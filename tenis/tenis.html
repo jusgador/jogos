@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-<title>Blocky Tennis 3D</title>
+<title>Campos Tennis</title>
 <!--
-  BLOCKY TENNIS 3D
+  CAMPOS TENNIS
   Jogo de tênis 3D em um único arquivo. three.js (WebGPURenderer com fallback automático para WebGL 2).
   Tudo é gerado proceduralmente: geometria, texturas (canvas), sons (Web Audio). Nenhum asset externo.
   Dica: acrescente ?webgl na URL para forçar o backend WebGL.
@@ -158,12 +158,12 @@ body.cine .bar{height:9vh}
 <!-- ============================================================
      MARCAÇÃO DA INTERFACE
      ============================================================ -->
-<div id="loading">BLOCKY TENNIS 3D<small id="loadInfo">Carregando three.js…</small></div>
+<div id="loading">CAMPOS TENNIS<small id="loadInfo">Carregando three.js…</small></div>
 
 <div id="menu" class="hidden">
   <div class="panel">
-    <h1>BLOCKY <span>TENNIS</span></h1>
-    <div class="sub">Blocky Open • melhor de 3 sets • tie-break no 6-6</div>
+    <h1>CAMPOS <span>TENNIS</span></h1>
+    <div class="sub">Campos Open • melhor de 3 sets • tie-break no 6-6</div>
     <h3>Seu jogador</h3><div id="charList" class="cards"></div>
     <h3>Cor do avatar</h3><div id="colorList" class="swatches"></div>
     <h3>Adversário</h3><div id="oppList" class="chips"></div>
@@ -743,7 +743,7 @@ function drawBoard() {
   const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0d1838'); gr.addColorStop(1, '#060b1d');
   g.fillStyle = gr; g.fillRect(0, 0, w, h);
   g.fillStyle = '#ffd23a'; g.font = '900 46px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(score.tb ? 'BLOCKY OPEN • TIE-BREAK' : 'BLOCKY OPEN', w / 2, 46);
+  g.fillText(score.tb ? 'CAMPOS OPEN • TIE-BREAK' : 'CAMPOS OPEN', w / 2, 46);
   g.fillStyle = '#ffffff22'; g.fillRect(30, 84, w - 60, 3);
   const P = S.chars.length ? S.chars : null;
   for (let i = 0; i < 2; i++) {
