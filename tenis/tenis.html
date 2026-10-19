@@ -265,17 +265,17 @@ const DIFF = [
 
 // Personagens selecionáveis
 const CHARS = [
-  { id: 'leo', name: 'Leonardo', age: 13, desc: '13 anos, franja estilosa. Muito bom!', height: 1.66,
+  { id: 'leo', name: 'Leonardo', age: 13, desc: '13 anos. Muito bom! (mas não tão bom quanto acha)', height: 1.66,
     skin: 0xf2c48d, hair: 0xa0682f, brow: '#6b4421', style: 'swoop', shorts: 0xffffff, shirt: 0x2f7bff, trim: 0xffffff, racket: 0x1f6dff,
     stats: { speed: 1.12, power: 1.08, accuracy: 1.0, reach: 1.05 } },
-  { id: 'ric', name: 'Ricardo', desc: 'Cabelo castanho escuro, óculos e barba grisalha.', height: 1.80,
+  { id: 'ric', name: 'Ricardo', desc: 'Jogador clássico. Experiente. Aprendeu com os melhores.', height: 1.80,
     skin: 0xe5b07a, hair: 0x3d2a1c, brow: '#3d2a1c', style: 'swoopGray', shorts: 0x24324a, shirt: 0x22b573, trim: 0xffffff, racket: 0x1b3d2c,
     stats: { speed: 0.93, power: 1.06, accuracy: 0.9, reach: 1.06 } },
-  { id: 'bia', name: 'Beatriz', age: 16, desc: '16 anos, estilo princesa, cabelo castanho longo.', height: 1.66,
+  { id: 'bia', name: 'Beatriz', age: 16, desc: '16 anos. Técnica impecável. Joga com diversão e com afinco.', height: 1.66,
     skin: 0xf5d2ad, hair: 0x6b3b1e, brow: '#4a2814', style: 'princess', shorts: 0xffffff, shirt: 0xff5fa8, trim: 0xffffff, racket: 0xff4fa0,
     skirt: true, lashes: true, blush: true, stats: { speed: 1.03, power: 0.93, accuracy: 0.95, reach: 1.0 } },
-  { id: 'lic', name: 'Lícia', desc: 'Cabelo médio, um pouco mais baixa e ainda pegando o jeito.', height: 1.56,
-    skin: 0xeab98a, hair: 0x5b3a26, brow: '#3f2818', style: 'bob', shorts: 0xffffff, shirt: 0xffb31a, trim: 0xffffff, racket: 0xff7a1a,
+  { id: 'lic', name: 'Lícia', desc: 'Ainda pegando o jeito. Sempre disposta.', height: 1.56,
+    skin: 0xeab98a, hair: 0xc9a46e, brow: '#8a6640', style: 'bob', shorts: 0xffffff, shirt: 0xffb31a, trim: 0xffffff, racket: 0xff7a1a,
     skirt: true, lashes: true, blush: true, visor: 0x14b8c4, stats: { speed: 0.8, power: 0.78, accuracy: 0.7, reach: 0.92 } },
 ];
 const UMPIRE = { id: 'ump', name: 'Juiz', height: 1.76, skin: 0xd9a066, hair: 0x2b1d14, brow: '#2b1d14', style: 'cap',
@@ -353,6 +353,9 @@ function radialTex(inner = 'rgba(0,0,0,0.6)') {
 // 3. ESTADO GLOBAL
 // ============================================================
 let renderer, scene, camera, pipeline = null, backendName = '';
+// recuo nas bolas fundas: 0 = câmera normal, 1 = grua alta atrás do muro, olhando para o próprio fundo
+let camBaseFov = 50, camDeep = 0;
+const CAM_DEEP_FOV = 6;
 let qualLow = 0, ballGlow, quality = 2, qualT = 0, qualAcc = 0, qualN = 0;
 let sun, courtGroup, netGroup, ballMesh, ballShadow, trailMesh, dustMesh, aimRing, umpire, boardTex;
 const S = {
@@ -450,7 +453,8 @@ function initPost() {
 
 function onResize() {
   camera.aspect = innerWidth / innerHeight;
-  camera.fov = camera.aspect < 1 ? 66 : 50;
+  camBaseFov = camera.aspect < 1 ? 66 : 50;
+  camera.fov = camBaseFov + camDeep * CAM_DEEP_FOV;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 }
@@ -827,22 +831,21 @@ function buildHair(head, def, M) {
     }
   }
   if (st === 'swoopGray') {
-    const G = plastic(0x1d1f26, 0.3);                       // óculos
+    const G = plastic(0x1d1f26, 0.3);                       // óculos redondos de aro fino
+    const ringGeo = new THREE.TorusGeometry(0.056, 0.009, 6, 24);
+    const lensMat = new THREE.MeshStandardMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.28, roughness: 0.05 });
     for (const sx of [-1, 1]) {
       const fx = sx * 0.088;
-      box(head, 0.13, 0.018, 0.02, G, fx, 0.307, 0.205, 0.006);
-      box(head, 0.13, 0.018, 0.02, G, fx, 0.205, 0.205, 0.006);
-      box(head, 0.018, 0.1, 0.02, G, fx - 0.056, 0.256, 0.205, 0.006);
-      box(head, 0.018, 0.1, 0.02, G, fx + 0.056, 0.256, 0.205, 0.006);
-      box(head, 0.015, 0.018, 0.2, G, sx * 0.205, 0.29, 0.1, 0.006);
-      const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.085), new THREE.MeshStandardMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.28, roughness: 0.05 }));
-      lens.position.set(fx, 0.256, 0.204); head.add(lens);
+      const ring = new THREE.Mesh(ringGeo, G); ring.position.set(fx, 0.256, 0.207); head.add(ring);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.052, 24), lensMat);
+      lens.position.set(fx, 0.256, 0.205); head.add(lens);
+      box(head, 0.06, 0.016, 0.018, G, sx * 0.172, 0.262, 0.203, 0.005);  // dobradiça até a haste
+      box(head, 0.015, 0.016, 0.2, G, sx * 0.205, 0.262, 0.1, 0.006);
     }
-    box(head, 0.03, 0.016, 0.02, G, 0, 0.28, 0.205, 0.005);
+    box(head, 0.05, 0.014, 0.018, G, 0, 0.27, 0.207, 0.005);              // ponte
     const B = plastic(0xa8a8a8, 0.7);                       // barba grande grisalha
     box(head, 0.4, 0.2, 0.13, B, 0, 0.065, 0.14, 0.05);
     box(head, 0.32, 0.13, 0.11, B, 0, -0.05, 0.13, 0.05);
-    for (const sx of [-1, 1]) box(head, 0.07, 0.26, 0.3, B, sx * 0.195, 0.16, 0.03, 0.03);
     box(head, 0.22, 0.045, 0.05, plastic(0x8e8e8e, 0.7), 0, 0.215, 0.205, 0.02);  // bigode
     box(head, 0.1, 0.022, 0.02, plastic(0x6b2a1f), 0, 0.177, 0.208, 0.008);       // boca/sorriso
     box(head, 0.03, 0.02, 0.02, plastic(0x6b2a1f), -0.06, 0.188, 0.207, 0.008);
@@ -1973,7 +1976,11 @@ function toggleMute() {
 // 16. CÂMERA (atrás do jogador, suavizada, tremor) E REPLAY EM CÂMERA LENTA
 // ============================================================
 const camLook = new V3(0, 1, 0), _cp = new V3(), _cl = new V3();
+function setCamFov(f) {
+  if (Math.abs(camera.fov - f) > 0.01) { camera.fov = f; camera.updateProjectionMatrix(); }
+}
 function updateCamera(dt) {
+  if (S.state !== 'play' && S.state !== 'paused') { camDeep = 0; setCamFov(camBaseFov); }
   if (S.state === 'menu' || S.state === 'end' || S.state === 'loading') {
     const focus = S.state === 'end' && S.chars.length ? S.chars[S.endWinner].pos : new V3(0, 0, 2);
     // órbita suave pela frente do personagem; no menu desloca o enquadramento para a direita do painel
@@ -1998,9 +2005,18 @@ function updateCamera(dt) {
   // ao subir à rede a câmera acompanha só em parte, sobe e olha mais longe:
   // o adversário e a quadra dele continuam no quadro
   const near = clamp((HL - az) / (HL - 1), 0, 1);
-  const camZ = s * Math.min(lerp(HL + 7, az + 7, 0.45), HL + 7.4);
-  _cp.set(h.pos.x * (0.55 - near * 0.2), 3.5 + near * 1.7, camZ);
-  _cl.set(h.pos.x * 0.3 + ball.p.x * 0.08, 0.7, -s * (3.2 + near * 3.5));
+  // bola funda: o jogador recua atrás da linha de base (ou a bola vem quicar lá) e sairia por baixo
+  // do quadro. A câmera sobe por cima do muro, recua até a frente da arquibancada de fundo,
+  // inclina para o próprio fundo e abre um pouco o campo de visão
+  const bz = ball.p.z * s;
+  const ballDeep = ball.state !== 'held' && ball.v.z * s > 0 ? clamp((bz - (HL - 3)) / 4, 0, 1) : 0;
+  const deepT = Math.max(clamp((az - HL - 0.6) / 3, 0, 1), ballDeep);
+  camDeep += (deepT - camDeep) * (1 - Math.exp(-dt * (deepT > camDeep ? 4 : 1.8)));
+  const d = camDeep * camDeep * (3 - 2 * camDeep);
+  const camZ = s * (Math.min(lerp(HL + 7, az + 7, 0.45), HL + 7.4) + d * 4);
+  _cp.set(h.pos.x * (0.55 - near * 0.2), 3.5 + near * 1.7 + d * 3.5, camZ);
+  _cl.set(h.pos.x * 0.3 + ball.p.x * 0.08, 0.7, lerp(-s * (3.2 + near * 3.5), s * (HL - 1), d));
+  setCamFov(camBaseFov + d * CAM_DEEP_FOV);
   if (S.camSnap) { camera.position.copy(_cp); camLook.copy(_cl); S.camSnap = false; }
   camera.position.lerp(_cp, 1 - Math.exp(-dt * 4.5));
   camLook.lerp(_cl, 1 - Math.exp(-dt * 4.5));
@@ -2067,7 +2083,7 @@ function drawPortrait(cv, def) {
   if (def.style.startsWith('swoop')) { g.save(); g.translate(40, 22); g.rotate(-0.35); g.fillRect(-14, -4, 28, 9); g.restore(); }
   g.fillStyle = '#1b1b24'; g.fillRect(24, 33, 6, 8); g.fillRect(42, 33, 6, 8);
   if (def.style === 'swoopGray') {
-    g.strokeStyle = '#1b1b24'; g.lineWidth = 2; g.strokeRect(20, 30, 14, 12); g.strokeRect(38, 30, 14, 12); g.beginPath(); g.moveTo(34, 35); g.lineTo(38, 35); g.stroke();
+    g.strokeStyle = '#1b1b24'; g.lineWidth = 2; g.beginPath(); g.arc(27, 37, 7.5, 0, 2 * Math.PI); g.moveTo(52.5, 37); g.arc(45, 37, 7.5, 0, 2 * Math.PI); g.moveTo(34.5, 35); g.lineTo(37.5, 35); g.stroke();
     g.fillStyle = '#a8a8a8'; g.beginPath(); g.roundRect(15, 46, 42, 20, 7); g.fill(); g.fillStyle = '#6b2a1f'; g.fillRect(30, 49, 12, 3);
   } else { g.strokeStyle = '#6b2a1f'; g.lineWidth = 3; g.beginPath(); g.arc(36, 46, 7, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke(); }
   if (def.style === 'princess') { g.fillStyle = '#ffd34d'; g.fillRect(24, 8, 24, 4); g.fillRect(34, 3, 4, 6); g.fillStyle = '#ff3c9a'; g.fillRect(34, 8, 4, 4); }
