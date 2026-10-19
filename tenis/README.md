@@ -1,6 +1,8 @@
-# Blocky Tennis 3D
+# Campos Tennis
 
 Jogo de tênis 3D em um único arquivo HTML ([tenis.html](tenis.html)), feito com three.js (WebGPURenderer, com troca automática para WebGL 2). Tudo é procedural: personagens, quadra, estádio, texturas e sons. Não usa nenhum asset externo além do three.js via CDN.
+
+Jogue online: https://jusgador.github.io/campos-tennis/
 
 ## Como jogar
 
