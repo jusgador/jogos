@@ -98,6 +98,7 @@ h3{margin:14px 0 7px;font-size:13px;text-transform:uppercase;letter-spacing:2px;
   border-left:2px solid var(--yellow);border-right:2px solid var(--yellow);z-index:2}
 #meter span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;letter-spacing:3px;z-index:3;text-shadow:0 1px 3px #000}
 #hint{position:absolute;left:0;right:0;bottom:22px;text-align:center;font-weight:800;font-size:14px;opacity:.9;text-shadow:0 2px 6px rgba(0,0,0,.7);padding:0 16px}
+body.touch #hint{bottom:auto;top:96px;font-size:12px;opacity:.8}
 #topbar{position:fixed;right:12px;top:12px;z-index:30;display:flex;gap:8px;align-items:center}
 #topbar button{width:42px;height:42px;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:#fff;font-size:18px}
 #badge{font-size:11px;font-weight:800;background:var(--panel);padding:5px 8px;border-radius:10px;border:2px solid var(--line);opacity:.85}
@@ -108,11 +109,15 @@ h3{margin:14px 0 7px;font-size:13px;text-transform:uppercase;letter-spacing:2px;
   background:radial-gradient(circle,#ffffff22,#ffffff0d);border:3px solid #ffffff40}
 #knob{position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px 0 0 -31px;border-radius:50%;
   background:linear-gradient(#ffffffd0,#c9d6ffb0);box-shadow:0 4px 12px rgba(0,0,0,.4)}
-#hitBtn,#sliceBtn{position:absolute;pointer-events:auto;border:none;color:#3b2400;font-weight:900;border-radius:50%}
-#hitBtn{right:26px;bottom:40px;width:112px;height:112px;font-size:20px;background:linear-gradient(#ffe066,#ffb320);box-shadow:0 6px 0 #c0670c}
-#hitBtn:active{transform:translateY(4px);box-shadow:0 2px 0 #c0670c}
-#sliceBtn{right:150px;bottom:44px;width:66px;height:66px;font-size:12px;background:#ffffffc0}
-#sliceBtn.on{background:#7fd0ff}
+#hitBtn,#sliceBtn,#dropBtn{position:absolute;pointer-events:auto;font-weight:900;border-radius:50%;color:#ffffffd0;
+  background:#0a142e38;border:2px solid #ffffff55;letter-spacing:1px;text-shadow:0 1px 3px rgba(0,0,0,.6);
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);transition:background .1s,transform .1s}
+#hitBtn{right:24px;bottom:40px;width:96px;height:96px;font-size:15px;color:#ffe08ae0;border-color:#ffd23a80}
+#hitBtn:active{transform:scale(.94);background:#ffd23a40}
+#sliceBtn{right:132px;bottom:34px;width:58px;height:58px;font-size:11px}
+#sliceBtn.on{background:#7fd0ff55;border-color:#7fd0ffcc;color:#fff}
+#dropBtn{right:34px;bottom:148px;width:58px;height:58px;font-size:11px}
+#dropBtn:active{transform:scale(.94);background:#ffffff40}
 
 /* --- overlays --- */
 .overlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(5,10,25,.45)}
@@ -174,7 +179,7 @@ body.cine .bar{height:9vh}
     <div class="help">
       <kbd>WASD</kbd>/<kbd>setas</kbd> mover • <b>mouse</b> ou <kbd>J</kbd><kbd>L</kbd><kbd>I</kbd><kbd>K</kbd> mirar •
       <kbd>Espaço</kbd> ou clique: segure para carregar a força, solte para bater (zona dourada = golpe perfeito) •
-      <kbd>Shift</kbd> + golpe = slice (no saque: com efeito) • <kbd>R</kbd> replay • <kbd>M</kbd> som • <kbd>F</kbd> FPS • <kbd>Esc</kbd> pausa.<br>
+      <kbd>Shift</kbd> + golpe = slice (no saque: com efeito) • <kbd>E</kbd> drop shot • <kbd>R</kbd> replay • <kbd>M</kbd> som • <kbd>F</kbd> FPS • <kbd>Esc</kbd> pausa.<br>
       No saque: segure <kbd>Espaço</kbd> para lançar a bola e solte perto do ponto mais alto.
     </div>
   </div>
@@ -193,6 +198,7 @@ body.cine .bar{height:9vh}
 <div id="touchUI" class="hidden">
   <div id="joy"><div id="knob"></div></div>
   <button id="sliceBtn">SLICE</button>
+  <button id="dropBtn">DROP</button>
   <button id="hitBtn">GOLPE</button>
 </div>
 
@@ -624,7 +630,7 @@ function buildStadium() {
     box(w, len, 1.1, 0.25, wallMat, 0, 0.55, 0, 0.04).receiveShadow = true;
     const nb = Math.floor(len / 4.2);
     for (let i = 0; i < nb; i++) {
-      const bi = featured && i === Math.floor(nb / 2) ? GOLF : (i + Math.abs(Math.round(x + z))) % (boards.length - 1);   // placa do torneio no centro dos fundos
+      const bi = (i - Math.floor(nb / 2)) % (featured ? 2 : 3) === 0 ? GOLF : (i + Math.abs(Math.round(x + z))) % (boards.length - 1);   // placa do torneio no centro e repetida ao longo das muretas
       const p = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 0.62), boards[bi]);
       p.position.set(-len / 2 + 2.1 + i * (len / nb) + (len / nb - 4.2) / 2, 0.55, 0.13);
       w.add(p);
@@ -1411,6 +1417,7 @@ function endPoint(w, reason, isError) {
   S.pending = res; S.phaseTimer = res.match ? 3.2 : 2.4;
   S.chars[w].mood = 'win'; S.chars[other(w)].mood = 'lose';
   for (const c of S.chars) { c.charging = false; }
+  res.highlight = isHighlight(w, res, isError);
   // narração do placar
   const nm = S.chars[w].def.name;
   let sub;
@@ -1429,6 +1436,25 @@ function endPoint(w, reason, isError) {
   else { S.excite = 0.45; if (isError) AudioFX.aww(); else AudioFX.cheer(0.4); }
   if (res.game) AudioFX.whistle();
   updateScoreHUD(); drawBoard();
+}
+
+// Replay automático nos pontos bonitos: quanto mais difícil a jogada, maior a chance.
+// Depois de um replay, espera alguns pontos para não cansar (pontos de set e partida sempre têm).
+function isHighlight(w, res, isError) {
+  S.sinceReplay = (S.sinceReplay ?? 9) + 1;
+  if (res.decisive) return false;                          // já tem replay garantido
+  if (isError || S.sinceReplay < 3) return false;
+  const shot = rally.lastShot;
+  let ch = 0;
+  if (rally.isServe) ch = 0.35;                            // ace
+  else {
+    if (shot === 'drop' || shot === 'lob') ch += 0.8;
+    else if (shot === 'volley') ch += 0.45;
+    else if (shot === 'perfect') ch += 0.4;
+    if (rally.hits >= 10) ch += 0.8; else if (rally.hits >= 6) ch += 0.4;
+  }
+  if (res.game && w !== rally.server) ch += 0.25;           // quebra de saque
+  return Math.random() < ch;
 }
 
 function startPoint() {
@@ -1453,7 +1479,7 @@ function afterPoint() {
   const P = S.pending; S.pending = null;
   if (!P) return startPoint();
   if (P.fault || P.let) return startPoint();
-  if (P.decisive && !P.replayed) { P.replayed = true; return startReplay(() => afterPointCont(P)); }
+  if ((P.decisive || P.highlight) && !P.replayed) { P.replayed = true; S.sinceReplay = 0; return startReplay(() => afterPointCont(P)); }
   afterPointCont(P);
 }
 function afterPointCont(P) {
@@ -1486,7 +1512,7 @@ function retoss() {
 }
 function startSwing(c, type, o = {}) {
   c.swing = { type, t: 0, dur: type === 'serve' ? 0.6 : o.volley ? 0.62 : 0.52, hit: false, checked: false,
-    power: o.power ?? 0.6, perfect: !!o.perfect, slice: !!o.slice, kick: !!o.kick, volley: !!o.volley };
+    power: o.power ?? 0.6, perfect: !!o.perfect, slice: !!o.slice, kick: !!o.kick, volley: !!o.volley, drop: !!o.drop };
   AudioFX.swoosh(c.swing.power);
 }
 function updateSwing(c, dt) {
@@ -1502,7 +1528,7 @@ function canHit(c) {
 // Contato: a bola precisa chegar ao "plano de impacto" à frente do jogador dentro da janela do swing
 function tryContact(c) {
   const sw = c.swing;
-  if (sw.t < 0.02 || sw.t > (sw.volley ? 0.5 : 0.34) || !canHit(c)) return;
+  if (sw.t < 0.02 || sw.t > (sw.volley ? 0.5 : sw.drop ? 0.42 : 0.34) || !canHit(c)) return;
   const k = c.stats.reach * c.sc * (c.isAI ? 1 : 1.12);
   const f = (ball.p.z - c.pos.z) * -c.side;                 // distância à frente
   const l = (ball.p.x - c.pos.x) * c.side;                  // lateral (direita +)
@@ -1514,6 +1540,7 @@ function tryContact(c) {
   sw.type = fh ? 'fh' : 'bh'; sw.hit = true;
   let late = (0.14 - sw.t) + (f < 0 ? -f * 0.12 : 0);      // >0 atrasado, <0 adiantado
   if (sw.volley) late = f < 0 ? -f * 0.08 : 0;              // voleio: só pesa se a bola passou do corpo
+  else if (sw.drop) late *= 0.6;                            // deixadinha: toque curto, janela mais folgada
   const tq = clamp(1 - Math.abs(late) / 0.2, 0, 1);
   const dq = clamp(1 - Math.max(0, dl - 0.3) / (0.9 * k), 0, 1);
   const hq = clamp(1 - Math.abs(ball.p.y - 1.0 * c.sc) / 1.6, 0.35, 1);
@@ -1530,6 +1557,10 @@ function executeShot(c, q, late) {
   if (!c.isAI) {
     P = { target: aimTarget(c), power: sw.power, spin: sw.slice ? -0.55 : 0.45 + 0.45 * sw.power, speedMul: sw.slice ? 0.8 : 1 };
     if (sw.volley) { P.spin = sw.slice ? -0.5 : 0.1; P.speedMul = 0.95; }
+    if (sw.drop) {                                          // deixadinha: curta, com slice, logo depois da rede
+      const far = clamp((Math.abs(c.pos.z) - 7) / (HL - 7), 0, 1);   // do fundo ela fica mais arriscada
+      P = { target: new V3(c.side * S.aim.x * (HW - 1), 0, -c.side * rand(1.9, 2.8)), power: 0.2 + 0.25 * far, spin: -0.75, speed: 8 + 3 * far, drop: true };
+    }
   } else P = aiShot(c);
   const perfect = !c.isAI && sw.perfect && q > 0.6;
   const speed = (P.speed ?? (14 + 20 * P.power) * P.speedMul) * st.power * (perfect ? 1.12 : 1);
@@ -1538,11 +1569,12 @@ function executeShot(c, q, late) {
   const sigma = (0.22 + 0.85 * (1 - q) + 0.35 * P.power) / st.accuracy * (c.isAI ? d.err : 1) * (perfect ? 0.35 : 1);
   tgt.x += gauss() * sigma; tgt.z += gauss() * sigma * 1.25;
   if (ball.p.y < 0.12) ball.p.y = 0.12;
-  const v = solveShot(ball.p, tgt, speed, P.spin, P.lob ? 0.9 : 0.25);
+  const v = solveShot(ball.p, tgt, speed, P.spin, P.lob ? 0.9 : P.drop ? 0.18 : 0.25);
   v.y += gauss() * 0.16 * (1.2 - q);
   ball.v.copy(v); ball.spin = P.spin; ball.rolling = false;
   rally.lastHitter = c.idx; rally.bounces = 0; rally.isServe = false; rally.netTouched = false; rally.hits++;
   rally.lastTarget.copy(tgt);
+  rally.lastShot = P.drop ? 'drop' : P.lob ? 'lob' : sw.volley ? 'volley' : perfect ? 'perfect' : 'shot';
   onShotHit(c, P.power, perfect, q, late);
 }
 function onShotHit(c, power, perfect, q, late) {
@@ -1554,7 +1586,8 @@ function onShotHit(c, power, perfect, q, late) {
   o.ai.err = { x: gauss() * d.posErr / o.stats.accuracy, z: gauss() * d.posErr * 0.6 / o.stats.accuracy };
   o.ai.terr = gauss() * d.timeErr / o.stats.accuracy;
   if (!c.isAI) {
-    if (c.swing && c.swing.volley) feedback(q > 0.7 ? 'VOLEIO!' : 'voleio', q > 0.7 ? 'ok' : 'meh');
+    if (c.swing && c.swing.drop) feedback(q > 0.7 ? 'DEIXADINHA!' : 'deixadinha', q > 0.7 ? 'ok' : 'meh');
+    else if (c.swing && c.swing.volley) feedback(q > 0.7 ? 'VOLEIO!' : 'voleio', q > 0.7 ? 'ok' : 'meh');
     else if (perfect) { feedback('PERFEITO!', 'perfect'); S.shake = 0.16; S.excite = Math.max(S.excite, 0.35); }
     else if (late !== undefined && late > 0.07) feedback('ATRASADO', 'meh');
     else if (late !== undefined && late < -0.08) feedback('CEDO', 'meh');
@@ -1584,7 +1617,7 @@ function executeServe(c, q) {
   const v = solveShot(ball.p, tgt, speed, spin, 0.05);
   v.y += gauss() * 0.12 * (1 - q);
   ball.v.copy(v); ball.spin = spin; ball.rolling = false;
-  rally.phase = 'live'; rally.isServe = true; rally.lastHitter = c.idx; rally.bounces = 0; rally.netTouched = false; rally.hits = 1;
+  rally.phase = 'live'; rally.isServe = true; rally.lastHitter = c.idx; rally.bounces = 0; rally.netTouched = false; rally.hits = 1; rally.lastShot = 'serve';
   rally.lastTarget.copy(tgt);
   if (!c.isAI && power > 0.8) S.shake = 0.12;
   onShotHit(c, power, perfect, q);
@@ -1636,14 +1669,14 @@ function predictedOut(c) {
 }
 function aiShot(c) {
   const d = DIFF[S.sel.diff], o = S.chars[other(c.idx)], os = o.side;
-  let power = clamp(d.power + gauss() * 0.08, 0.3, 1), spin = 0.5 + power * 0.35, speedMul = 1, lob = false, speed;
+  let power = clamp(d.power + gauss() * 0.08, 0.3, 1), spin = 0.5 + power * 0.35, speedMul = 1, lob = false, drop = false, speed;
   let tx, depth;
   const oppNear = Math.abs(o.pos.z) < 6;
   const away = -(Math.sign(o.pos.x) || (Math.random() < 0.5 ? 1 : -1));
   if (oppNear && Math.random() < d.lob) {                                   // lob por cima
     tx = gauss() * 1.4; depth = HL - 1.6; power = 0.35; spin = 0.9; lob = true; speed = 10;
   } else if (Math.random() < d.drop && Math.abs(o.pos.z) > HL - 1) {         // deixadinha
-    tx = away * rand(1, HW - 1); depth = rand(1.8, 2.8); power = 0.25; spin = -0.7; speed = 9;
+    tx = away * rand(1, HW - 1); depth = rand(1.8, 2.8); power = 0.25; spin = -0.7; speed = 9; drop = true;
   } else {
     tx = Math.random() < d.smart ? away * (HW - d.margin) * rand(0.6, 1) : rand(-1, 1) * (HW - d.margin);
     if (Math.random() < 0.35) tx = -(Math.sign(c.pos.x) || 1) * Math.abs(tx);   // bola cruzada às vezes
@@ -1652,7 +1685,7 @@ function aiShot(c) {
     if (ball.p.y < 0.45 && Math.random() < 0.5) { spin = -0.45; speedMul = 0.85; }
   }
   tx = clamp(tx, -(HW - 0.3), HW - 0.3);
-  return { target: new V3(tx, 0, os * depth), power, spin, speedMul, lob, speed };
+  return { target: new V3(tx, 0, os * depth), power, spin, speedMul, lob, drop, speed };
 }
 function updateAI(c, dt) {
   const d = DIFF[S.sel.diff], A = c.ai;
@@ -1770,6 +1803,15 @@ function actionPress() {
   }
 }
 const atNet = (c) => Math.abs(c.pos.z) < 7;
+function dropPress() {
+  AudioFX.init();
+  if (S.state === 'replay') { endReplay(); return; }
+  if (S.state !== 'play' || rally.phase !== 'live') return;
+  const h = S.chars[0];
+  if (h.swing || h.charging) return;
+  if (S.isTouch && !mouseAim) S.aim.x = clamp(S.joy.x * 1.1, -1, 1);
+  startSwing(h, guessSide(h), { power: 0.25, drop: true });   // um toque, sem carregar força
+}
 function actionRelease() {
   if (S.state !== 'play') return;
   const h = S.chars[0]; if (!h || !h.charging) return;
@@ -1786,6 +1828,7 @@ function initInput() {
     if (e.repeat) return;
     S.keys[e.code] = true;
     if (e.code === 'Space') actionPress();
+    if (e.code === 'KeyE') dropPress();
     if (e.code === 'KeyM') toggleMute();
     if (e.code === 'KeyF') setShowFps(!S.showFps);
     if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
@@ -1822,6 +1865,7 @@ function initInput() {
   hb.addEventListener('pointerdown', (e) => { e.preventDefault(); hb.setPointerCapture(e.pointerId); actionPress(); });
   hb.addEventListener('pointerup', (e) => { e.preventDefault(); actionRelease(); });
   hb.addEventListener('pointercancel', () => actionRelease());
+  $('dropBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); dropPress(); });
   $('sliceBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); S.sliceToggle = !S.sliceToggle; $('sliceBtn').classList.toggle('on', S.sliceToggle); });
 }
 
@@ -2089,10 +2133,10 @@ function startMatch() {
   if (oc === S.sel.color) oc = PALETTE[(PALETTE.indexOf(oc) + 3) % PALETTE.length];
   S.chars = [createPlayer(CHARS[S.sel.char], S.sel.color, false, 0), createPlayer(CHARS[oi], oc, true, 1)];
   Object.assign(score, { sets: [], games: [0, 0], pts: [0, 0], tb: false, tbFirst: 0, setsWon: [0, 0], server: Math.random() < 0.5 ? 0 : 1, done: false });
-  rally.serveNum = 1; S.pending = null; S.lock = false; S.replay = null;
+  rally.serveNum = 1; S.pending = null; S.lock = false; S.replay = null; S.sinceReplay = 9;
   ['menu', 'endScreen', 'pauseMenu'].forEach((id) => $(id).classList.add('hidden'));
   $('hud').classList.remove('hidden'); $('pauseBtn').classList.remove('hidden');
-  $('touchUI').classList.toggle('hidden', !S.isTouch);
+  $('touchUI').classList.toggle('hidden', !S.isTouch); document.body.classList.toggle('touch', S.isTouch);
   S.state = 'play'; S.camSnap = true;
   startPoint();
   for (const c of S.chars) { c.pose.set(c.T); animateChar(c, 0.016); }
@@ -2144,7 +2188,7 @@ function setHint() {
     if (rally.phase === 'serveReady' && rally.server === 0) t = S.isTouch ? 'Segure GOLPE para lançar, solte no alto para sacar • joystick mira' : 'Segure ESPAÇO para lançar • solte no alto para sacar • mouse mira • Shift = saque com efeito';
     else if (rally.phase === 'serveReady') t = `${S.chars[1].def.name} vai sacar…`;
     else if (S.chars[0] && atNet(S.chars[0])) t = S.isTouch ? 'Na rede: toque GOLPE para o voleio' : 'Na rede: toque ESPAÇO para o voleio • mouse mira';
-    else t = S.isTouch ? 'Segure GOLPE e solte quando a bola chegar • joystick para mirar' : 'Segure ESPAÇO e solte na chegada da bola • mouse mira • Shift = slice';
+    else t = S.isTouch ? 'Segure GOLPE e solte quando a bola chegar • DROP = deixadinha' : 'Segure ESPAÇO e solte na chegada da bola • mouse mira • Shift = slice • E = drop shot';
     if (rally.serveNum === 2 && rally.phase === 'serveReady') t = '2º SAQUE — ' + t;
   }
   $('hint').textContent = t;
