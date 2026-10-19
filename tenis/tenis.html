@@ -169,11 +169,12 @@ body.cine .bar{height:9vh}
     <h3>Adversário</h3><div id="oppList" class="chips"></div>
     <h3>Dificuldade</h3><div id="diffList" class="chips"></div>
     <h3>Quadra</h3><div id="surfList" class="chips"></div>
+    <h3>Contador de FPS</h3><div id="fpsList" class="chips"></div>
     <button id="playBtn" class="big">JOGAR ▶</button>
     <div class="help">
       <kbd>WASD</kbd>/<kbd>setas</kbd> mover • <b>mouse</b> ou <kbd>J</kbd><kbd>L</kbd><kbd>I</kbd><kbd>K</kbd> mirar •
       <kbd>Espaço</kbd> ou clique: segure para carregar a força, solte para bater (zona dourada = golpe perfeito) •
-      <kbd>Shift</kbd> + golpe = slice (no saque: com efeito) • <kbd>R</kbd> replay • <kbd>M</kbd> som • <kbd>Esc</kbd> pausa.<br>
+      <kbd>Shift</kbd> + golpe = slice (no saque: com efeito) • <kbd>R</kbd> replay • <kbd>M</kbd> som • <kbd>F</kbd> FPS • <kbd>Esc</kbd> pausa.<br>
       No saque: segure <kbd>Espaço</kbd> para lançar a bola e solte perto do ponto mais alto.
     </div>
   </div>
@@ -187,7 +188,7 @@ body.cine .bar{height:9vh}
   <div id="hint"></div>
 </div>
 
-<div id="topbar"><span id="badge">…</span><button id="muteBtn" title="Som (M)">🔊</button><button id="pauseBtn" title="Pausa (Esc)" class="hidden">⏸</button></div>
+<div id="topbar"><span id="badge" class="hidden">…</span><button id="muteBtn" title="Som (M)">🔊</button><button id="pauseBtn" title="Pausa (Esc)" class="hidden">⏸</button></div>
 
 <div id="touchUI" class="hidden">
   <div id="joy"><div id="knob"></div></div>
@@ -202,6 +203,7 @@ body.cine .bar{height:9vh}
 
 <div id="pauseMenu" class="overlay hidden">
   <div class="panel"><h2>PAUSA</h2>
+    <div class="chips" style="justify-content:center;margin:6px 0 2px"><button class="chip" id="fpsPauseBtn">Mostrar FPS</button></div>
     <div class="row"><button class="big" id="resumeBtn">CONTINUAR</button><button class="big alt" id="quitBtn">MENU</button></div>
   </div>
 </div>
@@ -251,16 +253,16 @@ const DIFF = [
 
 // Personagens selecionáveis
 const CHARS = [
-  { id: 'leo', name: 'Leonardo', age: 13, desc: '13 anos, franja estilo Justin Bieber. Muito bom!', height: 1.66,
+  { id: 'leo', name: 'Leonardo', age: 13, desc: '13 anos, franja estilosa. Muito bom!', height: 1.66,
     skin: 0xf2c48d, hair: 0xa0682f, brow: '#6b4421', style: 'swoop', shorts: 0xffffff, shirt: 0x2f7bff, trim: 0xffffff, racket: 0x1f6dff,
     stats: { speed: 1.12, power: 1.08, accuracy: 1.0, reach: 1.05 } },
-  { id: 'ric', name: 'Ricardo', age: 50, desc: '~50 anos, óculos e barba grisalha generosa.', height: 1.80,
-    skin: 0xe5b07a, hair: 0x9c9c9c, brow: '#7a7a7a', style: 'swoopGray', shorts: 0x24324a, shirt: 0x22b573, trim: 0xffffff, racket: 0x1b3d2c,
+  { id: 'ric', name: 'Ricardo', age: 50, desc: '~50 anos, cabelo castanho escuro, óculos e barba grisalha.', height: 1.80,
+    skin: 0xe5b07a, hair: 0x3d2a1c, brow: '#3d2a1c', style: 'swoopGray', shorts: 0x24324a, shirt: 0x22b573, trim: 0xffffff, racket: 0x1b3d2c,
     stats: { speed: 0.93, power: 1.06, accuracy: 0.9, reach: 1.06 } },
   { id: 'bia', name: 'Beatriz', age: 16, desc: '16 anos, estilo princesa, cabelo castanho longo.', height: 1.66,
     skin: 0xf5d2ad, hair: 0x6b3b1e, brow: '#4a2814', style: 'princess', shorts: 0xffffff, shirt: 0xff5fa8, trim: 0xffffff, racket: 0xff4fa0,
     skirt: true, lashes: true, blush: true, stats: { speed: 1.03, power: 0.93, accuracy: 0.95, reach: 1.0 } },
-  { id: 'lic', name: 'Lícia', age: 50, desc: '~50 anos, um pouco mais baixa e ainda pegando o jeito.', height: 1.56,
+  { id: 'lic', name: 'Lícia', age: 50, desc: '~50 anos, cabelo médio, um pouco mais baixa e ainda pegando o jeito.', height: 1.56,
     skin: 0xeab98a, hair: 0x5b3a26, brow: '#3f2818', style: 'bob', shorts: 0xffffff, shirt: 0xffb31a, trim: 0xffffff, racket: 0xff7a1a,
     skirt: true, lashes: true, blush: true, visor: 0x14b8c4, stats: { speed: 0.8, power: 0.78, accuracy: 0.7, reach: 0.92 } },
 ];
@@ -280,6 +282,8 @@ const sstep = (t) => t * t * (3 - 2 * t);
 function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2831853 * v); }
 const css = (h) => '#' + h.toString(16).padStart(6, '0');
 const $ = (id) => document.getElementById(id);
+// Preferências salvas no navegador (falha em silêncio se o armazenamento estiver bloqueado)
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
 const netHeight = (x) => NET_C + (NET_P - NET_C) * Math.min(1, (x / POST_X) ** 2);
 
 // Materiais "plástico" com leve brilho (clearcoat) — cache por cor
@@ -361,7 +365,6 @@ const score = { sets: [], games: [0, 0], pts: [0, 0], tb: false, tbFirst: 0, set
 // ============================================================
 async function init() {
   S.isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
-  const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
   const qs = location.search;
   const forceWebGL = /webgl/i.test(qs) || (store('bt-backend') === 'webgl' && !/webgpu/i.test(qs));
   renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL, powerPreference: 'high-performance' });
@@ -592,6 +595,7 @@ function buildNet() {
 const SPONSORS = [
   ['BLOKCOLA', '#e3242b', '#fff'], ['QUADRIX', '#1f2b5c', '#ffd23a'], ['PIXEL SPORTS', '#11a36a', '#fff'], ['TOPSPIN TECH', '#7b2ff7', '#fff'],
   ['SAQUE+', '#ff7a1a', '#1a1a1a'], ['CUBO BANK', '#0b7bd3', '#fff'], ['RAQUETEX', '#111', '#7cf2ff'], ['VOLEIO AIR', '#ffd23a', '#1f2b5c'],
+  ['GOLF VILLE OPEN', '#1f6b3a', '#fff'],
 ];
 function sponsorTex(i) {
   const [name, bg, fg] = SPONSORS[i % SPONSORS.length];
@@ -614,17 +618,19 @@ function buildStadium() {
   const AWx = HDW + 4.6, ALz = HL + 6.4;
   // Muretas com placas de patrocínio
   const boards = SPONSORS.map((_, i) => new THREE.MeshStandardMaterial({ map: sponsorTex(i), roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.05 }));
-  const addWall = (x, z, len, rotY) => {
+  const GOLF = SPONSORS.findIndex((sp) => sp[0] === 'GOLF VILLE OPEN');
+  const addWall = (x, z, len, rotY, featured) => {
     const w = new THREE.Group(); w.position.set(x, 0, z); w.rotation.y = rotY; g.add(w);
     box(w, len, 1.1, 0.25, wallMat, 0, 0.55, 0, 0.04).receiveShadow = true;
     const nb = Math.floor(len / 4.2);
     for (let i = 0; i < nb; i++) {
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 0.62), boards[(i + Math.abs(Math.round(x + z))) % boards.length]);
+      const bi = featured && i === Math.floor(nb / 2) ? GOLF : (i + Math.abs(Math.round(x + z))) % (boards.length - 1);   // placa do torneio no centro dos fundos
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 0.62), boards[bi]);
       p.position.set(-len / 2 + 2.1 + i * (len / nb) + (len / nb - 4.2) / 2, 0.55, 0.13);
       w.add(p);
     }
   };
-  addWall(0, -ALz, 2 * AWx, 0); addWall(0, ALz, 2 * AWx, Math.PI);
+  addWall(0, -ALz, 2 * AWx, 0, true); addWall(0, ALz, 2 * AWx, Math.PI, true);
   addWall(-AWx, 0, 2 * ALz, Math.PI / 2); addWall(AWx, 0, 2 * ALz, -Math.PI / 2);
   // Arquibancadas laterais (degraus low-poly)
   const standA = plastic(0x2a3d6a, 0.55), standB = plastic(0x36508c, 0.55);
@@ -842,9 +848,14 @@ function buildHair(head, def, M) {
     box(head, 0.05, 0.05, 0.03, plastic(0xff3c9a, 0.2, { emissive: 0xff2a8a, emissiveIntensity: 0.6 }), 0, 0.56, 0.16, 0.012);
   }
   if (st === 'bob') {
+    // cabelo médio: laterais e nuca até a altura dos ombros, pontas levemente para fora
     box(head, 0.44, 0.1, 0.42, H, 0, 0.47, 0, 0.04);
-    for (const sx of [-1, 1]) box(head, 0.07, 0.32, 0.38, H, sx * 0.215, 0.3, -0.01, 0.03);
-    box(head, 0.44, 0.34, 0.08, H, 0, 0.3, -0.2, 0.03);
+    for (const sx of [-1, 1]) {
+      box(head, 0.07, 0.56, 0.38, H, sx * 0.215, 0.19, -0.01, 0.03);
+      box(head, 0.09, 0.09, 0.3, H, sx * 0.235, -0.07, -0.04, 0.03);
+    }
+    box(head, 0.46, 0.62, 0.09, H, 0, 0.16, -0.2, 0.03);
+    box(head, 0.5, 0.09, 0.12, H, 0, -0.13, -0.2, 0.04);
     box(head, 0.3, 0.09, 0.07, H, -0.05, 0.41, 0.18, 0.03).rotation.z = 0.15;
     box(head, 0.06, 0.1, 0.43, plastic(0xb8b8b8, 0.6), 0.09, 0.495, 0, 0.02);       // mecha grisalha
     const V = plastic(def.visor, 0.35);
@@ -1474,8 +1485,8 @@ function retoss() {
   showMsg('', 'lançamento refeito', '');
 }
 function startSwing(c, type, o = {}) {
-  c.swing = { type, t: 0, dur: type === 'serve' ? 0.6 : 0.52, hit: false, checked: false,
-    power: o.power ?? 0.6, perfect: !!o.perfect, slice: !!o.slice, kick: !!o.kick };
+  c.swing = { type, t: 0, dur: type === 'serve' ? 0.6 : o.volley ? 0.62 : 0.52, hit: false, checked: false,
+    power: o.power ?? 0.6, perfect: !!o.perfect, slice: !!o.slice, kick: !!o.kick, volley: !!o.volley };
   AudioFX.swoosh(c.swing.power);
 }
 function updateSwing(c, dt) {
@@ -1491,7 +1502,7 @@ function canHit(c) {
 // Contato: a bola precisa chegar ao "plano de impacto" à frente do jogador dentro da janela do swing
 function tryContact(c) {
   const sw = c.swing;
-  if (sw.t < 0.02 || sw.t > 0.34 || !canHit(c)) return;
+  if (sw.t < 0.02 || sw.t > (sw.volley ? 0.5 : 0.34) || !canHit(c)) return;
   const k = c.stats.reach * c.sc * (c.isAI ? 1 : 1.12);
   const f = (ball.p.z - c.pos.z) * -c.side;                 // distância à frente
   const l = (ball.p.x - c.pos.x) * c.side;                  // lateral (direita +)
@@ -1501,7 +1512,8 @@ function tryContact(c) {
   const fh = dFH <= dBH, dl = Math.min(dFH, dBH);
   if (dl > 1.0 * k) return;
   sw.type = fh ? 'fh' : 'bh'; sw.hit = true;
-  const late = (0.14 - sw.t) + (f < 0 ? -f * 0.12 : 0);    // >0 atrasado, <0 adiantado
+  let late = (0.14 - sw.t) + (f < 0 ? -f * 0.12 : 0);      // >0 atrasado, <0 adiantado
+  if (sw.volley) late = f < 0 ? -f * 0.08 : 0;              // voleio: só pesa se a bola passou do corpo
   const tq = clamp(1 - Math.abs(late) / 0.2, 0, 1);
   const dq = clamp(1 - Math.max(0, dl - 0.3) / (0.9 * k), 0, 1);
   const hq = clamp(1 - Math.abs(ball.p.y - 1.0 * c.sc) / 1.6, 0.35, 1);
@@ -1517,6 +1529,7 @@ function executeShot(c, q, late) {
   let P;
   if (!c.isAI) {
     P = { target: aimTarget(c), power: sw.power, spin: sw.slice ? -0.55 : 0.45 + 0.45 * sw.power, speedMul: sw.slice ? 0.8 : 1 };
+    if (sw.volley) { P.spin = sw.slice ? -0.5 : 0.1; P.speedMul = 0.95; }
   } else P = aiShot(c);
   const perfect = !c.isAI && sw.perfect && q > 0.6;
   const speed = (P.speed ?? (14 + 20 * P.power) * P.speedMul) * st.power * (perfect ? 1.12 : 1);
@@ -1541,7 +1554,8 @@ function onShotHit(c, power, perfect, q, late) {
   o.ai.err = { x: gauss() * d.posErr / o.stats.accuracy, z: gauss() * d.posErr * 0.6 / o.stats.accuracy };
   o.ai.terr = gauss() * d.timeErr / o.stats.accuracy;
   if (!c.isAI) {
-    if (perfect) { feedback('PERFEITO!', 'perfect'); S.shake = 0.16; S.excite = Math.max(S.excite, 0.35); }
+    if (c.swing && c.swing.volley) feedback(q > 0.7 ? 'VOLEIO!' : 'voleio', q > 0.7 ? 'ok' : 'meh');
+    else if (perfect) { feedback('PERFEITO!', 'perfect'); S.shake = 0.16; S.excite = Math.max(S.excite, 0.35); }
     else if (late !== undefined && late > 0.07) feedback('ATRASADO', 'meh');
     else if (late !== undefined && late < -0.08) feedback('CEDO', 'meh');
     else if (q > 0.78) feedback('BOA!', 'ok');
@@ -1696,7 +1710,7 @@ function humanControl(c, dt) {
   const maxV = MOVE * c.stats.speed;
   c.tv.set(ix * c.side * maxV, 0, -iy * c.side * maxV);       // relativo à câmera atrás do jogador
   // assistência leve de posicionamento enquanto carrega o golpe (mais forte no celular)
-  if (rally.phase === 'live' && rally.lastHitter !== c.idx && (c.charging || S.isTouch)) {
+  if (rally.phase === 'live' && rally.lastHitter !== c.idx && (c.charging || S.isTouch || atNet(c))) {
     c.ai.assistT -= dt;
     if (!c.ai.plan || c.ai.assistT <= 0) { c.ai.plan = planIntercept(c); c.ai.assistT = 0.25; }
     const pl = c.ai.plan;
@@ -1749,8 +1763,13 @@ function actionPress() {
   if (S.state !== 'play') return;
   const h = S.chars[0];
   if (rally.phase === 'serveReady' && rally.server === 0 && !h.swing) { doToss(h); h.charging = 'serve'; h.chargeT = 0; return; }
-  if (rally.phase === 'live' && !h.swing && !h.charging) { h.charging = 'shot'; h.chargeT = 0; h.prep = guessSide(h); }
+  if (rally.phase === 'live' && !h.swing && !h.charging) {
+    // perto da rede: um toque já faz o voleio (sem carregar força, janela de contato maior)
+    if (atNet(h)) { startSwing(h, guessSide(h), { power: 0.45, volley: true, slice: !!(S.keys.ShiftLeft || S.keys.ShiftRight || S.sliceToggle) }); return; }
+    h.charging = 'shot'; h.chargeT = 0; h.prep = guessSide(h);
+  }
 }
+const atNet = (c) => Math.abs(c.pos.z) < 7;
 function actionRelease() {
   if (S.state !== 'play') return;
   const h = S.chars[0]; if (!h || !h.charging) return;
@@ -1768,6 +1787,7 @@ function initInput() {
     S.keys[e.code] = true;
     if (e.code === 'Space') actionPress();
     if (e.code === 'KeyM') toggleMute();
+    if (e.code === 'KeyF') setShowFps(!S.showFps);
     if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
     if (e.code === 'KeyR' && S.state === 'play' && rally.phase === 'dead' && !S.lock) {
       const P = S.pending; S.phaseTimer = 99;
@@ -1910,10 +1930,13 @@ function updateCamera(dt) {
     return;
   }
   const h = S.chars[0]; if (!h) return;
-  const s = h.side;
-  const camZ = s * Math.min(Math.abs(h.pos.z) + 6.8, HL + 7.4);
-  _cp.set(h.pos.x * 0.55, 3.5 + Math.max(0, HL - Math.abs(h.pos.z)) * 0.05, camZ);
-  _cl.set(h.pos.x * 0.32 + ball.p.x * 0.08, 0.7, -s * 3.2);
+  const s = h.side, az = Math.abs(h.pos.z);
+  // ao subir à rede a câmera acompanha só em parte, sobe e olha mais longe:
+  // o adversário e a quadra dele continuam no quadro
+  const near = clamp((HL - az) / (HL - 1), 0, 1);
+  const camZ = s * Math.min(lerp(HL + 7, az + 7, 0.45), HL + 7.4);
+  _cp.set(h.pos.x * (0.55 - near * 0.2), 3.5 + near * 1.7, camZ);
+  _cl.set(h.pos.x * 0.3 + ball.p.x * 0.08, 0.7, -s * (3.2 + near * 3.5));
   if (S.camSnap) { camera.position.copy(_cp); camLook.copy(_cl); S.camSnap = false; }
   camera.position.lerp(_cp, 1 - Math.exp(-dt * 4.5));
   camLook.lerp(_cl, 1 - Math.exp(-dt * 4.5));
@@ -1975,7 +1998,7 @@ function drawPortrait(cv, def) {
   if (def.style === 'princess') { g.fillStyle = hair; g.fillRect(10, 14, 52, 58); }
   g.fillStyle = css(def.skin); g.beginPath(); g.roundRect(14, 16, 44, 44, 9); g.fill();
   g.fillStyle = hair;
-  if (def.style === 'bob') { g.fillRect(12, 12, 48, 12); g.fillRect(11, 14, 7, 30); g.fillRect(54, 14, 7, 30); }
+  if (def.style === 'bob') { g.fillRect(12, 12, 48, 12); g.fillRect(9, 14, 9, 46); g.fillRect(54, 14, 9, 46); }
   else { g.fillRect(12, 11, 48, 11); }
   if (def.style.startsWith('swoop')) { g.save(); g.translate(40, 22); g.rotate(-0.35); g.fillRect(-14, -4, 28, 9); g.restore(); }
   g.fillStyle = '#1b1b24'; g.fillRect(24, 33, 6, 8); g.fillRect(42, 33, 6, 8);
@@ -2016,16 +2039,26 @@ function initUI() {
   S.renderChips = () => {
     chips($('oppList'), [['Aleatório', -1], ...CHARS.map((d, i) => [d.name, i]).filter(([, i]) => i !== S.sel.char)], () => S.sel.opp, (v) => (S.sel.opp = v));
     chips($('diffList'), DIFF.map((d, i) => [d.name, i]), () => S.sel.diff, (v) => (S.sel.diff = v));
+    chips($('fpsList'), [['Ocultar', false], ['Mostrar', true]], () => S.showFps, (v) => setShowFps(v));
     chips($('surfList'), Object.entries(SURFACES).map(([k, s]) => [s.name, k]), () => S.sel.surface, (v) => { if (v !== S.sel.surface) { S.sel.surface = v; buildCourt(v); } });
   };
   $('playBtn').onclick = () => { AudioFX.init(); AudioFX.click(); startMatch(); };
   $('muteBtn').onclick = () => { AudioFX.init(); toggleMute(); };
   $('pauseBtn').onclick = () => togglePause();
+  $('fpsPauseBtn').onclick = () => setShowFps(!S.showFps);
+  setShowFps(store('bt-fps') === '1');
   $('resumeBtn').onclick = () => togglePause();
   $('quitBtn').onclick = () => { $('pauseMenu').classList.add('hidden'); enterMenu(); };
   $('againBtn').onclick = () => { AudioFX.click(); startMatch(); };
   $('menuBtn').onclick = () => { AudioFX.click(); enterMenu(); };
   refreshMenu();
+}
+// Mostra/oculta o contador de FPS (preferência guardada no navegador)
+function setShowFps(v) {
+  S.showFps = !!v; store('bt-fps', S.showFps ? '1' : '0');
+  $('badge').classList.toggle('hidden', !S.showFps);
+  $('fpsPauseBtn').textContent = S.showFps ? 'Ocultar FPS' : 'Mostrar FPS';
+  S.renderChips && S.renderChips();
 }
 function refreshMenu() {
   document.querySelectorAll('#charList .card').forEach((b) => b.classList.toggle('sel', +b.dataset.i === S.sel.char));
@@ -2110,6 +2143,7 @@ function setHint() {
   if (S.state === 'play') {
     if (rally.phase === 'serveReady' && rally.server === 0) t = S.isTouch ? 'Segure GOLPE para lançar, solte no alto para sacar • joystick mira' : 'Segure ESPAÇO para lançar • solte no alto para sacar • mouse mira • Shift = saque com efeito';
     else if (rally.phase === 'serveReady') t = `${S.chars[1].def.name} vai sacar…`;
+    else if (S.chars[0] && atNet(S.chars[0])) t = S.isTouch ? 'Na rede: toque GOLPE para o voleio' : 'Na rede: toque ESPAÇO para o voleio • mouse mira';
     else t = S.isTouch ? 'Segure GOLPE e solte quando a bola chegar • joystick para mirar' : 'Segure ESPAÇO e solte na chegada da bola • mouse mira • Shift = slice';
     if (rally.serveNum === 2 && rally.phase === 'serveReady') t = '2º SAQUE — ' + t;
   }
@@ -2117,6 +2151,8 @@ function setHint() {
 }
 function updateHUDDynamic(dt) {
   const h = S.chars[0];
+  const net = !!(h && S.state === 'play' && atNet(h));
+  if (net !== S.netHint) { S.netHint = net; setHint(); }
   const m = $('meter');
   if (h && h.charging) {
     m.classList.remove('hidden');
