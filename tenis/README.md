@@ -16,11 +16,12 @@ Depois acesse `http://localhost:8000/tenis.html`. No celular, use o IP do PC na 
 
 ## Controles
 
-- **Desktop:** WASD ou setas movem o jogador. O mouse (ou J/L/I/K) mira. Segure Espaço para carregar a força e solte na chegada da bola; a zona dourada do medidor dá o golpe perfeito. Shift faz slice e E faz drop shot. R mostra o replay, M liga e desliga o som, F mostra ou oculta o FPS e Esc pausa.
+- **Desktop:** WASD ou setas movem o jogador. O mouse (ou J/L/I/K) mira. Segure Espaço para carregar a força e solte na chegada da bola; a zona dourada do medidor dá o golpe perfeito. Shift faz slice e E faz drop shot e Q faz lob (com o adversário na rede). R mostra o replay, M liga e desliga o som, F mostra ou oculta o FPS e Esc pausa.
 - **Na rede:** um toque em Espaço já faz o voleio, sem carregar força.
 - **Saque:** segure Espaço para lançar a bola e solte perto do ponto mais alto.
 - **Drop shot:** E (ou o botão DROP no celular) faz a deixadinha com um toque, curta e com slice, logo depois da rede. Do fundo da quadra ela é mais arriscada.
-- **Celular:** joystick virtual e botões GOLPE, SLICE e DROP.
+- **Lob:** quando o adversário sobe à rede, Q (ou o botão LOB, que só aparece nessa hora no celular) joga a bola por cima dele.
+- **Celular:** joystick virtual e botões GOLPE, SLICE e DROP, mais o LOB quando o adversário está na rede.
 
 ## Recursos
 
