@@ -109,7 +109,7 @@ body.touch #hint{bottom:auto;top:96px;font-size:12px;opacity:.8}
   background:radial-gradient(circle,#ffffff22,#ffffff0d);border:3px solid #ffffff40}
 #knob{position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px 0 0 -31px;border-radius:50%;
   background:linear-gradient(#ffffffd0,#c9d6ffb0);box-shadow:0 4px 12px rgba(0,0,0,.4)}
-#hitBtn,#sliceBtn,#dropBtn{position:absolute;pointer-events:auto;font-weight:900;border-radius:50%;color:#ffffffd0;
+#hitBtn,#sliceBtn,#dropBtn,#lobBtn{position:absolute;pointer-events:auto;font-weight:900;border-radius:50%;color:#ffffffd0;
   background:#0a142e38;border:2px solid #ffffff55;letter-spacing:1px;text-shadow:0 1px 3px rgba(0,0,0,.6);
   -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);transition:background .1s,transform .1s}
 #hitBtn{right:24px;bottom:40px;width:96px;height:96px;font-size:15px;color:#ffe08ae0;border-color:#ffd23a80}
@@ -118,6 +118,11 @@ body.touch #hint{bottom:auto;top:96px;font-size:12px;opacity:.8}
 #sliceBtn.on{background:#7fd0ff55;border-color:#7fd0ffcc;color:#fff}
 #dropBtn{right:34px;bottom:148px;width:58px;height:58px;font-size:11px}
 #dropBtn:active{transform:scale(.94);background:#ffffff40}
+#lobBtn{right:122px;bottom:118px;width:64px;height:64px;font-size:12px;color:#c8f7ff;border-color:#7fe3ffb0;background:#0a6a8a40;
+  opacity:0;transform:scale(.6);pointer-events:none;transition:opacity .18s,transform .18s,background .1s}
+#lobBtn.on{opacity:1;transform:scale(1);pointer-events:auto;animation:lobPulse 1s ease-in-out infinite}
+#lobBtn.on:active{transform:scale(.94);background:#7fe3ff55}
+@keyframes lobPulse{50%{box-shadow:0 0 14px #7fe3ff99}}
 
 /* --- overlays --- */
 .overlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(5,10,25,.45)}
@@ -179,7 +184,7 @@ body.cine .bar{height:9vh}
     <div class="help">
       <kbd>WASD</kbd>/<kbd>setas</kbd> mover • <b>mouse</b> ou <kbd>J</kbd><kbd>L</kbd><kbd>I</kbd><kbd>K</kbd> mirar •
       <kbd>Espaço</kbd> ou clique: segure para carregar a força, solte para bater (zona dourada = golpe perfeito) •
-      <kbd>Shift</kbd> + golpe = slice (no saque: com efeito) • <kbd>E</kbd> drop shot • <kbd>R</kbd> replay • <kbd>M</kbd> som • <kbd>F</kbd> FPS • <kbd>Esc</kbd> pausa.<br>
+      <kbd>Shift</kbd> + golpe = slice (no saque: com efeito) • <kbd>E</kbd> drop shot • <kbd>Q</kbd> lob (com o adversário na rede) • <kbd>R</kbd> replay • <kbd>M</kbd> som • <kbd>F</kbd> FPS • <kbd>Esc</kbd> pausa.<br>
       No saque: segure <kbd>Espaço</kbd> para lançar a bola e solte perto do ponto mais alto.
     </div>
   </div>
@@ -199,6 +204,7 @@ body.cine .bar{height:9vh}
   <div id="joy"><div id="knob"></div></div>
   <button id="sliceBtn">SLICE</button>
   <button id="dropBtn">DROP</button>
+  <button id="lobBtn">LOB</button>
   <button id="hitBtn">GOLPE</button>
 </div>
 
@@ -1512,7 +1518,7 @@ function retoss() {
 }
 function startSwing(c, type, o = {}) {
   c.swing = { type, t: 0, dur: type === 'serve' ? 0.6 : o.volley ? 0.62 : 0.52, hit: false, checked: false,
-    power: o.power ?? 0.6, perfect: !!o.perfect, slice: !!o.slice, kick: !!o.kick, volley: !!o.volley, drop: !!o.drop };
+    power: o.power ?? 0.6, perfect: !!o.perfect, slice: !!o.slice, kick: !!o.kick, volley: !!o.volley, drop: !!o.drop, lob: !!o.lob };
   AudioFX.swoosh(c.swing.power);
 }
 function updateSwing(c, dt) {
@@ -1528,7 +1534,7 @@ function canHit(c) {
 // Contato: a bola precisa chegar ao "plano de impacto" à frente do jogador dentro da janela do swing
 function tryContact(c) {
   const sw = c.swing;
-  if (sw.t < 0.02 || sw.t > (sw.volley ? 0.5 : sw.drop ? 0.42 : 0.34) || !canHit(c)) return;
+  if (sw.t < 0.02 || sw.t > (sw.volley ? 0.5 : sw.drop || sw.lob ? 0.42 : 0.34) || !canHit(c)) return;
   const k = c.stats.reach * c.sc * (c.isAI ? 1 : 1.12);
   const f = (ball.p.z - c.pos.z) * -c.side;                 // distância à frente
   const l = (ball.p.x - c.pos.x) * c.side;                  // lateral (direita +)
@@ -1540,7 +1546,7 @@ function tryContact(c) {
   sw.type = fh ? 'fh' : 'bh'; sw.hit = true;
   let late = (0.14 - sw.t) + (f < 0 ? -f * 0.12 : 0);      // >0 atrasado, <0 adiantado
   if (sw.volley) late = f < 0 ? -f * 0.08 : 0;              // voleio: só pesa se a bola passou do corpo
-  else if (sw.drop) late *= 0.6;                            // deixadinha: toque curto, janela mais folgada
+  else if (sw.drop || sw.lob) late *= 0.6;                  // deixadinha e lob: toque curto, janela mais folgada
   const tq = clamp(1 - Math.abs(late) / 0.2, 0, 1);
   const dq = clamp(1 - Math.max(0, dl - 0.3) / (0.9 * k), 0, 1);
   const hq = clamp(1 - Math.abs(ball.p.y - 1.0 * c.sc) / 1.6, 0.35, 1);
@@ -1561,6 +1567,7 @@ function executeShot(c, q, late) {
       const far = clamp((Math.abs(c.pos.z) - 7) / (HL - 7), 0, 1);   // do fundo ela fica mais arriscada
       P = { target: new V3(c.side * S.aim.x * (HW - 1), 0, -c.side * rand(1.9, 2.8)), power: 0.2 + 0.25 * far, spin: -0.75, speed: 8 + 3 * far, drop: true };
     }
+    if (sw.lob) P = { target: new V3(c.side * S.aim.x * (HW - 1), 0, -c.side * (HL - rand(1.2, 2.4))), power: 0.35, spin: 0.9, speed: 10, lob: true };   // lob por cima de quem subiu
   } else P = aiShot(c);
   const perfect = !c.isAI && sw.perfect && q > 0.6;
   const speed = (P.speed ?? (14 + 20 * P.power) * P.speedMul) * st.power * (perfect ? 1.12 : 1);
@@ -1586,7 +1593,8 @@ function onShotHit(c, power, perfect, q, late) {
   o.ai.err = { x: gauss() * d.posErr / o.stats.accuracy, z: gauss() * d.posErr * 0.6 / o.stats.accuracy };
   o.ai.terr = gauss() * d.timeErr / o.stats.accuracy;
   if (!c.isAI) {
-    if (c.swing && c.swing.drop) feedback(q > 0.7 ? 'DEIXADINHA!' : 'deixadinha', q > 0.7 ? 'ok' : 'meh');
+    if (c.swing && c.swing.lob) feedback(q > 0.7 ? 'LOB!' : 'lob', q > 0.7 ? 'ok' : 'meh');
+    else if (c.swing && c.swing.drop) feedback(q > 0.7 ? 'DEIXADINHA!' : 'deixadinha', q > 0.7 ? 'ok' : 'meh');
     else if (c.swing && c.swing.volley) feedback(q > 0.7 ? 'VOLEIO!' : 'voleio', q > 0.7 ? 'ok' : 'meh');
     else if (perfect) { feedback('PERFEITO!', 'perfect'); S.shake = 0.16; S.excite = Math.max(S.excite, 0.35); }
     else if (late !== undefined && late > 0.07) feedback('ATRASADO', 'meh');
@@ -1812,6 +1820,16 @@ function dropPress() {
   if (S.isTouch && !mouseAim) S.aim.x = clamp(S.joy.x * 1.1, -1, 1);
   startSwing(h, guessSide(h), { power: 0.25, drop: true });   // um toque, sem carregar força
 }
+// Lob: só existe enquanto o adversário está na rede (botão aparece e some sozinho)
+function lobPress() {
+  AudioFX.init();
+  if (S.state === 'replay') { endReplay(); return; }
+  if (S.state !== 'play' || rally.phase !== 'live' || !S.lobOn) return;
+  const h = S.chars[0];
+  if (h.swing || h.charging) return;
+  if (S.isTouch && !mouseAim) S.aim.x = clamp(S.joy.x * 1.1, -1, 1);
+  startSwing(h, guessSide(h), { power: 0.35, lob: true });
+}
 function actionRelease() {
   if (S.state !== 'play') return;
   const h = S.chars[0]; if (!h || !h.charging) return;
@@ -1829,6 +1847,7 @@ function initInput() {
     S.keys[e.code] = true;
     if (e.code === 'Space') actionPress();
     if (e.code === 'KeyE') dropPress();
+    if (e.code === 'KeyQ') lobPress();
     if (e.code === 'KeyM') toggleMute();
     if (e.code === 'KeyF') setShowFps(!S.showFps);
     if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
@@ -1866,6 +1885,7 @@ function initInput() {
   hb.addEventListener('pointerup', (e) => { e.preventDefault(); actionRelease(); });
   hb.addEventListener('pointercancel', () => actionRelease());
   $('dropBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); dropPress(); });
+  $('lobBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); lobPress(); });
   $('sliceBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); S.sliceToggle = !S.sliceToggle; $('sliceBtn').classList.toggle('on', S.sliceToggle); });
 }
 
@@ -2187,6 +2207,7 @@ function setHint() {
   if (S.state === 'play') {
     if (rally.phase === 'serveReady' && rally.server === 0) t = S.isTouch ? 'Segure GOLPE para lançar, solte no alto para sacar • joystick mira' : 'Segure ESPAÇO para lançar • solte no alto para sacar • mouse mira • Shift = saque com efeito';
     else if (rally.phase === 'serveReady') t = `${S.chars[1].def.name} vai sacar…`;
+    else if (S.lobOn) t = S.isTouch ? 'Adversário na rede: LOB por cima!' : 'Adversário na rede: Q = lob por cima!';
     else if (S.chars[0] && atNet(S.chars[0])) t = S.isTouch ? 'Na rede: toque GOLPE para o voleio' : 'Na rede: toque ESPAÇO para o voleio • mouse mira';
     else t = S.isTouch ? 'Segure GOLPE e solte quando a bola chegar • DROP = deixadinha' : 'Segure ESPAÇO e solte na chegada da bola • mouse mira • Shift = slice • E = drop shot';
     if (rally.serveNum === 2 && rally.phase === 'serveReady') t = '2º SAQUE — ' + t;
@@ -2197,6 +2218,10 @@ function updateHUDDynamic(dt) {
   const h = S.chars[0];
   const net = !!(h && S.state === 'play' && atNet(h));
   if (net !== S.netHint) { S.netHint = net; setHint(); }
+  // lob disponível com o adversário perto da rede (com folga para o botão não piscar)
+  const o = S.chars[1], oz = o ? Math.abs(o.pos.z) : 99;
+  const lob = S.state === 'play' && rally.phase === 'live' && (S.lobOn ? oz < 8.5 : oz < 7);
+  if (lob !== !!S.lobOn) { S.lobOn = lob; $('lobBtn').classList.toggle('on', lob); setHint(); }
   const m = $('meter');
   if (h && h.charging) {
     m.classList.remove('hidden');
