@@ -79,6 +79,7 @@ h3{margin:14px 0 7px;font-size:13px;text-transform:uppercase;letter-spacing:2px;
 #scoreTable .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#d7ff3a;box-shadow:0 0 8px #d7ff3a}
 #scoreTable .col{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
 #tbTag{font-size:11px;letter-spacing:2px;color:var(--yellow);text-align:center;font-weight:900}
+#tourTag{font-size:10px;letter-spacing:1.5px;text-align:center;font-weight:900;opacity:.75;padding-top:2px}
 #msg{position:absolute;left:0;right:0;top:24%;text-align:center;opacity:0;transform:scale(.8);transition:opacity .2s,transform .25s}
 #msg.on{opacity:1;transform:scale(1)}
 #msgMain{font-size:clamp(34px,7vw,72px);font-weight:900;color:#fff;letter-spacing:2px;
@@ -98,7 +99,8 @@ h3{margin:14px 0 7px;font-size:13px;text-transform:uppercase;letter-spacing:2px;
   border-left:2px solid var(--yellow);border-right:2px solid var(--yellow);z-index:2}
 #meter span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;letter-spacing:3px;z-index:3;text-shadow:0 1px 3px #000}
 #hint{position:absolute;left:0;right:0;bottom:22px;text-align:center;font-weight:800;font-size:14px;opacity:.9;text-shadow:0 2px 6px rgba(0,0,0,.7);padding:0 16px}
-body.touch #hint{bottom:auto;top:96px;font-size:12px;opacity:.8}
+body.touch #hint{bottom:auto;top:96px;font-size:12px;opacity:0;transition:opacity .5s;pointer-events:none}
+body.touch #hint.show{opacity:.8}
 #topbar{position:fixed;right:12px;top:12px;z-index:30;display:flex;gap:8px;align-items:center}
 #topbar button{width:42px;height:42px;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:#fff;font-size:18px}
 #badge{font-size:11px;font-weight:800;background:var(--panel);padding:5px 8px;border-radius:10px;border:2px solid var(--line);opacity:.85}
@@ -173,10 +175,15 @@ body.cine .bar{height:9vh}
 <div id="menu" class="hidden">
   <div class="panel">
     <h1>CAMPOS <span>TENNIS</span></h1>
-    <div class="sub">Campos Open • melhor de 3 sets • tie-break no 6-6</div>
+    <div class="sub" id="menuSub">Campos Open • melhor de 3 sets • tie-break no 6-6</div>
     <h3>Seu jogador</h3><div id="charList" class="cards"></div>
     <h3>Cor do avatar</h3><div id="colorList" class="swatches"></div>
-    <h3>Adversário</h3><div id="oppList" class="chips"></div>
+    <h3>Modo</h3><div id="modeList" class="chips"></div>
+    <div id="tourOpts" class="hidden">
+      <h3>Campeonato</h3><div id="tourList" class="chips"></div>
+      <h3>Adversários</h3><div id="poolList" class="chips"></div><div class="sub" id="poolInfo"></div>
+    </div>
+    <div id="oppOpts"><h3>Adversário</h3><div id="oppList" class="chips"></div></div>
     <h3>Dificuldade</h3><div id="diffList" class="chips"></div>
     <h3>Quadra</h3><div id="surfList" class="chips"></div>
     <h3>Contador de FPS</h3><div id="fpsList" class="chips"></div>
@@ -191,7 +198,7 @@ body.cine .bar{height:9vh}
 </div>
 
 <div id="hud" class="hidden">
-  <div id="scorebox"><table id="scoreTable"></table><div id="tbTag" class="hidden">TIE-BREAK</div></div>
+  <div id="scorebox"><table id="scoreTable"></table><div id="tbTag" class="hidden">TIE-BREAK</div><div id="tourTag" class="hidden"></div></div>
   <div id="msg"><div id="msgMain"></div><div id="msgSub"></div></div>
   <div id="fb"></div>
   <div id="meter" class="hidden"><div id="meterZone"></div><div id="meterFill"></div><span>FORÇA</span></div>
@@ -273,11 +280,41 @@ const CHARS = [
     stats: { speed: 0.93, power: 1.06, accuracy: 0.9, reach: 1.06 } },
   { id: 'bia', name: 'Beatriz', age: 16, desc: '16 anos. Técnica impecável. Joga com diversão e com afinco.', height: 1.66,
     skin: 0xf5d2ad, hair: 0x6b3b1e, brow: '#4a2814', style: 'princess', shorts: 0xffffff, shirt: 0xff5fa8, trim: 0xffffff, racket: 0xff4fa0,
-    skirt: true, lashes: true, blush: true, stats: { speed: 1.03, power: 0.93, accuracy: 0.95, reach: 1.0 } },
+    skirt: true, lashes: true, blush: true, fem: true, stats: { speed: 1.03, power: 0.93, accuracy: 0.95, reach: 1.0 } },
   { id: 'lic', name: 'Lícia', desc: 'Ainda pegando o jeito. Sempre disposta.', height: 1.56,
     skin: 0xeab98a, hair: 0xc9a46e, brow: '#8a6640', style: 'bob', shorts: 0xffffff, shirt: 0xffb31a, trim: 0xffffff, racket: 0xff7a1a,
-    skirt: true, lashes: true, blush: true, visor: 0x14b8c4, stats: { speed: 0.8, power: 0.78, accuracy: 0.7, reach: 0.92 } },
+    skirt: true, lashes: true, blush: true, fem: true, visor: 0x14b8c4, stats: { speed: 0.8, power: 0.78, accuracy: 0.7, reach: 0.92 } },
 ];
+// Profissionais: só aparecem como adversários nos campeonatos.
+// Djokovic é o mais forte; Monteiro fica um degrau abaixo dos demais, que são iguais entre si.
+const PRO = { speed: 1.1, power: 1.1, accuracy: 1.06, reach: 1.06 };
+const PROS = [
+  { id: 'djo', name: 'Djokovic', desc: 'O melhor de todos. Devolve tudo.', height: 1.88,
+    skin: 0xeec39a, hair: 0x2a1f18, brow: '#2a1f18', style: 'short', shorts: 0xffffff, shirt: 0x1f3c88, trim: 0xffffff, racket: 0xd61f26,
+    stats: { speed: 1.17, power: 1.14, accuracy: 1.15, reach: 1.1 } },
+  { id: 'nad', name: 'Nadal', desc: 'Rei do saibro. Não desiste de nenhuma bola.', height: 1.85,
+    skin: 0xd9a77a, hair: 0x3a2618, brow: '#3a2618', style: 'band', band: 0xff7a1a, shorts: 0xffffff, shirt: 0xa3e635, trim: 0x1a1a1a, racket: 0xffd23a,
+    stats: { ...PRO } },
+  { id: 'fed', name: 'Federer', desc: 'Elegância suíça. Faz parecer fácil.', height: 1.85,
+    skin: 0xeec39a, hair: 0x4a3020, brow: '#4a3020', style: 'bandShort', band: 0xffffff, shorts: 0xffffff, shirt: 0xf4f4f4, trim: 0xd61f26, racket: 0x1a1a1a,
+    stats: { ...PRO } },
+  { id: 'gug', name: 'Guga', desc: 'Tricampeão de Roland Garros. Cachos e backhand de uma mão.', height: 1.90,
+    skin: 0xeec39a, hair: 0x4a2c18, brow: '#4a2c18', style: 'curly', shorts: 0x1f5fd1, shirt: 0xffd400, trim: 0x1f5fd1, racket: 0x1f5fd1,
+    stats: { ...PRO } },
+  { id: 'alc', name: 'Alcaraz', desc: 'O fenômeno espanhol. Explosivo.', height: 1.83,
+    skin: 0xe5b07a, hair: 0x3a2618, brow: '#3a2618', style: 'short', tuft: true, shorts: 0x1d2a44, shirt: 0x14b8a6, trim: 0xffffff, racket: 0xff3b4e,
+    stats: { ...PRO } },
+  { id: 'mon', name: 'Monteiro', desc: 'Cearense, joga em casa no Porto das Dunas.', height: 1.83,
+    skin: 0xc68c5c, hair: 0x1d1712, brow: '#1d1712', style: 'short', shorts: 0x1d4ed8, shirt: 0x16a34a, trim: 0xffd23a, racket: 0x16a34a,
+    stats: { speed: 1.04, power: 1.04, accuracy: 1.0, reach: 1.02 } },
+];
+// Campeonatos: 1 set por partida, três vitórias (quartas, semi e final) para levar o título.
+// venue = cenário de fundo; board = placa principal nas muretas [texto, fundo, letra]
+const TOURNEYS = [
+  { id: 'pdd', name: 'Porto das Dunas Open', venue: 'beach', board: ['PORTO DAS DUNAS OPEN', '#0a7fb5', '#fff'] },
+  { id: 'gvo', name: 'Golf Ville Open', venue: 'stadium', board: ['GOLF VILLE OPEN', '#1f6b3a', '#fff'] },
+];
+const ROUNDS = ['QUARTAS DE FINAL', 'SEMIFINAL', 'FINAL'];
 const UMPIRE = { id: 'ump', name: 'Juiz', height: 1.76, skin: 0xd9a066, hair: 0x2b1d14, brow: '#2b1d14', style: 'cap',
   shorts: 0x2a3550, shirt: 0x1d2a44, trim: 0xffd23a, stats: {} };
 
@@ -360,7 +397,8 @@ let qualLow = 0, ballGlow, quality = 2, qualT = 0, qualAcc = 0, qualN = 0;
 let sun, courtGroup, netGroup, ballMesh, ballShadow, trailMesh, dustMesh, aimRing, umpire, boardTex;
 const S = {
   state: 'loading',            // loading | menu | play | replay | paused | end
-  sel: { char: 0, color: CHARS[0].shirt, opp: -1, diff: 1, surface: 'hard' },
+  sel: { char: 0, color: CHARS[0].shirt, opp: -1, diff: 1, surface: 'hard', mode: 'match', tour: 0, pool: 'pros' },
+  tour: null, setsToWin: 2, eventName: 'Campos Open',
   chars: [], preview: null,
   t: 0, pt: 0,                 // tempo global / tempo do ponto atual
   phaseTimer: 0, pending: null, lock: false,
@@ -403,6 +441,7 @@ async function init() {
   buildCourt(S.sel.surface);
   buildNet();
   buildStadium();
+  buildBackdrop('stadium');
   buildBall();
   buildEffects();
   buildUmpire();
@@ -491,17 +530,134 @@ function buildSky() {
     }
     scene.add(cl);
   }
+}
+
+// Fundo do cenário (fora do estádio): colinas verdes ou praia com coqueiros, areia e mar
+let envGroup = null, envKind = '';
+const foam = [];
+const SEA_Z = -32;                // na praia o fundo -z da arena é aberto e o mar começa aqui
+function buildBackdrop(kind) {
+  if (kind === envKind) return;
+  if (envGroup) { scene.remove(envGroup); envGroup.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
+  envKind = kind; foam.length = 0;
+  envGroup = new THREE.Group(); scene.add(envGroup);
+  if (kind === 'beach') buildBeach(envGroup);
+  else buildHills(envGroup);
+  setEndStands(kind !== 'beach');
+}
+function addGround(g, color) {
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), matte(color, 1));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; ground.receiveShadow = true;
+  g.add(ground);
+}
+function buildHills(g) {
   // Colinas distantes
   const hm = new THREE.MeshStandardMaterial({ color: 0x5fae5a, roughness: 1, flatShading: true });
   for (let i = 0; i < 34; i++) {
     const a = (i / 34) * Math.PI * 2 + rand(-0.05, 0.05), r = rand(160, 230);
     const m = new THREE.Mesh(new THREE.ConeGeometry(rand(25, 45), rand(14, 34), 6), hm);
     m.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
-    scene.add(m);
+    g.add(m);
   }
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), matte(0x6dbb5e, 1));
-  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; ground.receiveShadow = true;
-  scene.add(ground);
+  addGround(g, 0x6dbb5e);
+}
+function buildBeach(g) {
+  addGround(g, 0xead6a6);
+  // Mar: plano com degradê do raso (verde-água) ao fundo (azul), da praia até o horizonte
+  const seaTex = canvasTex(4, 256, (c, w, h) => {
+    const gr = c.createLinearGradient(0, h, 0, 0);
+    gr.addColorStop(0, '#6fded6'); gr.addColorStop(0.03, '#2fb5cc'); gr.addColorStop(0.12, '#1784bd'); gr.addColorStop(1, '#0d5c96');
+    c.fillStyle = gr; c.fillRect(0, 0, w, h);
+  });
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshStandardMaterial({ map: seaTex, roughness: 0.22, metalness: 0.05 }));
+  sea.rotation.x = -Math.PI / 2; sea.position.set(0, 0.02, SEA_Z - 450); g.add(sea);
+  const wet = new THREE.Mesh(new THREE.PlaneGeometry(900, 6), matte(0xcfb27c, 0.7));   // areia molhada
+  wet.rotation.x = -Math.PI / 2; wet.position.set(0, 0.0, SEA_Z + 2.6); g.add(wet);
+  for (let i = 0; i < 3; i++) {                                                         // espuma das ondas (animada)
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(900, 0.9 - i * 0.2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 - i * 0.2, depthWrite: false }));
+    f.rotation.x = -Math.PI / 2; f.position.set(0, 0.04 + i * 0.002, SEA_Z - i * 3); f.userData = { z0: SEA_Z - 0.3 - i * 3.2, ph: i * 1.7 };
+    g.add(f); foam.push(f);
+  }
+  // Dunas no outro fundo e nas laterais (longe do mar)
+  const dm = new THREE.MeshStandardMaterial({ color: 0xe2c68c, roughness: 1, flatShading: true });
+  for (let i = 0; i < 28; i++) {
+    const a = rand(-0.15, Math.PI + 0.15), r = rand(90, 220);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), dm);
+    m.scale.set(rand(25, 50), rand(8, 22), rand(25, 45)); m.rotation.y = rand(0, 3);
+    m.position.set(Math.cos(a) * r, -0.5, Math.sin(a) * r);
+    g.add(m);
+  }
+  // Coqueiros, guarda-sóis e barquinhos: montados em grupos e fundidos numa malha só (1 draw call)
+  const props = grp(g);
+  const spots = [];
+  const place = (x, z, d) => { if (!spots.every(([a, b]) => Math.hypot(a - x, b - z) > d)) return false; spots.push([x, z]); return true; };
+  // fora da arena; no fundo aberto, livre só o miolo atrás do placar (para não tapar o mar)
+  const outside = (x, z) => Math.abs(x) > 27 || z > 22 || (z < -21 && Math.abs(x) > 7);
+  for (let x = -150; x <= 150; x += rand(7, 12)) {                                      // fileira na beira da praia
+    const z = SEA_Z + rand(2.5, 6);
+    if (outside(x, z) && place(x, z, 5)) buildPalm(props, x, z, rand(9, 14), rand(0.12, 0.3), -Math.PI / 2 + rand(-0.6, 0.6));
+  }
+  for (let n = 0, tries = 0; n < 40 && tries < 500; tries++) {                           // espalhados em volta da arena
+    const x = rand(-120, 120), z = rand(SEA_Z + 6, 130);
+    if (!outside(x, z) || !place(x, z, 6)) continue;
+    buildPalm(props, x, z, rand(8, 15), rand(0.05, 0.3), rand(0, 6.28)); n++;
+  }
+  const UMB = [0xff3b4e, 0xffd23a, 0x2f7bff, 0x22c55e, 0xff7a1a, 0xff5fa8];
+  for (let x = -140; x <= 140; x += rand(9, 16)) {                                      // guarda-sóis na areia
+    const z = SEA_Z + rand(1.5, 4);
+    if (!outside(x, z) || !place(x, z, 3)) continue;
+    const u = grp(props, x, 0, z);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 6), matte(0xf4f4f4)); pole.position.y = 1.2; u.add(pole);
+    const top = new THREE.Mesh(new THREE.ConeGeometry(1.5, 0.55, 8), matte(UMB[(Math.random() * UMB.length) | 0], 0.7));
+    top.position.y = 2.45; top.rotation.z = rand(-0.15, 0.15); u.add(top);
+  }
+  for (let i = 0; i < 4; i++) {                                                         // barquinhos a vela no mar
+    const b = grp(props, rand(-120, 120), 0, rand(SEA_Z - 50, SEA_Z - 170)); b.rotation.y = rand(0, 6.28);
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(5, 0.8, 1.6), matte(i % 2 ? 0xf4f4f4 : 0xff7a1a)); hull.position.y = 0.4; b.add(hull);
+    const sail = new THREE.Mesh(new THREE.ConeGeometry(1.6, 6, 3), matte(0xffffff, 0.7)); sail.scale.z = 0.15; sail.position.set(0.3, 3.8, 0); b.add(sail);
+  }
+  flattenInto(props);
+  bakeGroups(props);
+}
+// Coqueiro: tronco curvo em gomos + folhas caídas + cocos
+function buildPalm(parent, x, z, h, lean, yaw) {
+  const p = grp(parent, x, 0, z); p.rotation.y = yaw;
+  const bark = [matte(0x8a6a45, 0.95), matte(0x735538, 0.95)];
+  const leafM = [matte(0x2f8f3a, 0.8), matte(0x3fa84a, 0.8)];
+  const seg = 7, px = (t) => lean * h * t * t;
+  for (let i = 0; i < seg; i++) {
+    const t0 = i / seg, t1 = (i + 1) / seg, x0 = px(t0), x1 = px(t1), y0 = h * t0, y1 = h * t1;
+    const r = lerp(0.3, 0.19, t0);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r, Math.hypot(x1 - x0, y1 - y0) + 0.06, 7), bark[i % 2]);
+    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0); m.rotation.z = -Math.atan2(x1 - x0, y1 - y0); p.add(m);
+  }
+  const top = grp(p, px(1), h, 0);
+  const nL = 9;
+  for (let k = 0; k < nL; k++) {
+    let a = grp(top); a.rotation.y = (k / nL) * Math.PI * 2 + rand(-0.15, 0.15);
+    let pitch = rand(-0.55, -0.3), wdt = 0.8;
+    const L = rand(1.3, 1.6);
+    for (let s = 0; s < 3; s++) {                       // três gomos, cada um mais caído
+      const b = grp(a); b.rotation.x = pitch;
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(wdt, 0.05, L), leafM[(k + s) % 2]); leaf.position.z = L / 2; b.add(leaf);
+      a = grp(b, 0, 0, L); pitch = rand(0.35, 0.6); wdt *= 0.72;
+    }
+  }
+  for (let k = 0; k < 3; k++) {
+    const c = new THREE.Mesh(new THREE.IcosahedronGeometry(0.17, 0), matte(0x5b3b1f, 0.7));
+    c.position.set(Math.cos(k * 2.1) * 0.25, -0.25, Math.sin(k * 2.1) * 0.25); top.add(c);
+  }
+}
+// Desaninha: todas as malhas viram filhas diretas do grupo (mantendo a posição no mundo) para o bakeGroups fundir tudo
+function flattenInto(g) {
+  g.updateMatrixWorld(true);
+  const meshes = [];
+  g.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  for (const m of meshes) g.attach(m);
+  for (const c of [...g.children]) if (!c.isMesh) g.remove(c);
+}
+function updateBackdrop() {
+  for (const f of foam) f.position.z = f.userData.z0 - Math.sin(S.t * 0.7 + f.userData.ph) * 1.1;
 }
 
 function buildLights() {
@@ -613,17 +769,28 @@ const SPONSORS = [
   ['SAQUE+', '#ff7a1a', '#1a1a1a'], ['CUBO BANK', '#0b7bd3', '#fff'], ['RAQUETEX', '#111', '#7cf2ff'], ['VOLEIO AIR', '#ffd23a', '#1f2b5c'],
   ['GOLF VILLE OPEN', '#1f6b3a', '#fff'],
 ];
-function sponsorTex(i) {
-  const [name, bg, fg] = SPONSORS[i % SPONSORS.length];
+function sponsorTex(i) { return boardTexOf(SPONSORS[i % SPONSORS.length]); }
+function boardTexOf([name, bg, fg]) {
   return canvasTex(512, 64, (g, w, h) => {
     g.fillStyle = bg; g.fillRect(0, 0, w, h);
     g.fillStyle = fg; g.globalAlpha = 0.18;
     for (let k = 0; k < 8; k++) g.fillRect(k * 70 - 20, 0, 22, h);
     g.globalAlpha = 1;
-    g.font = '900 40px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let fs = 40; fs > 20; fs -= 2) { g.font = `900 ${fs}px "Trebuchet MS",sans-serif`; if (g.measureText(name).width < w - 80) break; }
     g.fillText(name, w / 2 + 18, h / 2 + 2);
     g.beginPath(); g.arc(w / 2 - g.measureText(name).width / 2 - 14, h / 2, 13, 0, Math.PI * 2); g.fill();
   });
+}
+
+// Placa principal das muretas: muda conforme o campeonato
+let featuredMat = null, featuredName = 'GOLF VILLE OPEN';
+function setFeaturedBoard(spec) {
+  if (!featuredMat || spec[0] === featuredName) return;
+  featuredName = spec[0];
+  const old = featuredMat.map;
+  featuredMat.map = boardTexOf(spec); featuredMat.needsUpdate = true;
+  old && old.dispose();
 }
 
 const crowd = { n: 0 };
@@ -635,6 +802,7 @@ function buildStadium() {
   // Muretas com placas de patrocínio
   const boards = SPONSORS.map((_, i) => new THREE.MeshStandardMaterial({ map: sponsorTex(i), roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.05 }));
   const GOLF = SPONSORS.findIndex((sp) => sp[0] === 'GOLF VILLE OPEN');
+  featuredMat = boards[GOLF];
   const addWall = (x, z, len, rotY, featured) => {
     const w = new THREE.Group(); w.position.set(x, 0, z); w.rotation.y = rotY; g.add(w);
     box(w, len, 1.1, 0.25, wallMat, 0, 0.55, 0, 0.04).receiveShadow = true;
@@ -656,11 +824,13 @@ function buildStadium() {
     m.position.set(x, top / 2, 0); m.receiveShadow = true; m.castShadow = i === 0; g.add(m);
     for (let z = -(HL + 5.4); z <= HL + 5.4; z += 0.62) seats.push([x, top, z, sx > 0 ? -Math.PI / 2 : Math.PI / 2]);
   }
-  // Arquibancadas de fundo
+  // Arquibancadas de fundo (grupo à parte: somem na praia para abrir a vista)
+  const nSideSeats = seats.length;
+  endStands = grp(g);
   for (const sz of [-1, 1]) for (let i = 0; i < 8; i++) {
     const top = 1.6 + i * 0.55, z = sz * (ALz + 3.2 + i * 0.95);
     const m = new THREE.Mesh(new THREE.BoxGeometry(2 * (AWx + 0.2), top, 0.95), i % 2 ? standA : standB);
-    m.position.set(0, top / 2, z); m.receiveShadow = true; g.add(m);
+    m.position.set(0, top / 2, z); m.receiveShadow = true; endStands.add(m);
     for (let x = -(AWx - 0.4); x <= AWx - 0.4; x += 0.62) seats.push([x, top, z, sz > 0 ? Math.PI : 0]);
   }
   // Telhado lateral leve
@@ -691,13 +861,23 @@ function buildStadium() {
   drawBoard();
   bakeGroups(g);
   g.traverse((o) => { if (o.isMesh) o.castShadow = false; });   // estádio fora da área útil do mapa de sombras
-  buildCrowd(seats);
+  buildCrowd(seats, nSideSeats);
+}
+// Mostra ou esconde as arquibancadas de fundo (e a torcida delas)
+let endStands = null;
+function setEndStands(on) {
+  endStands.visible = on;
+  crowd.n = on ? crowd.nAll : crowd.nSide;
+  crowd.bodies.count = crowd.heads.count = crowd.n; crowd.arms.count = crowd.n * 2;
+  updateCrowd(0, true);
 }
 
 // Torcida: 3 InstancedMesh (corpos, cabeças, braços) — reagem aos pontos
-function buildCrowd(seats) {
-  const list = seats.filter(() => Math.random() < 0.86);
-  const N = list.length; crowd.n = N;
+function buildCrowd(seats, nSide) {
+  const keep = seats.map(() => Math.random() < 0.86);
+  const list = seats.filter((_, i) => keep[i]);
+  const N = list.length; crowd.n = crowd.nAll = N;
+  crowd.nSide = keep.slice(0, nSide).filter(Boolean).length;   // as laterais vêm primeiro na lista
   const bodyGeo = new THREE.BoxGeometry(0.44, 0.56, 0.3); bodyGeo.translate(0, 0.28, 0);
   const headGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3); headGeo.translate(0, 0.15, 0);
   const armGeo = new THREE.BoxGeometry(0.11, 0.42, 0.11); armGeo.translate(0, -0.19, 0);
@@ -765,7 +945,9 @@ function drawBoard() {
   const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0d1838'); gr.addColorStop(1, '#060b1d');
   g.fillStyle = gr; g.fillRect(0, 0, w, h);
   g.fillStyle = '#ffd23a'; g.font = '900 46px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(score.tb ? 'CAMPOS OPEN • TIE-BREAK' : 'CAMPOS OPEN', w / 2, 46);
+  const title = S.eventName.toUpperCase() + (score.tb ? ' • TIE-BREAK' : '');
+  for (let fs = 46; fs > 24; fs -= 2) { g.font = `900 ${fs}px "Trebuchet MS",sans-serif`; if (g.measureText(title).width < w - 60) break; }
+  g.fillText(title, w / 2, 46);
   g.fillStyle = '#ffffff22'; g.fillRect(30, 84, w - 60, 3);
   const P = S.chars.length ? S.chars : null;
   for (let i = 0; i < 2; i++) {
@@ -876,6 +1058,31 @@ function buildHair(head, def, M) {
     const V = plastic(def.visor, 0.35);
     box(head, 0.45, 0.07, 0.03, V, 0, 0.44, 0.205, 0.015);
     box(head, 0.38, 0.025, 0.17, V, 0, 0.415, 0.28, 0.012);
+  }
+  if (st === 'short' || st === 'band' || st === 'bandShort') {
+    box(head, 0.44, 0.09, 0.42, H, 0, 0.465, 0, 0.04);                                   // topo curto
+    box(head, 0.44, 0.24, 0.08, H, 0, 0.35, -0.18, 0.03);                                // nuca
+    for (const sx of [-1, 1]) box(head, 0.05, 0.13, 0.32, H, sx * 0.21, 0.39, -0.03, 0.02);
+    box(head, 0.4, 0.06, 0.06, H, 0, 0.43, 0.185, 0.02);                                 // linha da testa
+  }
+  if (def.tuft) { const t = box(head, 0.3, 0.09, 0.22, H, 0, 0.53, 0.07, 0.03); t.rotation.x = -0.18; }   // topete
+  if (st === 'band') {                                                                   // cabelo comprido até a nuca, volume por cima da faixa
+    box(head, 0.36, 0.1, 0.32, H, 0.02, 0.52, -0.01, 0.04);
+    box(head, 0.46, 0.34, 0.1, H, 0, 0.17, -0.2, 0.03);
+    for (const sx of [-1, 1]) box(head, 0.07, 0.24, 0.2, H, sx * 0.22, 0.26, -0.1, 0.03);
+  }
+  if (st === 'band' || st === 'bandShort') {                                             // faixa na testa
+    const B = plastic(def.band || 0xffffff, 0.5);
+    box(head, 0.43, 0.06, 0.41, B, 0, 0.405, 0, 0.02);
+    if (st === 'band') for (const sx of [-1, 1]) box(head, 0.05, 0.2, 0.03, B, sx * 0.05, 0.3, -0.22, 0.01).rotation.z = sx * 0.25;   // pontas do nó
+  }
+  if (st === 'curly') {                                                                  // cachos volumosos
+    box(head, 0.44, 0.1, 0.42, H, 0, 0.47, 0, 0.04);
+    box(head, 0.46, 0.4, 0.1, H, 0, 0.3, -0.19, 0.03);
+    const C = [[-0.15, 0.53, -0.12], [0, 0.56, -0.12], [0.15, 0.53, -0.12], [-0.15, 0.55, 0.03], [0, 0.58, 0.03], [0.15, 0.55, 0.03],
+      [-0.13, 0.52, 0.16], [0.02, 0.53, 0.17], [0.15, 0.5, 0.15], [-0.2, 0.42, -0.2], [0, 0.4, -0.23], [0.2, 0.42, -0.2],
+      [-0.22, 0.42, 0.02], [0.22, 0.42, 0.02], [-0.22, 0.42, -0.12], [0.22, 0.42, -0.12], [-0.1, 0.24, -0.23], [0.1, 0.24, -0.23]];
+    for (const [x, y, z] of C) box(head, 0.16, 0.14, 0.16, H, x, y, z, 0.06);
   }
   if (st === 'cap') {
     const C = plastic(0x1d2a44, 0.5);
@@ -1377,7 +1584,7 @@ function winGame(w, r) {
     if ((g[0] + g[1]) % 2 === 1) r.change = true;
     score.server = wasTB ? other(score.tbFirst) : other(score.server);
     score.games = [0, 0]; score.tb = false;
-    if (score.setsWon[w] >= 2) { r.match = true; score.done = true; }
+    if (score.setsWon[w] >= S.setsToWin) { r.match = true; score.done = true; }
   } else {
     if ((g[0] + g[1]) % 2 === 1) r.change = true;
     score.server = other(score.server);
@@ -1564,6 +1771,7 @@ function executeShot(c, q, late) {
   const st = c.stats, d = DIFF[S.sel.diff], sw = c.swing, fh = sw.type === 'fh';
   let P;
   if (!c.isAI) {
+    if (S.isTouch && !mouseAim && Math.abs(S.joy.x) > 0.15) S.aim.x = touchAimX();   // vale a direção no momento do contato
     P = { target: aimTarget(c), power: sw.power, spin: sw.slice ? -0.55 : 0.45 + 0.45 * sw.power, speedMul: sw.slice ? 0.8 : 1 };
     if (sw.volley) { P.spin = sw.slice ? -0.5 : 0.1; P.speedMul = 0.95; }
     if (sw.drop) {                                          // deixadinha: curta, com slice, logo depois da rede
@@ -1809,18 +2017,25 @@ function actionPress() {
   if (rally.phase === 'serveReady' && rally.server === 0 && !h.swing) { doToss(h); h.charging = 'serve'; h.chargeT = 0; return; }
   if (rally.phase === 'live' && !h.swing && !h.charging) {
     // perto da rede: um toque já faz o voleio (sem carregar força, janela de contato maior)
-    if (atNet(h)) { startSwing(h, guessSide(h), { power: 0.45, volley: true, slice: !!(S.keys.ShiftLeft || S.keys.ShiftRight || S.sliceToggle) }); return; }
+    if (atNet(h)) { if (S.isTouch && !mouseAim) S.aim.x = touchAimX(); startSwing(h, guessSide(h), { power: 0.45, volley: true, slice: !!(S.keys.ShiftLeft || S.keys.ShiftRight || S.sliceToggle) }); return; }
     h.charging = 'shot'; h.chargeT = 0; h.prep = guessSide(h);
   }
 }
 const atNet = (c) => Math.abs(c.pos.z) < 7;
+// Mira no toque: o joystick também anda, então quem solta o joystick para bater
+// ainda mira para o último lado que apontou (memória curta)
+function touchAimX() {
+  if (Math.abs(S.joy.x) > 0.15) return clamp(S.joy.x * 1.1, -1, 1);
+  if (performance.now() - (S.joyAimT || 0) < 700) return clamp(S.joyAimX * 1.1, -1, 1);
+  return 0;
+}
 function dropPress() {
   AudioFX.init();
   if (S.state === 'replay') { endReplay(); return; }
   if (S.state !== 'play' || rally.phase !== 'live') return;
   const h = S.chars[0];
   if (h.swing || h.charging) return;
-  if (S.isTouch && !mouseAim) S.aim.x = clamp(S.joy.x * 1.1, -1, 1);
+  if (S.isTouch && !mouseAim) S.aim.x = touchAimX();
   startSwing(h, guessSide(h), { power: 0.25, drop: true });   // um toque, sem carregar força
 }
 // Lob: só existe enquanto o adversário está na rede (botão aparece e some sozinho)
@@ -1830,7 +2045,7 @@ function lobPress() {
   if (S.state !== 'play' || rally.phase !== 'live' || !S.lobOn) return;
   const h = S.chars[0];
   if (h.swing || h.charging) return;
-  if (S.isTouch && !mouseAim) S.aim.x = clamp(S.joy.x * 1.1, -1, 1);
+  if (S.isTouch && !mouseAim) S.aim.x = touchAimX();
   startSwing(h, guessSide(h), { power: 0.35, lob: true });
 }
 function actionRelease() {
@@ -1838,7 +2053,7 @@ function actionRelease() {
   const h = S.chars[0]; if (!h || !h.charging) return;
   const v = meterValue(h), perfect = v >= 0.82 && v <= 0.97, power = 0.22 + 0.78 * v;
   const slice = !!(S.keys.ShiftLeft || S.keys.ShiftRight || S.sliceToggle);
-  if (S.isTouch && !mouseAim) { S.aim.x = clamp(S.joy.x * 1.1, -1, 1); S.aim.y = 0.8; }
+  if (S.isTouch && !mouseAim) { S.aim.x = touchAimX(); S.aim.y = 0.8; }
   const kind = h.charging; h.charging = false;
   if (kind === 'serve') { if (rally.phase === 'toss') startSwing(h, 'serve', { power, perfect, kick: slice }); return; }
   if (rally.phase === 'live') startSwing(h, guessSide(h), { power, perfect, slice });
@@ -1877,6 +2092,7 @@ function initInput() {
     let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R); const l = Math.hypot(dx, dy);
     if (l > R * 0.8) { dx *= (R * 0.8) / l; dy *= (R * 0.8) / l; }
     S.joy.x = dx / (R * 0.8); S.joy.y = dy / (R * 0.8);
+    if (Math.abs(S.joy.x) > 0.25) { S.joyAimX = S.joy.x; S.joyAimT = performance.now(); }
     knob.style.transform = `translate(${dx}px,${dy}px)`;
   };
   joy.addEventListener('pointerdown', (e) => { jid = e.pointerId; joy.setPointerCapture(jid); setJoy(e); AudioFX.init(); });
@@ -2117,6 +2333,17 @@ function initUI() {
     });
   };
   S.renderChips = () => {
+    chips($('modeList'), [['Partida amistosa', 'match'], ['Campeonato', 'tour']], () => S.sel.mode, (v) => { S.sel.mode = v; refreshVenue(); });
+    chips($('tourList'), TOURNEYS.map((t, i) => { const n = +(store('bt-tit-' + t.id) || 0); return [t.name + (n ? ` 🏆${n > 1 ? n : ''}` : ''), i]; }),
+      () => S.sel.tour, (v) => { S.sel.tour = v; refreshVenue(); });
+    chips($('poolList'), [['Profissionais', 'pros'], ['Turma', 'turma']], () => S.sel.pool, (v) => (S.sel.pool = v));
+    $('poolInfo').textContent = S.sel.pool === 'pros'
+      ? '3 sorteados entre ' + PROS.map((p) => p.name).join(', ').replace(/, ([^,]*)$/, ' e $1') + '. O mais forte fica para a final.'
+      : 'Os outros três da turma, do mais fraco ao mais forte.';
+    const tour = S.sel.mode === 'tour';
+    $('tourOpts').classList.toggle('hidden', !tour); $('oppOpts').classList.toggle('hidden', tour);
+    $('menuSub').textContent = tour ? `${TOURNEYS[S.sel.tour].name} • 3 vitórias até o título • 1 set por partida` : 'Campos Open • melhor de 3 sets • tie-break no 6-6';
+    $('playBtn').textContent = tour ? 'JOGAR CAMPEONATO ▶' : 'JOGAR ▶';
     chips($('oppList'), [['Aleatório', -1], ...CHARS.map((d, i) => [d.name, i]).filter(([, i]) => i !== S.sel.char)], () => S.sel.opp, (v) => (S.sel.opp = v));
     chips($('diffList'), DIFF.map((d, i) => [d.name, i]), () => S.sel.diff, (v) => (S.sel.diff = v));
     chips($('fpsList'), [['Ocultar', false], ['Mostrar', true]], () => S.showFps, (v) => setShowFps(v));
@@ -2129,7 +2356,7 @@ function initUI() {
   setShowFps(store('bt-fps') === '1');
   $('resumeBtn').onclick = () => togglePause();
   $('quitBtn').onclick = () => { $('pauseMenu').classList.add('hidden'); enterMenu(); };
-  $('againBtn').onclick = () => { AudioFX.click(); startMatch(); };
+  $('againBtn').onclick = () => { AudioFX.click(); (S.againAction || startMatch)(); };
   $('menuBtn').onclick = () => { AudioFX.click(); enterMenu(); };
   refreshMenu();
 }
@@ -2153,21 +2380,53 @@ function refreshPreview() {
 }
 function enterMenu() {
   for (const c of S.chars) removePlayer(c);
-  S.chars = []; S.state = 'menu';
+  S.chars = []; S.state = 'menu'; S.tour = null;
   score.sets = []; score.games = [0, 0]; score.pts = [0, 0]; score.tb = false; score.done = false;
   ['hud', 'touchUI', 'endScreen', 'pauseMenu', 'pauseBtn'].forEach((id) => $(id).classList.add('hidden'));
   $('menu').classList.remove('hidden');
   ball.state = 'held'; ball.p.set(0, -5, 0);
-  refreshPreview(); drawBoard();
+  refreshMenu(); refreshPreview(); refreshVenue();
 }
+// Cenário e placa principal conforme o modo escolhido no menu
+function refreshVenue() {
+  const t = S.sel.mode === 'tour' ? TOURNEYS[S.sel.tour] : null;
+  buildBackdrop(t ? t.venue : 'stadium');
+  setFeaturedBoard(t ? t.board : SPONSORS.find((sp) => sp[0] === 'GOLF VILLE OPEN'));
+  S.eventName = t ? t.name : 'Campos Open';
+  drawBoard();
+}
+const strength = (d) => d.stats.speed + d.stats.power + d.stats.accuracy + d.stats.reach;
 function startMatch() {
-  if (S.preview) { removePlayer(S.preview); S.preview = null; }
-  for (const c of S.chars) removePlayer(c);
+  if (S.sel.mode === 'tour') return startTour();
+  S.tour = null; S.setsToWin = 2; S.againAction = startMatch;
   let oi = S.sel.opp;
   if (oi < 0 || oi === S.sel.char) { const opts = CHARS.map((_, i) => i).filter((i) => i !== S.sel.char); oi = opts[(Math.random() * opts.length) | 0]; }
-  let oc = CHARS[oi].shirt;
+  beginMatch(CHARS[oi]);
+  showMsg(S.chars[score.server].def.name.toUpperCase(), 'saca primeiro', '');
+}
+// Campeonato: sorteia 3 adversários e os ordena do mais fraco ao mais forte (o melhor fica para a final)
+function startTour() {
+  const pool = (S.sel.pool === 'pros' ? PROS : CHARS.filter((_, i) => i !== S.sel.char)).slice();
+  for (let i = pool.length - 1; i > 0; i--) { const k = (Math.random() * (i + 1)) | 0; [pool[i], pool[k]] = [pool[k], pool[i]]; }
+  const opps = pool.slice(0, 3).sort((a, b) => strength(a) - strength(b));
+  S.tour = { t: TOURNEYS[S.sel.tour], round: 0, opps, res: [] };
+  playTourMatch();
+}
+function playTourMatch() {
+  const T = S.tour, opp = T.opps[T.round], rd = ROUNDS[T.round];
+  S.setsToWin = 1;
+  ['menu', 'endScreen'].forEach((id) => $(id).classList.add('hidden'));
+  fadeTransition(rd, () => {
+    beginMatch(opp);
+    showMsg(rd, `contra ${opp.name} • ${S.chars[score.server].def.name} saca`, T.round === 2 ? 'gold' : '');
+  });
+}
+function beginMatch(oppDef) {
+  if (S.preview) { removePlayer(S.preview); S.preview = null; }
+  for (const c of S.chars) removePlayer(c);
+  let oc = oppDef.shirt;
   if (oc === S.sel.color) oc = PALETTE[(PALETTE.indexOf(oc) + 3) % PALETTE.length];
-  S.chars = [createPlayer(CHARS[S.sel.char], S.sel.color, false, 0), createPlayer(CHARS[oi], oc, true, 1)];
+  S.chars = [createPlayer(CHARS[S.sel.char], S.sel.color, false, 0), createPlayer(oppDef, oc, true, 1)];
   Object.assign(score, { sets: [], games: [0, 0], pts: [0, 0], tb: false, tbFirst: 0, setsWon: [0, 0], server: Math.random() < 0.5 ? 0 : 1, done: false });
   rally.serveNum = 1; S.pending = null; S.lock = false; S.replay = null; S.sinceReplay = 9;
   ['menu', 'endScreen', 'pauseMenu'].forEach((id) => $(id).classList.add('hidden'));
@@ -2176,17 +2435,42 @@ function startMatch() {
   S.state = 'play'; S.camSnap = true;
   startPoint();
   for (const c of S.chars) { c.pose.set(c.T); animateChar(c, 0.016); }
-  showMsg(S.chars[score.server].def.name.toUpperCase(), 'saca primeiro', '');
   AudioFX.whistle(true); S.excite = 0.6; AudioFX.cheer(0.5);
 }
 function showEnd() {
-  const w = score.setsWon[0] >= 2 ? 0 : 1;
+  const w = score.setsWon[0] >= S.setsToWin ? 0 : 1;
   S.endWinner = w; S.state = 'end';
   S.chars[w].mood = 'win'; S.chars[other(w)].mood = 'lose';
   $('hud').classList.add('hidden'); $('touchUI').classList.add('hidden'); $('pauseBtn').classList.add('hidden');
-  $('endTitle').textContent = w === 0 ? 'VITÓRIA!' : 'DERROTA';
-  $('endSub').textContent = w === 0 ? `${S.chars[0].def.name} venceu ${S.chars[1].def.name} (${DIFF[S.sel.diff].name})` : `${S.chars[1].def.name} venceu desta vez. Revanche?`;
-  $('endSets').textContent = score.sets.map((s) => `${s[0]}-${s[1]}`).join('   ');
+  const me = S.chars[0].def, op = S.chars[1].def, sets = score.sets.map((s) => `${s[0]}-${s[1]}`).join('   ');
+  let title, sub, again, line = sets;
+  if (!S.tour) {
+    title = w === 0 ? 'VITÓRIA!' : 'DERROTA';
+    sub = w === 0 ? `${me.name} venceu ${op.name} (${DIFF[S.sel.diff].name})` : `${op.name} venceu desta vez. Revanche?`;
+    again = ['REINICIAR', startMatch];
+  } else {
+    const T = S.tour, r = T.round, IN = ['nas quartas de final', 'na semifinal', 'na final'];
+    T.res.push(`${['Quartas', 'Semi', 'Final'][r]} ${sets}`);
+    line = T.res.join('   •   ');
+    if (w === 0 && r < 2) {
+      const next = T.opps[r + 1];
+      title = 'VITÓRIA!';
+      sub = `${me.name} passou por ${op.name} ${IN[r]}. Agora: ${ROUNDS[r + 1].toLowerCase()} contra ${next.name}.`;
+      again = ['PRÓXIMA ▶', () => { T.round++; playTourMatch(); }];
+    } else if (w === 0) {
+      const key = 'bt-tit-' + T.t.id, n = +(store(key) || 0) + 1;
+      store(key, String(n));
+      title = me.fem ? '🏆 CAMPEÃ!' : '🏆 CAMPEÃO!';
+      sub = `${me.name} venceu ${op.name} na final e levou o ${T.t.name}!` + (n > 1 ? ` (${n}º título)` : '');
+      again = ['NOVO CAMPEONATO', startTour];
+    } else {
+      title = me.fem ? 'ELIMINADA' : 'ELIMINADO';
+      sub = `${op.name} venceu ${IN[r]}. Tente de novo!`;
+      again = ['TENTAR DE NOVO', startTour];
+    }
+  }
+  $('endTitle').textContent = title; $('endSub').textContent = sub; $('endSets').textContent = line;
+  $('againBtn').textContent = again[0]; S.againAction = again[1];
   $('endScreen').classList.remove('hidden');
   S.excite = 1.4; AudioFX.cheer(1);
 }
@@ -2217,6 +2501,8 @@ function updateScoreHUD() {
   }
   $('scoreTable').innerHTML = html;
   $('tbTag').classList.toggle('hidden', !score.tb);
+  $('tourTag').classList.toggle('hidden', !S.tour);
+  if (S.tour) $('tourTag').textContent = `${S.tour.t.name.toUpperCase()} • ${ROUNDS[S.tour.round]}`;
 }
 function setHint() {
   let t = '';
@@ -2228,7 +2514,16 @@ function setHint() {
     else t = S.isTouch ? 'Segure GOLPE e solte quando a bola chegar • DROP = deixadinha' : 'Segure ESPAÇO e solte na chegada da bola • mouse mira • Shift = slice • E = drop shot';
     if (rally.serveNum === 2 && rally.phase === 'serveReady') t = '2º SAQUE — ' + t;
   }
-  $('hint').textContent = t;
+  const el = $('hint');
+  if (el.textContent === t) return;
+  el.textContent = t;
+  if (!S.isTouch) return;
+  // no celular a dica fica no meio da quadra: aparece por pouco tempo e só nas primeiras vezes
+  clearTimeout(S.hintTimer);
+  S.hintSeen = S.hintSeen || {};
+  const key = t.replace(/^2º SAQUE — /, ''), n = S.hintSeen[key] = (S.hintSeen[key] || 0) + 1;
+  el.classList.toggle('show', !!t && n <= 2);
+  if (t && n <= 2) S.hintTimer = setTimeout(() => el.classList.remove('show'), 3000);
 }
 function updateHUDDynamic(dt) {
   const h = S.chars[0];
@@ -2278,7 +2573,7 @@ function update(dt) {
     for (const c of S.chars) { c.vel.set(0, 0, 0); animateChar(c, dt); }
   }
   if (S.state !== 'paused') {
-    updateCrowd(dt); updateEffects(dt); updateUmpire();
+    updateCrowd(dt); updateEffects(dt); updateUmpire(); updateBackdrop();
     // volume da torcida acompanha a empolgação
     if (AudioFX.amb) AudioFX.amb.gain.value = 0.02 + S.excite * 0.05;
   }
@@ -2334,7 +2629,7 @@ function render() {
   else renderer.render(scene, camera);
 }
 
-window.__tennis = { S, ball, rally, score, get renderer() { return renderer; }, get pipeline() { return pipeline; }, set pipeline(v) { pipeline = v; }, get sun() { return sun; }, get scene() { return scene; }, crowd };   // gancho de depuração (console)
+window.__tennis = { S, ball, rally, score, get renderer() { return renderer; }, get pipeline() { return pipeline; }, set pipeline(v) { pipeline = v; }, get sun() { return sun; }, get scene() { return scene; }, crowd, endPoint };   // gancho de depuração (console)
 init().catch((e) => {
   console.error(e);
   $('loadInfo').textContent = 'Erro ao iniciar: ' + (e && e.message ? e.message : e);

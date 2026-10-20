@@ -27,7 +27,9 @@ Depois acesse `http://localhost:8000/tenis.html`. No celular, use o IP do PC na 
 
 - Quatro personagens: Leonardo, Ricardo, Beatriz e Lícia, com atributos diferentes.
 - IA em três dificuldades (fácil, médio e difícil).
-- Regras oficiais: 15/30/40, vantagem, tie-break, melhor de 3 sets, 2º saque e troca de lado.
+- Partida amistosa em melhor de 3 sets ou campeonato: três vitórias (quartas, semifinal e final) com 1 set por partida. No campeonato, os adversários são os outros três da turma ou três profissionais sorteados entre Djokovic (o mais forte), Nadal, Federer, Guga, Alcaraz e Monteiro (um degrau abaixo). O mais forte sorteado fica para a final.
+- Campeonatos: Porto das Dunas Open, numa arena de praia aberta para o mar, com coqueiros e dunas; e Golf Ville Open, no estádio. Os títulos ficam guardados no navegador.
+- Regras oficiais: 15/30/40, vantagem, tie-break, 2º saque e troca de lado.
 - Física da bola com arrasto, efeito Magnus (topspin e slice), quique e rede.
 - Replay em câmera lenta nos pontos de set e partida e, de vez em quando, nos pontos bonitos (ace, rally longo, winner de drop shot, lob, voleio ou golpe perfeito, quebra de saque).
 - Quadra de piso rígido ou de saibro.
