@@ -265,9 +265,9 @@ const SURFACES = {
 
 // Dificuldades da IA
 const DIFF = [
-  { name: 'Fácil',   speed: 0.74, react: 0.36, posErr: 0.42, timeErr: 0.055, power: 0.42, margin: 1.3, smart: 0.2,  err: 1.55, lob: 0.10, drop: 0.00, judge: 0.45, serveP: 0.5,  serveQ: 0.62 },
-  { name: 'Médio',   speed: 0.86, react: 0.27, posErr: 0.26, timeErr: 0.04,  power: 0.56, margin: 1.0, smart: 0.4,  err: 1.2,  lob: 0.2,  drop: 0.03, judge: 0.7,  serveP: 0.66, serveQ: 0.74 },
-  { name: 'Difícil', speed: 1.04, react: 0.13, posErr: 0.07, timeErr: 0.016, power: 0.76, margin: 0.55, smart: 0.85, err: 0.72, lob: 0.45, drop: 0.08, judge: 0.97, serveP: 0.86, serveQ: 0.9 },
+  { name: 'Fácil',   speed: 0.74, react: 0.36, posErr: 0.42, timeErr: 0.055, power: 0.42, margin: 1.3, smart: 0.2,  err: 1.55, lob: 0.10, drop: 0.00, judge: 0.45, serveP: 0.5,  serveQ: 0.62, miss: 0.8 },
+  { name: 'Médio',   speed: 0.86, react: 0.27, posErr: 0.26, timeErr: 0.04,  power: 0.56, margin: 1.0, smart: 0.4,  err: 1.2,  lob: 0.2,  drop: 0.03, judge: 0.7,  serveP: 0.66, serveQ: 0.74, miss: 0.55 },
+  { name: 'Difícil', speed: 1.04, react: 0.13, posErr: 0.07, timeErr: 0.016, power: 0.76, margin: 0.55, smart: 0.85, err: 0.72, lob: 0.45, drop: 0.08, judge: 0.97, serveP: 0.86, serveQ: 0.9, miss: 0.22 },
 ];
 
 // Personagens selecionáveis
@@ -1323,7 +1323,7 @@ function createPlayer(def, color, isAI, idx) {
     swing: null, charging: false, chargeT: 0, prep: 'fh',
     pose: new Float32Array(NP), T: new Float32Array(NP), runPhase: 0, phaseOff: Math.random() * 10,
     mood: null, stats: { ...def.stats }, sc: def.height / 1.75, moveTo: null,
-    ai: { react: 0, plan: null, replan: 0, err: { x: 0, z: 0 }, terr: 0, serveT: 1, tossVy: 0, letGo: false, judged: false, assistT: 0 },
+    ai: { react: 0, plan: null, replan: 0, err: { x: 0, z: 0 }, terr: 0, serveT: 1, tossVy: 0, letGo: false, judged: false, assistT: 0, stretch: -1 },
   };
 }
 function removePlayer(c) { scene.remove(c.root); scene.remove(c.shadow); }
@@ -1783,8 +1783,9 @@ function executeShot(c, q, late) {
   const perfect = !c.isAI && sw.perfect && q > 0.6;
   const speed = (P.speed ?? (14 + 20 * P.power) * P.speedMul) * st.power * (perfect ? 1.12 : 1);
   const tgt = P.target.clone();
-  tgt.x += c.side * late * 9 * (fh ? 1 : -1);               // atrasado empurra para fora, adiantado puxa
-  const sigma = (0.22 + 0.85 * (1 - q) + 0.35 * P.power) / st.accuracy * (c.isAI ? d.err : 1) * (perfect ? 0.35 : 1);
+  tgt.x += c.side * late * (S.isTouch && !c.isAI ? 5 : 9) * (fh ? 1 : -1);   // atrasado empurra para fora, adiantado puxa (no toque pesa menos que a mira)
+  const run = c.isAI ? 1 + 0.9 * clamp(c.ai.stretch - 0.5, 0, 1) : 1;      // IA batendo na corrida erra mais
+  const sigma = (0.22 + 0.85 * (1 - q) + 0.35 * P.power) / st.accuracy * (c.isAI ? d.err * run : 1) * (perfect ? 0.35 : 1);
   tgt.x += gauss() * sigma; tgt.z += gauss() * sigma * 1.25;
   if (ball.p.y < 0.12) ball.p.y = 0.12;
   const v = solveShot(ball.p, tgt, speed, P.spin, P.lob ? 0.9 : P.drop ? 0.18 : 0.25);
@@ -1800,7 +1801,7 @@ function onShotHit(c, power, perfect, q, late) {
   const o = S.chars[other(c.idx)];
   const d = DIFF[S.sel.diff];
   o.ai.react = d.react * (1.25 - 0.25 * o.stats.speed) + rand(0, 0.06);
-  o.ai.plan = null; o.ai.letGo = false; o.ai.judged = false;
+  o.ai.plan = null; o.ai.letGo = false; o.ai.judged = false; o.ai.stretch = -1;
   o.ai.err = { x: gauss() * d.posErr / o.stats.accuracy, z: gauss() * d.posErr * 0.6 / o.stats.accuracy };
   o.ai.terr = gauss() * d.timeErr / o.stats.accuracy;
   if (!c.isAI) {
@@ -1871,7 +1872,11 @@ function planIntercept(c) {
   const i = best >= 0 ? best : fb, fh = best >= 0 ? bestFh : fbFh;
   if (i < 0) return null;
   const k = i * 5, off = (fh ? 0.62 : -0.58) * c.sc;
-  return { tAbs: S.pt + PRED[k], stand: { x: PRED[k + 1] - c.side * off, z: PRED[k + 3] + c.side * 0.3 }, type: fh ? 'fh' : 'bh' };
+  const stand = { x: PRED[k + 1] - c.side * off, z: PRED[k + 3] + c.side * 0.3 };
+  // stretch: fração do tempo disponível gasta na corrida (1 = chega no limite); recuar pesa pouco, ir para o lado ou para a rede pesa inteiro
+  const dz = (stand.z - c.pos.z) * c.side;
+  const run = Math.abs(stand.x - c.pos.x) + (dz > 0 ? 0.35 * dz : -dz);
+  return { tAbs: S.pt + PRED[k], stand, type: fh ? 'fh' : 'bh', stretch: (run / maxV + 0.12) / Math.max(0.05, PRED[k]) };
 }
 // Julga se a bola que vem vai sair (a IA pode deixar passar)
 function predictedOut(c) {
@@ -1902,6 +1907,7 @@ function aiShot(c) {
     depth = HL - d.margin - rand(0, 2.5 * (1 - d.smart));
     if (c.swing.type === 'bh' && Math.random() < 0.3) { spin = -0.5; speedMul = 0.82; }   // slice de backhand
     if (ball.p.y < 0.45 && Math.random() < 0.5) { spin = -0.45; speedMul = 0.85; }
+    if (c.ai.stretch > 0.7) { power *= 0.75; depth -= rand(0, 2); }   // na corrida devolve mais fraco e curto
   }
   tx = clamp(tx, -(HW - 0.3), HW - 0.3);
   return { target: new V3(tx, 0, os * depth), power, spin, speedMul, lob, drop, speed };
@@ -1934,6 +1940,15 @@ function updateAI(c, dt) {
     A.replan -= dt;
     if (!A.plan || A.replan <= 0) { A.plan = planIntercept(c); A.replan = 0.22; }
     const pl = A.plan;
+    if (pl && A.stretch < 0) {
+      // bola longe e rápida: quanto mais a IA precisa correr, maior a chance de não chegar
+      A.stretch = pl.stretch;
+      const s = clamp((pl.stretch - 0.5) / 0.5, 0, 1);
+      if (Math.random() < d.miss * s * s * (3 - 2 * s)) {
+        const dx = pl.stand.x - c.pos.x, dz = pl.stand.z - c.pos.z, dd = Math.hypot(dx, dz) || 1, short = rand(1.4, 2.1);
+        A.err.x -= (dx / dd) * short; A.err.z -= (dz / dd) * short;   // para antes e estica o braço sem alcançar
+      }
+    }
     if (pl) {
       c.moveTo = { x: pl.stand.x + A.err.x, z: pl.stand.z + A.err.z };
       if (!c.swing && pl.tAbs - S.pt <= 0.14 + A.terr) startSwing(c, pl.type, {});
@@ -2024,10 +2039,12 @@ function actionPress() {
 const atNet = (c) => Math.abs(c.pos.z) < 7;
 // Mira no toque: o joystick também anda, então quem solta o joystick para bater
 // ainda mira para o último lado que apontou (memória curta)
+// Curva forte: um empurrão moderado para o lado já manda a bola perto da linha
 function touchAimX() {
-  if (Math.abs(S.joy.x) > 0.15) return clamp(S.joy.x * 1.1, -1, 1);
-  if (performance.now() - (S.joyAimT || 0) < 700) return clamp(S.joyAimX * 1.1, -1, 1);
-  return 0;
+  let x = S.joy.x;
+  if (Math.abs(x) <= 0.15) x = performance.now() - (S.joyAimT || 0) < 700 ? S.joyAimX : 0;
+  if (Math.abs(x) <= 0.15) return 0;
+  return Math.sign(x) * (0.5 + 0.4 * clamp((Math.abs(x) - 0.15) / 0.45, 0, 1));
 }
 function dropPress() {
   AudioFX.init();
@@ -2077,13 +2094,15 @@ function initInput() {
   addEventListener('keyup', (e) => { S.keys[e.code] = false; if (e.code === 'Space') actionRelease(); });
   addEventListener('blur', () => { S.keys = {}; });
   const cv = renderer.domElement;
-  cv.addEventListener('mousemove', (e) => {
+  // só mouse de verdade: no celular um toque na tela gera eventos de mouse e desligava a mira do joystick
+  cv.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse') return;
     mouseAim = true;
     S.aim.x = clamp(((e.clientX / innerWidth) * 2 - 1) * 1.2, -1, 1);
     S.aim.y = clamp(1.25 - (e.clientY / innerHeight) * 1.5, 0, 1);
   });
-  cv.addEventListener('mousedown', (e) => { if (e.button === 0) actionPress(); });
-  addEventListener('mouseup', (e) => { if (e.button === 0) actionRelease(); });
+  cv.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' && e.button === 0) actionPress(); });
+  addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && e.button === 0) actionRelease(); });
   cv.addEventListener('touchstart', () => { if (S.state === 'replay') endReplay(); }, { passive: true });
   // joystick virtual
   const joy = $('joy'), knob = $('knob'); let jid = null;
