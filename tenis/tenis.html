@@ -62,6 +62,15 @@ h3{margin:14px 0 7px;font-size:13px;text-transform:uppercase;letter-spacing:2px;
 .big{display:block;width:100%;margin-top:16px;padding:14px;border:none;border-radius:16px;font-size:22px;font-weight:900;letter-spacing:2px;
   color:#3b2400;background:linear-gradient(#ffe066,#ffb320);box-shadow:0 6px 0 #c0670c,0 10px 20px rgba(0,0,0,.35);transition:transform .1s}
 .big:active{transform:translateY(4px);box-shadow:0 2px 0 #c0670c}
+#resumeTourBtn{font-size:16px;letter-spacing:1px;line-height:1.3}
+#resumeTourBtn small{display:block;font-size:12px;font-weight:700;letter-spacing:0;opacity:.85}
+#resumeTourBtn+.big{margin-top:12px}
+.hist{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.hist div{background:rgba(255,255,255,.07);border-radius:12px;padding:6px 4px;text-align:center}
+.hist b{display:block;font-size:20px;color:var(--yellow)}
+.hist span{font-size:10px;letter-spacing:1px;text-transform:uppercase;opacity:.75}
+.histMore{font-size:12px;opacity:.75;margin-top:6px;line-height:1.5}
+.histMore button{background:none;border:none;color:#9cc0ff;font-size:12px;padding:0;text-decoration:underline}
 .help{margin-top:12px;font-size:12px;line-height:1.5;opacity:.75}
 .help kbd{background:#ffffff22;border-radius:5px;padding:1px 6px;font-family:inherit;font-weight:800}
 
@@ -185,9 +194,12 @@ body.cine .bar{height:9vh}
     </div>
     <div id="oppOpts"><h3>Adversário</h3><div id="oppList" class="chips"></div></div>
     <h3>Dificuldade</h3><div id="diffList" class="chips"></div>
+    <h3>Duração</h3><div id="lenList" class="chips"></div>
     <h3>Quadra</h3><div id="surfList" class="chips"></div>
     <h3>Contador de FPS</h3><div id="fpsList" class="chips"></div>
+    <button id="resumeTourBtn" class="big alt hidden"></button>
     <button id="playBtn" class="big">JOGAR ▶</button>
+    <h3>Histórico</h3><div id="histBox"></div>
     <div class="help">
       <kbd>WASD</kbd>/<kbd>setas</kbd> mover • <b>mouse</b> ou <kbd>J</kbd><kbd>L</kbd><kbd>I</kbd><kbd>K</kbd> mirar •
       <kbd>Espaço</kbd> ou clique: segure para carregar a força, solte para bater (zona dourada = golpe perfeito) •
@@ -313,6 +325,7 @@ const PROS = [
 const TOURNEYS = [
   { id: 'pdd', name: 'Porto das Dunas Open', venue: 'beach', board: ['PORTO DAS DUNAS OPEN', '#0a7fb5', '#fff'] },
   { id: 'gvo', name: 'Golf Ville Open', venue: 'club', board: ['GOLF VILLE OPEN', '#1f6b3a', '#fff'] },
+  { id: 'chi', name: 'Chicago Open', venue: 'city', board: ['CHICAGO OPEN', '#c8102e', '#fff'] },
 ];
 const ROUNDS = ['QUARTAS DE FINAL', 'SEMIFINAL', 'FINAL'];
 const UMPIRE = { id: 'ump', name: 'Juiz', height: 1.76, skin: 0xd9a066, hair: 0x2b1d14, brow: '#2b1d14', style: 'cap',
@@ -397,8 +410,8 @@ let qualLow = 0, ballGlow, quality = 2, qualT = 0, qualAcc = 0, qualN = 0;
 let sun, courtGroup, netGroup, ballMesh, ballShadow, trailMesh, dustMesh, aimRing, umpire, boardTex;
 const S = {
   state: 'loading',            // loading | menu | play | replay | paused | end
-  sel: { char: 0, color: CHARS[0].shirt, opp: -1, diff: 1, surface: 'hard', mode: 'match', tour: 0, pool: 'pros' },
-  tour: null, setsToWin: 2, eventName: 'Campos Open',
+  sel: { char: 0, color: CHARS[0].shirt, opp: -1, diff: 1, surface: 'hard', mode: 'match', tour: 0, pool: 'pros', short: false },
+  tour: null, setsToWin: 2, setGames: 6, eventName: 'Campos Open',
   chars: [], preview: null,
   t: 0, pt: 0,                 // tempo global / tempo do ponto atual
   phaseTimer: 0, pending: null, lock: false,
@@ -534,18 +547,20 @@ function buildSky() {
 
 // Fundo do cenário (fora do estádio): colinas verdes, praia com coqueiros, areia e mar, ou clube com cercas
 let envGroup = null, envKind = '';
-const foam = [], rotors = [];
+const foam = [], rotors = [], movers = [];
 const SEA_Z = -32;                // na praia o fundo -z da arena é aberto e o mar começa aqui
 const CLUB_X = HDW + 6, CLUB_Z = HL + 11.7;   // cerca da quadra do clube (o fundo fica atrás da câmera de jogo)
 function buildBackdrop(kind) {
   if (kind === envKind) return;
   if (envGroup) { scene.remove(envGroup); envGroup.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
   const wasClub = envKind === 'club';
-  envKind = kind; foam.length = 0; rotors.length = 0;
+  envKind = kind; foam.length = 0; rotors.length = 0; movers.length = 0;
   envGroup = new THREE.Group(); scene.add(envGroup);
   if (kind === 'beach') buildBeach(envGroup);
   else if (kind === 'club') buildClub(envGroup);
+  else if (kind === 'city') buildCity(envGroup);
   else buildHills(envGroup);
+  scene.fog.near = kind === 'city' ? 150 : 70; scene.fog.far = kind === 'city' ? 700 : 290;   // na cidade o skyline precisa aparecer longe
   setStands(kind);
   if (wasClub !== (kind === 'club')) buildCourt(S.sel.surface);   // no clube o piso vai até a cerca
 }
@@ -775,6 +790,233 @@ function buildClub(g) {
   flattenInto(trees); bakeGroups(trees);
   bakeGroups(solid);
 }
+// Chicago Open: skyline com Willis Tower, John Hancock, Marina City e companhia; Cloud Gate (o "Bean")
+// atrás de um fundo, Buckingham Fountain atrás do outro, trem elevado "L", lago Michigan com a roda-gigante do Navy Pier
+const LAKE_X = 75;
+function buildCity(g) {
+  addGround(g, 0x8f9399);
+  // Lago Michigan a leste (+x)
+  const lake = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshStandardMaterial({ color: 0x2f7fb0, roughness: 0.25, metalness: 0.05 }));
+  lake.rotation.x = -Math.PI / 2; lake.position.set(LAKE_X + 450, 0.03, 0); g.add(lake);
+  const shore = new THREE.Mesh(new THREE.PlaneGeometry(10, 900), matte(0x6fa35a, 1));     // faixa verde da orla
+  shore.rotation.x = -Math.PI / 2; shore.position.set(LAKE_X - 5, 0.01, 0); g.add(shore);
+  for (const [x, z, r] of [[-14, -54, 22], [12, 56, 24]]) {                                // gramados dos parques
+    const p = new THREE.Mesh(new THREE.CircleGeometry(r, 32), matte(0x6fa35a, 1));
+    p.rotation.x = -Math.PI / 2; p.position.set(x, 0.01, z); g.add(p);
+  }
+
+  // --- Prédios: geometrias com UV em metros (a textura de janelas repete) e cor por vértice; uma malha só ---
+  const CW = 12.8, CH = 14.4;   // a textura cobre 4 x 4 janelas
+  const winTex = canvasTex(128, 128, (c, w, h) => {
+    c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+      const v = rand(0, 1);
+      c.fillStyle = v < 0.15 ? '#9fb4c8' : v < 0.5 ? '#45556a' : '#2e3a4a';
+      c.fillRect(i * 32 + 5, j * 32 + 6, 22, 20);
+    }
+  });
+  winTex.wrapS = winTex.wrapT = THREE.RepeatWrapping;
+  const geos = [];
+  const push = (geo, tint, solid) => {                  // solid: sem janelas (antenas, telhados, estruturas)
+    const uv = geo.attributes.uv, n = geo.attributes.position.count, col = new Float32Array(n * 3), c = new THREE.Color(tint);
+    if (solid) for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.01, 0.01);
+    for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geos.push(geo.index ? geo.toNonIndexed() : geo);
+  };
+  const tower = (x, z, w, d, h, tint, y0 = 0, ry = 0) => {
+    const geo = new THREE.BoxGeometry(w, h, d), uv = geo.attributes.uv;
+    for (let i = 0; i < 24; i++) {
+      const f = i >> 2;
+      if (f === 2 || f === 3) uv.setXY(i, 0.01, 0.01);                                   // telhado/base sem janelas
+      else uv.setXY(i, (uv.getX(i) * (f < 2 ? d : w)) / CW, (uv.getY(i) * h) / CH);
+    }
+    geo.rotateY(ry); geo.translate(x, y0 + h / 2, z); push(geo, tint);
+  };
+  const rod = (x, z, y0, len, r, tint) => {
+    const geo = new THREE.CylinderGeometry(r * 0.6, r, len, 6); geo.translate(x, y0 + len / 2, z); push(geo, tint, true);
+  };
+  const beam = (a, b, r, tint) => {                     // barra entre dois pontos (contraventamentos)
+    const len = a.distanceTo(b), geo = new THREE.CylinderGeometry(r, r, len, 4);
+    const q = new THREE.Quaternion().setFromUnitVectors(new V3(0, 1, 0), b.clone().sub(a).normalize());
+    geo.applyQuaternion(q); geo.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2); push(geo, tint, true);
+  };
+  const spots = [];
+  const free = (x, z, r) => spots.every(([a, b, rr]) => Math.hypot(a - x, b - z) > r + rr);
+  const claim = (x, z, r) => spots.push([x, z, r]);
+
+  // Willis Tower: nove tubos de alturas diferentes, preta, com duas antenas brancas
+  { const x0 = -28, z0 = -195, T = 8.5, HS = [[98, 160, 133], [133, 160, 74], [74, 133, 98]];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) tower(x0 + (i - 1) * T, z0 + (j - 1) * T, T, T, HS[j][i], 0x26282d);
+    rod(x0 - 2, z0 - T, 160, 34, 0.7, 0xf2f2f2); rod(x0 + 2, z0 - T, 160, 30, 0.7, 0xf2f2f2);
+    claim(x0, z0, 22); }
+  // John Hancock Center: tronco de pirâmide escuro com os X de contraventamento e duas antenas
+  { const x0 = 38, z0 = 185, H = 142, bx = 17, bz = 11, tx = 10, tz = 6.5;
+    const geo = new THREE.CylinderGeometry(Math.SQRT2, Math.SQRT2 * 1, H, 4, 1).rotateY(Math.PI / 4);
+    const pos = geo.attributes.position, uv = geo.attributes.uv;
+    for (let i = 0; i < pos.count; i++) {
+      const t = pos.getY(i) / H + 0.5;
+      pos.setX(i, pos.getX(i) * lerp(bx, tx, t)); pos.setZ(i, pos.getZ(i) * lerp(bz, tz, t));
+      if (i < 10) uv.setXY(i, (uv.getX(i) * 2 * (bx + bz) * 2) / CW, (uv.getY(i) * H) / CH); else uv.setXY(i, 0.01, 0.01);
+    }
+    geo.computeVertexNormals(); geo.translate(x0, H / 2, z0); push(geo, 0x2b2c30);
+    const hw = (t, b, tp) => lerp(b, tp, t) + 0.35;
+    for (let k = 0; k < 5; k++) {
+      const t0 = k / 5, t1 = (k + 1) / 5, y0 = t0 * H, y1 = t1 * H;
+      for (const s of [-1, 1]) {
+        // faces ±z
+        beam(new V3(x0 - hw(t0, bx, tx), y0, z0 + s * hw(t0, bz, tz)), new V3(x0 + hw(t1, bx, tx), y1, z0 + s * hw(t1, bz, tz)), 0.45, 0x5d636d);
+        beam(new V3(x0 + hw(t0, bx, tx), y0, z0 + s * hw(t0, bz, tz)), new V3(x0 - hw(t1, bx, tx), y1, z0 + s * hw(t1, bz, tz)), 0.45, 0x5d636d);
+        // faces ±x
+        beam(new V3(x0 + s * hw(t0, bx, tx), y0, z0 - hw(t0, bz, tz)), new V3(x0 + s * hw(t1, bx, tx), y1, z0 + hw(t1, bz, tz)), 0.45, 0x5d636d);
+        beam(new V3(x0 + s * hw(t0, bx, tx), y0, z0 + hw(t0, bz, tz)), new V3(x0 + s * hw(t1, bx, tx), y1, z0 - hw(t1, bz, tz)), 0.45, 0x5d636d);
+      }
+    }
+    rod(x0 - 4, z0, H, 30, 0.6, 0xf2f2f2); rod(x0 + 4, z0, H, 30, 0.6, 0xd8d8d8);
+    claim(x0, z0, 24); }
+  // Marina City: duas "espigas de milho" (núcleo cilíndrico com sacadas redondas em todos os andares)
+  for (const dx of [0, 15]) {
+    const x0 = -70 + dx, z0 = -118, H = 58;
+    const core = new THREE.CylinderGeometry(4.6, 4.6, H, 18, 1, true), uv = core.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * 29) / CW, (uv.getY(i) * H) / CH);
+    core.translate(x0, H / 2, z0); push(core, 0xb9bec6);
+    for (let y = 3; y < H; y += 1.8) { const r = new THREE.CylinderGeometry(6.6, 6.6, 0.32, 18); r.translate(x0, y, z0); push(r, 0xeeeeea, true); }
+    rod(x0, z0, H, 2.5, 4.8, 0xd9dcdf);
+  }
+  claim(-62, -118, 18);
+  // Trump Tower (vidro azulado com recuos) e Aon Center (branco, esguio)
+  { const x0 = 8, z0 = -150; tower(x0, z0, 22, 16, 70, 0xa9c2dc); tower(x0, z0, 18, 13, 105, 0xa9c2dc); tower(x0 - 1, z0, 13, 10, 130, 0xa9c2dc); rod(x0 - 1, z0, 130, 22, 0.6, 0xcfd6de); claim(x0, z0, 18); }
+  { const x0 = 52, z0 = -168; tower(x0, z0, 20, 20, 124, 0xe8e6df); claim(x0, z0, 16); }
+  // Prédios genéricos em volta (nada no lago, no corredor do trem nem nos parques)
+  const TINTS = [0xc9b79a, 0x9aa7b5, 0x7d8a99, 0xd8d2c4, 0x5d6b7c, 0xa5683f, 0xb9c6d3, 0x8c6a52, 0xe0dccf];
+  for (let n = 0, tries = 0; n < 95 && tries < 2000; tries++) {
+    const a = rand(0, Math.PI * 2), r = rand(80, 270), x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const w = rand(12, 26), d = rand(12, 24), rr = Math.max(w, d) * 0.75;
+    if (x + rr > LAKE_X - 10 || Math.abs(x + 40) < rr + 6 || !free(x, z, rr)) continue;
+    const far = clamp((r - 80) / 190, 0, 1);
+    const h = rand(22, 60) + rand(0, 55) * far, tint = TINTS[(Math.random() * TINTS.length) | 0], ry = rand(-0.08, 0.08);
+    tower(x, z, w, d, h, tint, 0, ry);
+    if (Math.random() < 0.4) tower(x, z, w * 0.7, d * 0.7, h * rand(0.25, 0.5), tint, h, ry);   // recuo no topo
+    else if (Math.random() < 0.5) tower(x, z, w * 0.35, d * 0.35, 3, 0x6b7078, h, ry);            // casa de máquinas
+    if (Math.random() < 0.15) rod(x, z, h, rand(8, 16), 0.35, 0xdddddd);
+    claim(x, z, rr); n++;
+  }
+  // Trem elevado "L": viga sobre colunas de aço ao longo de toda a cidade (x = -40)
+  const LX = -40, steel = 0x34503f;
+  for (let z = -300; z <= 300; z += 150) { const deck = new THREE.BoxGeometry(5, 0.7, 150); deck.translate(LX, 6.35, z); push(deck, steel, true); }
+  for (let z = -294; z <= 294; z += 12) for (const s of [-1, 1]) {
+    const c = new THREE.BoxGeometry(0.45, 6, 0.45); c.translate(LX + s * 2, 3, z); push(c, steel, true);
+  }
+  const city = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshStandardMaterial({ map: winTex, vertexColors: true, roughness: 0.55, metalness: 0.1 }));
+  city.receiveShadow = false; g.add(city);
+  // vagões prateados com faixa azul (dois trens em sentidos opostos)
+  for (const [dir, ox] of [[1, -1.2], [-1, 1.2]]) {
+    const tr = grp(g, LX + ox, 6.7, 0);
+    for (let k = 0; k < 4; k++) {
+      const cz = (k - 1.5) * 14.6;
+      box(tr, 2.3, 3, 14, matte(0xc7ccd3, 0.4), 0, 1.5, cz, 0.3);
+      box(tr, 2.34, 0.8, 13.2, matte(0x27303a, 0.3), 0, 2.05, cz, 0.05);
+      box(tr, 2.36, 0.22, 13.4, matte(0x1f5fd1, 0.5), 0, 1.15, cz, 0.03);
+    }
+    bakeGroups(tr);
+    tr.userData = { v: dir > 0 ? 13 : 11, ph: dir > 0 ? 0 : 280, len: 600, dir };
+    movers.push(tr);
+  }
+
+  // Cloud Gate, o "Bean": aço escovado com reflexo suave do céu e dos prédios (discreto para não tirar a atenção do jogo)
+  const envTex = canvasTex(256, 128, (c, w, h) => {
+    const gr = c.createLinearGradient(0, 0, 0, h);
+    gr.addColorStop(0, '#8fb3e0'); gr.addColorStop(0.45, '#c9dcef'); gr.addColorStop(0.52, '#a9adb3'); gr.addColorStop(1, '#8a8e94');
+    c.fillStyle = gr; c.fillRect(0, 0, w, h);
+    c.globalAlpha = 0.35;
+    for (let x = 0; x < w; x += rand(4, 10)) { const bh = rand(6, 22); c.fillStyle = '#6f7a88'; c.fillRect(x, 64 - bh, rand(4, 9), bh); }
+  });
+  envTex.mapping = THREE.EquirectangularReflectionMapping;
+  const bean = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.MeshStandardMaterial({ color: 0xc9ced4, metalness: 0.75, roughness: 0.32, envMap: envTex, envMapIntensity: 0.6 }));
+  bean.scale.set(10, 4.6, 6.6); bean.position.set(-14, 3.3, -54); bean.rotation.y = 0.15; bean.castShadow = true; g.add(bean);
+  const plaza = new THREE.Mesh(new THREE.CircleGeometry(13, 32), matte(0xc9c4ba, 0.9));
+  plaza.rotation.x = -Math.PI / 2; plaza.position.set(-14, 0.02, -54); g.add(plaza);
+
+  // Buckingham Fountain: três bacias de granito rosado e jatos d'água
+  const solid = grp(g), fx = 12, fz = 56, granite = matte(0xd8b4a0, 0.8), water = matte(0x4aa3d8, 0.2);
+  const cyl = (r, h, y, mat, seg = 24) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.04, h, seg), mat); m.position.set(fx, y, fz); solid.add(m); };
+  cyl(16, 0.8, 0.4, granite); cyl(15.4, 0.1, 0.78, water);
+  cyl(5.5, 2.2, 1.9, granite); cyl(6.2, 0.6, 3.1, granite); cyl(5.8, 0.1, 3.42, water);
+  cyl(2.2, 2.2, 4.4, granite); cyl(3.2, 0.5, 5.6, granite); cyl(2.9, 0.1, 5.88, water);
+  cyl(0.9, 1.4, 6.6, granite); cyl(1.5, 0.4, 7.4, granite);
+  for (let k = 0; k < 4; k++) {                                                            // cavalos-marinhos nos cantos
+    const a = (k / 4) * Math.PI * 2 + Math.PI / 4, m = new THREE.Mesh(new THREE.ConeGeometry(0.9, 2.6, 6), matte(0x5f8f7a, 0.5));
+    m.position.set(fx + Math.cos(a) * 11.5, 2, fz + Math.sin(a) * 11.5); m.rotation.z = 0.3; solid.add(m);
+  }
+  bakeGroups(solid);
+  const jetMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false, roughness: 0.2, emissive: 0xcfe9ff, emissiveIntensity: 0.25 });
+  const jet = (x, z, y, h, r) => { const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10, 1, true), jetMat); m.position.set(x, y + h / 2, z); g.add(m); };
+  jet(fx, fz, 7.6, 14, 0.7);
+  for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; jet(fx + Math.cos(a) * 4.6, fz + Math.sin(a) * 4.6, 3.5, 3.5, 0.3); }
+  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + Math.PI / 4; jet(fx + Math.cos(a) * 10.4, fz + Math.sin(a) * 10.4, 2.2, 4, 0.35); }
+
+  // Navy Pier: píer no lago com a roda-gigante (gira em updateBackdrop)
+  const pier = grp(g);
+  box(pier, 60, 1.4, 14, matte(0xc9b79a, 0.9), LAKE_X + 30, 0.7, -112, 0.1);
+  box(pier, 40, 6, 9, matte(0xe8e2d4, 0.8), LAKE_X + 38, 4, -112, 0.1);
+  const WX = LAKE_X + 14, WY = 26, WR = 20, wheelMat = matte(0xf4f4f4, 0.5);
+  for (const s of [-1, 1]) {                                                               // cavaletes em A
+    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, WY + 2, 6), wheelMat);
+    a.position.set(WX - 6, (WY + 1.4) / 2, -112 + s * 2.2); a.rotation.z = -0.24; pier.add(a);
+    const b = a.clone(); b.position.x = WX + 6; b.rotation.z = 0.24; pier.add(b);
+  }
+  bakeGroups(pier);
+  const wheel = grp(g, WX, WY, -112);
+  const rimGeo = new THREE.TorusGeometry(WR, 0.45, 6, 64);
+  for (const s of [-1, 1]) { const rim = new THREE.Mesh(rimGeo, wheelMat); rim.position.z = s * 1.3; wheel.add(rim); }
+  const GC = [0xff3b4e, 0x2f7bff, 0xffd23a, 0x22c55e, 0xff7a1a, 0xa855f7];
+  for (let k = 0; k < 24; k++) {
+    const a = (k / 24) * Math.PI * 2;
+    const sp = new THREE.Mesh(new THREE.BoxGeometry(0.18, WR, 0.18), wheelMat);
+    sp.position.set((Math.cos(a) * WR) / 2, (Math.sin(a) * WR) / 2, 0); sp.rotation.z = a - Math.PI / 2; wheel.add(sp);
+    const gd = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 2.2), matte(GC[k % GC.length], 0.6));
+    gd.position.set(Math.cos(a) * WR, Math.sin(a) * WR - 1, 0); wheel.add(gd);
+  }
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 4.5, 12), wheelMat); hub.rotation.x = Math.PI / 2; wheel.add(hub);
+  bakeGroups(wheel);
+  wheel.userData = { w: 0.05, ph: 0 };
+  rotors.push(wheel);
+
+  // Bandeiras de Chicago (duas faixas azuis e quatro estrelas vermelhas de seis pontas) atrás dos placares
+  const flagTex = canvasTex(192, 128, (c, w, h) => {
+    c.fillStyle = '#fff'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#41b6e6'; c.fillRect(0, h * 0.16, w, h * 0.16); c.fillRect(0, h * 0.68, w, h * 0.16);
+    c.fillStyle = '#e4002b';
+    for (let k = 0; k < 4; k++) {
+      const cx = w * (0.2 + k * 0.2), cy = h / 2, R = 11;
+      c.beginPath();
+      for (let p = 0; p < 12; p++) { const rr = p % 2 ? R * 0.5 : R, a = -Math.PI / 2 + (p * Math.PI) / 6; c.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
+      c.closePath(); c.fill();
+    }
+  });
+  const flagMat = new THREE.MeshStandardMaterial({ map: flagTex, side: THREE.DoubleSide, roughness: 0.8 });
+  const poles = grp(g);
+  for (const sz of [-1, 1]) for (const fxp of [-9, 9]) {
+    const z = sz * 36, p = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 14, 8), matte(0xd9dde3, 0.4));
+    p.position.set(fxp, 7, z); poles.add(p);
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.4), flagMat); f.position.set(fxp + 1.85, 12.6, z); g.add(f);
+  }
+  bakeGroups(poles);
+
+  // Árvores nos parques
+  const trees = grp(g);
+  const trunk = matte(0x6b4a2f, 0.95), leaves = [matte(0x2f7d3a, 0.9), matte(0x3d9447, 0.9)];
+  for (const [px, pz, pr, inner] of [[-14, -54, 21, 13], [12, 56, 23, 17]]) {
+    for (let k = 0; k < 16; k++) {
+      const a = rand(0, Math.PI * 2), r = rand(inner + 1, pr), x = px + Math.cos(a) * r, z = pz + Math.sin(a) * r;
+      if (Math.abs(z) < 34 && Math.abs(x) < 24) continue;                                  // fora do estádio
+      const t = grp(trees, x, 0, z), h = rand(2.5, 3.5), rr = rand(1.6, 2.6);
+      const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, h, 6), trunk); tr.position.y = h / 2; t.add(tr);
+      const cn = new THREE.Mesh(new THREE.IcosahedronGeometry(rr, 0), leaves[k % 2]); cn.position.y = h + rr * 0.7; t.add(cn);
+    }
+  }
+  flattenInto(trees); bakeGroups(trees);
+}
 // Coqueiro: tronco curvo em gomos + folhas caídas + cocos
 function buildPalm(parent, x, z, h, lean, yaw) {
   const p = grp(parent, x, 0, z); p.rotation.y = yaw;
@@ -815,6 +1057,7 @@ function flattenInto(g) {
 function updateBackdrop() {
   for (const f of foam) f.position.z = f.userData.z0 - Math.sin(S.t * 0.7 + f.userData.ph) * 1.1;
   for (const r of rotors) r.rotation.z = S.t * r.userData.w + r.userData.ph;
+  for (const m of movers) { const u = m.userData; m.position.z = u.dir * ((((S.t * u.v + u.ph) % u.len) + u.len) % u.len - u.len / 2); }
 }
 
 function buildLights() {
@@ -1738,7 +1981,8 @@ function winGame(w, r) {
   const l = 1 - w, wasTB = score.tb;
   score.games[w]++; score.pts = [0, 0];
   const g = score.games;
-  if (wasTB || (g[w] >= 6 && g[w] - g[l] >= 2)) {
+  const N = S.setGames;   // 6 no set normal, 4 no set curto
+  if (wasTB || (g[w] >= N && g[w] - g[l] >= 2)) {
     r.set = true; r.decisive = true;
     score.sets.push([g[0], g[1]]); score.setsWon[w]++;
     if ((g[0] + g[1]) % 2 === 1) r.change = true;
@@ -1748,7 +1992,7 @@ function winGame(w, r) {
   } else {
     if ((g[0] + g[1]) % 2 === 1) r.change = true;
     score.server = other(score.server);
-    if (g[0] === 6 && g[1] === 6) { score.tb = true; score.tbFirst = score.server; }
+    if (g[0] === N && g[1] === N) { score.tb = true; score.tbFirst = score.server; }
   }
 }
 function inCourt(p) { return Math.abs(p.x) <= HW + BALL_R && Math.abs(p.z) <= HL + BALL_R; }
@@ -1842,11 +2086,12 @@ function startPoint() {
   rally.serveSign = rally.deuce ? s : -s;              // lado do sacador (direita = iguais)
   srv.pos.set(rally.serveSign * 0.9, 0, s * (HL + 0.25));
   rcv.pos.set(-rally.serveSign * 2.3, 0, -s * (HL + 0.45));
-  for (const c of S.chars) { c.vel.set(0, 0, 0); c.swing = null; c.charging = false; c.mood = null; c.moveTo = null; c.ai.plan = null; c.ai.letGo = false; c.ai.judged = false; }
+  for (const c of S.chars) { c.vel.set(0, 0, 0); c.swing = null; c.charging = false; c.mood = null; c.moveTo = null; c.ai.plan = null; c.ai.letGo = false; c.ai.judged = false; c.ai.swung = false; }
   srv.ai.serveT = rand(1.0, 1.8);
   rcv.ai.react = 0.2;
   ball.state = 'held'; ball.v.set(0, 0, 0); ball.spin = 0; ball.rolling = false;
   S.rec.length = 0; S.pt = 0; S.camSnap = S.camSnap || false;
+  if (S.tour && S.state === 'play') saveTour(true);    // placar do campeonato salvo a cada ponto
   updateScoreHUD(); drawBoard();
   setHint();
 }
@@ -1961,7 +2206,7 @@ function onShotHit(c, power, perfect, q, late) {
   const o = S.chars[other(c.idx)];
   const d = DIFF[S.sel.diff];
   o.ai.react = d.react * (1.25 - 0.25 * o.stats.speed) + rand(0, 0.06);
-  o.ai.plan = null; o.ai.letGo = false; o.ai.judged = false; o.ai.stretch = -1;
+  o.ai.plan = null; o.ai.letGo = false; o.ai.judged = false; o.ai.stretch = -1; o.ai.swung = false;
   o.ai.err = { x: gauss() * d.posErr / o.stats.accuracy, z: gauss() * d.posErr * 0.6 / o.stats.accuracy };
   o.ai.terr = gauss() * d.timeErr / o.stats.accuracy;
   if (!c.isAI) {
@@ -2111,7 +2356,8 @@ function updateAI(c, dt) {
     }
     if (pl) {
       c.moveTo = { x: pl.stand.x + A.err.x, z: pl.stand.z + A.err.z };
-      if (!c.swing && pl.tAbs - S.pt <= 0.14 + A.terr) startSwing(c, pl.type, {});
+      // uma raquetada por bola recebida: se errou, não replaneja um segundo golpe no ar
+      if (!c.swing && !A.swung && pl.tAbs - S.pt <= 0.14 + A.terr) { A.swung = true; startSwing(c, pl.type, {}); }
     }
   } else {
     // recuperação: volta para o centro do fundo, cobrindo o ângulo da bola enviada
@@ -2522,14 +2768,18 @@ function initUI() {
       : 'Os outros três da turma, do mais fraco ao mais forte.';
     const tour = S.sel.mode === 'tour';
     $('tourOpts').classList.toggle('hidden', !tour); $('oppOpts').classList.toggle('hidden', tour);
-    $('menuSub').textContent = tour ? `${TOURNEYS[S.sel.tour].name} • 3 vitórias até o título • 1 set por partida` : 'Campos Open • melhor de 3 sets • tie-break no 6-6';
+    const len = S.sel.short ? '1 set de 4 games • tie-break no 4-4' : tour ? '1 set por partida' : 'melhor de 3 sets • tie-break no 6-6';
+    $('menuSub').textContent = tour ? `${TOURNEYS[S.sel.tour].name} • 3 vitórias até o título • ${len}` : `Campos Open • ${len}`;
+    chips($('lenList'), [['Normal', false], ['Curta (1 set de 4 games)', true]], () => S.sel.short, (v) => { S.sel.short = v; store('bt-short', v ? '1' : '0'); });
     $('playBtn').textContent = tour ? 'JOGAR CAMPEONATO ▶' : 'JOGAR ▶';
     chips($('oppList'), [['Aleatório', -1], ...CHARS.map((d, i) => [d.name, i]).filter(([, i]) => i !== S.sel.char)], () => S.sel.opp, (v) => (S.sel.opp = v));
     chips($('diffList'), DIFF.map((d, i) => [d.name, i]), () => S.sel.diff, (v) => (S.sel.diff = v));
     chips($('fpsList'), [['Ocultar', false], ['Mostrar', true]], () => S.showFps, (v) => setShowFps(v));
     chips($('surfList'), Object.entries(SURFACES).map(([k, s]) => [s.name, k]), () => S.sel.surface, (v) => { if (v !== S.sel.surface) { S.sel.surface = v; buildCourt(v); } });
   };
+  S.sel.short = store('bt-short') === '1';
   $('playBtn').onclick = () => { AudioFX.init(); AudioFX.click(); startMatch(); };
+  $('resumeTourBtn').onclick = () => { AudioFX.init(); AudioFX.click(); resumeTour(); };
   $('muteBtn').onclick = () => { AudioFX.init(); toggleMute(); };
   $('pauseBtn').onclick = () => togglePause();
   $('fpsPauseBtn').onclick = () => setShowFps(!S.showFps);
@@ -2551,6 +2801,8 @@ function refreshMenu() {
   document.querySelectorAll('#charList .card').forEach((b) => b.classList.toggle('sel', +b.dataset.i === S.sel.char));
   document.querySelectorAll('#colorList .sw').forEach((b) => b.classList.toggle('sel', +b.dataset.c === S.sel.color));
   S.renderChips && S.renderChips();
+  renderHistory();
+  renderResume();
 }
 function refreshPreview() {
   if (S.state !== 'menu') return;
@@ -2578,7 +2830,7 @@ function refreshVenue() {
 const strength = (d) => d.stats.speed + d.stats.power + d.stats.accuracy + d.stats.reach;
 function startMatch() {
   if (S.sel.mode === 'tour') return startTour();
-  S.tour = null; S.setsToWin = 2; S.againAction = startMatch;
+  S.tour = null; S.setsToWin = S.sel.short ? 1 : 2; S.setGames = S.sel.short ? 4 : 6; S.againAction = startMatch;
   let oi = S.sel.opp;
   if (oi < 0 || oi === S.sel.char) { const opts = CHARS.map((_, i) => i).filter((i) => i !== S.sel.char); oi = opts[(Math.random() * opts.length) | 0]; }
   beginMatch(CHARS[oi]);
@@ -2586,20 +2838,98 @@ function startMatch() {
 }
 // Campeonato: sorteia 3 adversários e os ordena do mais fraco ao mais forte (o melhor fica para a final)
 function startTour() {
+  if (S.state === 'menu' && loadTour() && !confirm('Começar um campeonato novo? O que está em andamento será descartado.')) return;
   const pool = (S.sel.pool === 'pros' ? PROS : CHARS.filter((_, i) => i !== S.sel.char)).slice();
   for (let i = pool.length - 1; i > 0; i--) { const k = (Math.random() * (i + 1)) | 0; [pool[i], pool[k]] = [pool[k], pool[i]]; }
   const opps = pool.slice(0, 3).sort((a, b) => strength(a) - strength(b));
-  S.tour = { t: TOURNEYS[S.sel.tour], round: 0, opps, res: [] };
+  S.tour = { t: TOURNEYS[S.sel.tour], round: 0, opps, res: [], short: S.sel.short };
+  addHist((h) => h.tours++);
+  saveTour();
   playTourMatch();
 }
-function playTourMatch() {
+function playTourMatch(saved) {
   const T = S.tour, opp = T.opps[T.round], rd = ROUNDS[T.round];
-  S.setsToWin = 1;
+  S.setsToWin = 1; S.setGames = T.short ? 4 : 6;
   ['menu', 'endScreen'].forEach((id) => $(id).classList.add('hidden'));
   fadeTransition(rd, () => {
     beginMatch(opp);
-    showMsg(rd, `contra ${opp.name} • ${S.chars[score.server].def.name} saca`, T.round === 2 ? 'gold' : '');
+    if (saved) {                                          // retomando no meio da partida: placar e lados como estavam
+      Object.assign(score, JSON.parse(JSON.stringify(saved.score)));
+      S.chars[0].side = saved.side; S.chars[1].side = -saved.side;
+      S.camSnap = true; startPoint();
+      showMsg(rd, `contra ${opp.name} • partida retomada`, T.round === 2 ? 'gold' : '');
+    } else showMsg(rd, `contra ${opp.name} • ${S.chars[score.server].def.name} saca`, T.round === 2 ? 'gold' : '');
   });
+}
+
+// ------------------------------------------------------------
+// Campeonato salvo no navegador: rodada, adversários e placar (gravado a cada ponto) para retomar depois
+// ------------------------------------------------------------
+const findDef = (id) => PROS.find((d) => d.id === id) || CHARS.find((d) => d.id === id);
+function readJSON(k) { try { return JSON.parse(store(k) || 'null'); } catch (e) { return null; } }
+function saveTour(withScore) {
+  const T = S.tour; if (!T) return;
+  const sv = { tid: T.t.id, round: T.round, opps: T.opps.map((d) => d.id), res: T.res, short: T.short,
+    char: S.sel.char, color: S.sel.color, diff: S.sel.diff, surface: S.sel.surface };
+  if (withScore && S.chars.length) sv.match = { score: { ...score }, side: S.chars[0].side };
+  store('bt-tour', JSON.stringify(sv));
+}
+function clearTour() { try { localStorage.removeItem('bt-tour'); } catch (e) {} }
+function loadTour() {
+  const sv = readJSON('bt-tour');
+  if (!sv || !TOURNEYS.some((t) => t.id === sv.tid) || !sv.opps || sv.opps.some((id) => !findDef(id)) || !CHARS[sv.char]) return null;
+  return sv;
+}
+function renderResume() {
+  const sv = loadTour(), b = $('resumeTourBtn');
+  b.classList.toggle('hidden', !sv);
+  if (!sv) return;
+  const t = TOURNEYS.find((x) => x.id === sv.tid), opp = findDef(sv.opps[sv.round]);
+  let at = '';
+  if (sv.match) { const s = sv.match.score; at = s.sets.length ? ` • ${s.sets[0][0]}-${s.sets[0][1]}` : ` • ${s.games[0]}-${s.games[1]} em games`; }
+  b.innerHTML = `CONTINUAR CAMPEONATO ▶<small>${t.name} • ${ROUNDS[sv.round].toLowerCase()} contra ${opp.name}${at}<br>${CHARS[sv.char].name} • ${DIFF[sv.diff].name}${sv.short ? ' • partida curta' : ''}</small>`;
+}
+function resumeTour() {
+  const sv = loadTour(); if (!sv) return renderResume();
+  Object.assign(S.sel, { mode: 'tour', tour: TOURNEYS.findIndex((t) => t.id === sv.tid), char: sv.char, color: sv.color, diff: sv.diff });
+  if (sv.surface !== S.sel.surface && SURFACES[sv.surface]) { S.sel.surface = sv.surface; buildCourt(sv.surface); }
+  refreshVenue();
+  S.tour = { t: TOURNEYS[S.sel.tour], round: sv.round, opps: sv.opps.map(findDef), res: sv.res || [], short: !!sv.short };
+  playTourMatch(sv.match);
+}
+
+// ------------------------------------------------------------
+// Histórico do jogador (todas as partidas, amistosas e de campeonato)
+// ------------------------------------------------------------
+function loadHist() {
+  return Object.assign({ w: 0, l: 0, sw: 0, sl: 0, gw: 0, gl: 0, tours: 0, streak: 0, best: 0, opp: {} }, readJSON('bt-hist') || {});
+}
+function addHist(fn) { const h = loadHist(); fn(h); store('bt-hist', JSON.stringify(h)); }
+function recordMatch(won) {
+  const op = S.chars[1].def.name;
+  addHist((h) => {
+    if (won) { h.w++; h.streak = Math.max(0, h.streak) + 1; h.best = Math.max(h.best, h.streak); }
+    else { h.l++; h.streak = Math.min(0, h.streak) - 1; }
+    for (const s of score.sets) { h.gw += s[0]; h.gl += s[1]; if (s[0] > s[1]) h.sw++; else h.sl++; }
+    const r = (h.opp[op] = h.opp[op] || [0, 0]); r[won ? 0 : 1]++;
+  });
+}
+function renderHistory() {
+  const h = loadHist(), n = h.w + h.l;
+  const titles = TOURNEYS.reduce((a, t) => a + +(store('bt-tit-' + t.id) || 0), 0);
+  if (!n && !h.tours) { $('histBox').innerHTML = '<div class="histMore">Nenhuma partida ainda. Suas vitórias e derrotas ficam guardadas aqui.</div>'; return; }
+  const tile = (v, l) => `<div><b>${v}</b><span>${l}</span></div>`;
+  const pct = n ? Math.round((100 * h.w) / n) + '%' : '–';
+  const streak = h.streak > 0 ? `${h.streak} vitória${h.streak > 1 ? 's' : ''} seguida${h.streak > 1 ? 's' : ''}` : h.streak < 0 ? `${-h.streak} derrota${h.streak < -1 ? 's' : ''} seguida${h.streak < -1 ? 's' : ''}` : '';
+  const vs = Object.entries(h.opp).sort((a, b) => b[1][0] + b[1][1] - (a[1][0] + a[1][1])).slice(0, 6).map(([k, [w, l]]) => `${k} ${w}-${l}`).join(' • ');
+  $('histBox').innerHTML = `<div class="hist">${tile(n, 'partidas')}${tile(h.w, 'vitórias')}${tile(h.l, 'derrotas')}${tile(pct, 'aproveit.')}
+    ${tile(`${h.sw}-${h.sl}`, 'sets')}${tile(`${h.gw}-${h.gl}`, 'games')}${tile(h.tours, 'campeonatos')}${tile(titles, 'títulos')}</div>
+    <div class="histMore">${streak ? `Agora: ${streak} • ` : ''}Melhor sequência: ${h.best}${vs ? `<br>Contra: ${vs}` : ''}<br><button id="histReset">zerar histórico</button></div>`;
+  $('histReset').onclick = () => {
+    if (!confirm('Zerar o histórico de partidas e os títulos?')) return;
+    try { localStorage.removeItem('bt-hist'); TOURNEYS.forEach((t) => localStorage.removeItem('bt-tit-' + t.id)); } catch (e) {}
+    refreshMenu();
+  };
 }
 function beginMatch(oppDef) {
   if (S.preview) { removePlayer(S.preview); S.preview = null; }
@@ -2624,6 +2954,7 @@ function showEnd() {
   $('hud').classList.add('hidden'); $('touchUI').classList.add('hidden'); $('pauseBtn').classList.add('hidden');
   const me = S.chars[0].def, op = S.chars[1].def, sets = score.sets.map((s) => `${s[0]}-${s[1]}`).join('   ');
   let title, sub, again, line = sets;
+  recordMatch(w === 0);
   if (!S.tour) {
     title = w === 0 ? 'VITÓRIA!' : 'DERROTA';
     sub = w === 0 ? `${me.name} venceu ${op.name} (${DIFF[S.sel.diff].name})` : `${op.name} venceu desta vez. Revanche?`;
@@ -2636,14 +2967,17 @@ function showEnd() {
       const next = T.opps[r + 1];
       title = 'VITÓRIA!';
       sub = `${me.name} passou por ${op.name} ${IN[r]}. Agora: ${ROUNDS[r + 1].toLowerCase()} contra ${next.name}.`;
-      again = ['PRÓXIMA ▶', () => { T.round++; playTourMatch(); }];
+      T.round++; saveTour();                              // já fica salvo na próxima rodada, mesmo que feche o jogo aqui
+      again = ['PRÓXIMA ▶', () => playTourMatch()];
     } else if (w === 0) {
+      clearTour();
       const key = 'bt-tit-' + T.t.id, n = +(store(key) || 0) + 1;
       store(key, String(n));
       title = me.fem ? '🏆 CAMPEÃ!' : '🏆 CAMPEÃO!';
       sub = `${me.name} venceu ${op.name} na final e levou o ${T.t.name}!` + (n > 1 ? ` (${n}º título)` : '');
       again = ['NOVO CAMPEONATO', startTour];
     } else {
+      clearTour();
       title = me.fem ? 'ELIMINADA' : 'ELIMINADO';
       sub = `${op.name} venceu ${IN[r]}. Tente de novo!`;
       again = ['TENTAR DE NOVO', startTour];

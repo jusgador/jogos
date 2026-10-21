@@ -28,7 +28,9 @@ Depois acesse `http://localhost:8000/tenis.html`. No celular, use o IP do PC na 
 - Quatro personagens: Leonardo, Ricardo, Beatriz e Lícia, com atributos diferentes.
 - IA em três dificuldades (fácil, médio e difícil).
 - Partida amistosa em melhor de 3 sets ou campeonato: três vitórias (quartas, semifinal e final) com 1 set por partida. No campeonato, os adversários são os outros três da turma ou três profissionais sorteados entre Djokovic (o mais forte), Nadal, Federer, Guga, Alcaraz e Monteiro (um degrau abaixo). O mais forte sorteado fica para a final.
-- Campeonatos: Porto das Dunas Open, numa arena de praia aberta para o mar, com coqueiros e, do outro lado, dunas com eólicas; e Golf Ville Open, numa quadra de clube cercada por alambrado, sem plateia, entre outra quadra de tênis e uma poliesportiva. A partida amistosa é no estádio. Os títulos ficam guardados no navegador.
+- Partida curta (opcional, amistosa ou campeonato): 1 set de 4 games, com tie-break no 4-4.
+- Campeonatos: Porto das Dunas Open, numa arena de praia aberta para o mar, com coqueiros e, do outro lado, dunas com eólicas; Golf Ville Open, numa quadra de clube cercada por alambrado, sem plateia, entre outra quadra de tênis e uma poliesportiva; e Chicago Open, no meio dos arranha-céus (Willis Tower, John Hancock, Marina City), com o Cloud Gate atrás de um fundo, a Buckingham Fountain atrás do outro, o trem elevado "L" passando e a roda-gigante do Navy Pier no lago Michigan. A partida amistosa é no estádio.
+- Tudo fica guardado no navegador: títulos, histórico (partidas, vitórias, derrotas, sets, games, sequências e retrospecto contra cada adversário) e o campeonato em andamento, com o placar gravado a cada ponto. No menu, "Continuar campeonato" retoma de onde parou.
 - Regras oficiais: 15/30/40, vantagem, tie-break, 2º saque e troca de lado.
 - Física da bola com arrasto, efeito Magnus (topspin e slice), quique e rede.
 - Replay em câmera lenta nos pontos de set e partida e, de vez em quando, nos pontos bonitos (ace, rally longo, winner de drop shot, lob, voleio ou golpe perfeito, quebra de saque).
