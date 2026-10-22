@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b1830">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icone-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>Asas de Aço</title>
 <style>
   html,body{margin:0;height:100%;background:#0b1830;overflow:hidden;touch-action:none;
@@ -549,6 +554,29 @@ cvs.addEventListener('pointermove', e => {
 });
 const ptrEnd = e => { if (e.pointerId === ptr.id) ptr.id = null; };
 cvs.addEventListener('pointerup', ptrEnd);
+// tela cheia no celular: no primeiro toque e, fora do jogo, sempre que o jogador tiver saído dela.
+// Vai no pointerup porque o pointerdown de toque não conta como gesto para o Chrome.
+let fsTentou = false, saindo = false;
+cvs.addEventListener('pointerup', e => {
+  if (e.pointerType !== 'touch' || saindo || (fsTentou && state === 'play')) return;
+  fsTentou = true; telaCheia();
+});
+function telaCheia() {
+  const d = document, el = d.documentElement;
+  if (d.fullscreenElement || d.webkitFullscreenElement) return;
+  const req = el.requestFullscreen ? () => el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen ? () => el.webkitRequestFullscreen() : null;
+  if (!req) return;
+  try {
+    Promise.resolve(req()).then(() => {
+      try { screen.orientation.lock('portrait').catch(() => {}); } catch (_) {}
+    }).catch(() => {});
+  } catch (_) {}
+}
+document.addEventListener('fullscreenchange', resize);
+document.addEventListener('webkitfullscreenchange', resize);
+// volta para a lista de jogos (no app instalado não há botão de voltar do navegador)
+function voltarAosJogos() { saindo = true; writeSave(); location.href = '../'; }
+window.addEventListener('pageshow', () => { saindo = false; }); // voltou pelo histórico (bfcache)
 cvs.addEventListener('pointercancel', ptrEnd);
 cvs.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -3042,7 +3070,8 @@ function drawMenu() {
     button('JOGAR', x, y, bw, bh, () => setState('select'), { color: '#2bb24c', size: 26 }); y += 70;
     button('LOJA DE UPGRADES', x, y, bw, bh, () => openShop('menu'), { color: '#e08a1e' }); y += 70;
     button('COMO JOGAR', x, y, bw, bh, () => { ui.help = true; ui.focus = 0; }, { color: '#2f80ed' }); y += 70;
-    button(save.muted ? 'SOM: DESLIGADO' : 'SOM: LIGADO', x, y, bw, bh, () => AU.setMuted(!save.muted), { color: '#6c5ce7' });
+    button(save.muted ? 'SOM: DESLIGADO' : 'SOM: LIGADO', x, y, bw, bh, () => AU.setMuted(!save.muted), { color: '#6c5ce7' }); y += 70;
+    button('VOLTAR AOS JOGOS', x, y, bw, bh, voltarAosJogos, { color: '#5a6478' });
   }
   ICON.coin(W / 2 - 70, H - 36, 9); txt(fmt(save.coins), W / 2 - 56, H - 36, 18, '#ffe066', 'left');
   ICON.star(W / 2 + 34, H - 36, 10, '#ffd34d'); txt(save.stars.reduce((a, b) => a + b, 0) + '/24', W / 2 + 48, H - 36, 18, '#fff', 'left');
@@ -3146,7 +3175,8 @@ function drawPause() {
   button('CONTINUAR', x, y, bw, 54, () => setState('play'), { color: '#2bb24c' }); y += 68;
   button('REINICIAR FASE', x, y, bw, 54, () => startStage(G.idx), { color: '#e08a1e' }); y += 68;
   button(save.muted ? 'SOM: DESLIGADO' : 'SOM: LIGADO', x, y, bw, 54, () => AU.setMuted(!save.muted), { color: '#6c5ce7' }); y += 68;
-  button('SAIR PARA O MENU', x, y, bw, 54, () => { writeSave(); G = null; setState('menu'); }, { color: '#c0392b' });
+  button('SAIR PARA O MENU', x, y, bw, 54, () => { writeSave(); G = null; setState('menu'); }, { color: '#c0392b' }); y += 68;
+  button('VOLTAR AOS JOGOS', x, y, bw, 54, voltarAosJogos, { color: '#5a6478' });
 }
 function drawGameOver() {
   ctx.fillStyle = 'rgba(25,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
@@ -3158,7 +3188,8 @@ function drawGameOver() {
   txt('(3 vidas novas, pontos da fase zerados)', W / 2, y + 70, 12, '#cfe8ff'); y += 92;
   button('REINICIAR FASE', x, y, bw, 54, () => startStage(G.idx), { color: '#e08a1e' }); y += 68;
   button('LOJA DE UPGRADES', x, y, bw, 54, () => openShop('gameover'), { color: '#2f80ed' }); y += 68;
-  button('MENU', x, y, bw, 54, () => { G = null; setState('menu'); }, { color: '#5a6478' });
+  button('MENU', x, y, bw, 54, () => { G = null; setState('menu'); }, { color: '#5a6478' }); y += 68;
+  button('VOLTAR AOS JOGOS', x, y, bw, 54, voltarAosJogos, { color: '#5a6478' });
 }
 function updateVictory(dt) {
   const R = RESULT; R.t += dt;

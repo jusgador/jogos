@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#05070d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone-192.png">
+<link rel="apple-touch-icon" href="icone-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Jogos">
 <title>Jogos</title>
 <style>
   :root{--bg:#05070d;--card:#0e1322;--borda:#1f2a44;--texto:#e6ecff;--fraco:#8a96b8;--destaque:#7cf2a6}
@@ -23,6 +30,14 @@
   .corpo p{margin:0;color:var(--fraco);font-size:14px;flex:1}
   .compat{font-size:12px;color:var(--destaque);opacity:.85}
   footer{margin-top:32px;color:var(--fraco);font-size:13px}
+  main{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+  #instalar{display:none;align-items:center;gap:12px;margin:0 0 20px;padding:12px 14px;background:var(--card);
+    border:1px solid var(--destaque);border-radius:12px;font-size:14px}
+  #instalar.ver{display:flex}
+  #instalar p{margin:0;flex:1}
+  #instalar button{font:inherit;border-radius:8px;padding:6px 12px;cursor:pointer}
+  #instalar .sim{background:var(--destaque);color:var(--bg);border:0;font-weight:700}
+  #instalar .nao{background:none;color:var(--fraco);border:1px solid var(--borda)}
 </style>
 </head>
 <body>
@@ -31,6 +46,7 @@
     <h1>JOGOS</h1>
     <p>Jogos feitos por diversão, cada um num único arquivo HTML.</p>
   </header>
+  <div id="instalar" role="note"><p></p><button class="sim" hidden>Instalar</button><button class="nao" aria-label="Fechar">✕</button></div>
   <ul id="lista"></ul>
   <footer>Os recordes e o progresso ficam salvos no seu navegador.</footer>
 </main>
@@ -38,7 +54,7 @@
 'use strict';
 // Para acrescentar um jogo, inclua uma linha aqui. "desenho" é o miolo de um SVG 160x100.
 const JOGOS = [
-  { nome: 'Campos Tennis', url: 'https://jusgador.github.io/campos-tennis/', compat: 'Melhor no computador · funciona no celular',
+  { nome: 'Campos Tennis', url: 'tenis/', compat: 'Melhor no computador · funciona no celular',
     descricao: 'Tênis 3D com campeonatos, troféus e raquetes especiais.',
     desenho: '<rect width="160" height="100" fill="#1b5e9c"/><path d="M30 88 50 22h60l20 66Z" fill="#2f7fc4" stroke="#fff" stroke-width="1.5"/><path d="M40 55h80" stroke="#fff" stroke-width="2"/><path d="M80 22v66M44 75h72M56 35h48" stroke="#fff" stroke-width="1"/><circle cx="104" cy="44" r="4" fill="#e3f53a"/>' },
   { nome: 'Lunar Lander Vetorial', url: 'lander/', compat: 'Computador e celular',
@@ -65,6 +81,41 @@ for (const j of JOGOS) {
   li.querySelector('.compat').textContent = j.compat;
   lista.appendChild(li);
 }
+
+// Dica para instalar na tela inicial: só no celular, fora do app instalado e se a pessoa não a fechou.
+// Instalado, o app abre sem as barras do navegador, também dentro dos jogos.
+const aviso = document.getElementById('instalar');
+const instalado = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone;
+const celular = matchMedia('(pointer: coarse)').matches;
+const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let dispensado = false;
+try { dispensado = localStorage.getItem('jogos-instalar') === 'nao'; } catch (e) {}
+let pedido = null; // evento do Android/Chrome que abre a janela de instalação
+
+function mostrarAviso(texto, comBotao) {
+  if (instalado || !celular || dispensado) return;
+  aviso.querySelector('p').textContent = texto;
+  aviso.querySelector('.sim').hidden = !comBotao;
+  aviso.classList.add('ver');
+}
+aviso.querySelector('.nao').addEventListener('click', () => {
+  aviso.classList.remove('ver');
+  try { localStorage.setItem('jogos-instalar', 'nao'); } catch (e) {}
+});
+aviso.querySelector('.sim').addEventListener('click', () => {
+  if (!pedido) return;
+  pedido.prompt();
+  pedido.userChoice.finally(() => { pedido = null; aviso.classList.remove('ver'); });
+});
+addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  pedido = e;
+  mostrarAviso('Instale os jogos para jogar em tela cheia, sem as barras do navegador.', true);
+});
+addEventListener('appinstalled', () => aviso.classList.remove('ver'));
+if (iOS) mostrarAviso('Para jogar em tela cheia: toque em Compartilhar e depois em "Adicionar à Tela de Início".', false);
+// Navegadores sem a janela de instalação (Firefox, por exemplo): dica genérica
+else setTimeout(() => { if (!pedido) mostrarAviso('Para jogar em tela cheia, use no menu do navegador a opção "Instalar" ou "Adicionar à tela inicial".', false); }, 3000);
 </script>
 </body>
 </html>

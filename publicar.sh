@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Publica os quatro jogos, mas só envia o que mudou.
-# - Lander, Asas de Aço e Bruce Lee 64: copia das pastas de desenvolvimento para cá.
-# - Campos Tennis: publicado pelo repositório dele (../Jogo 01).
+# - Os quatro jogos: copia das pastas de desenvolvimento para cá.
+# - Campos Tennis: também envia o repositório dele (../Jogo 01), cujo endereço antigo
+#   (jusgador.github.io/campos-tennis/) redireciona para jogos/tenis/.
 # Mudanças ainda sem commit viram um commit automático.
 # Uso: ./publicar.sh        (publica)
 #      ./publicar.sh --local (só copia e faz commit, sem enviar)
@@ -35,12 +36,13 @@ copiar() { # origem destino
   cp "$1" "$2"
 }
 
+copiar "../Jogo 01/tenis.html"        tenis/index.html
 copiar "../Jogo 02/lunar-lander.html" lander/index.html
 copiar "../Jogo 03/index.html"        asas/index.html
 copiar "../Jogo 04/index.html"        fortaleza/index.html
 
-publicar_repo . "Página dos jogos (lander, asas, fortaleza)"
-publicar_repo "../Jogo 01" "Campos Tennis"
+publicar_repo . "Página dos jogos"
+publicar_repo "../Jogo 01" "Campos Tennis (repositório de origem)"
 
 (( ENVIAR )) && echo "O GitHub Pages leva um ou dois minutos para atualizar."
 exit 0
