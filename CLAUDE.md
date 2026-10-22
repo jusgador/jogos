@@ -5,6 +5,7 @@ Um repositório só para a página inicial e todos os jogos, publicado no GitHub
 ## Os jogos andam juntos
 
 - Os jogos dividem o domínio, o app instalável e a publicação. Todo jogo segue a seção "App instalável" do README e usa um prefixo próprio no `localStorage`.
+- **Jogo novo:** antes de começar, leia a seção "Acrescentar um jogo" do README e siga o roteiro até o fim, inclusive o registro do jogo neste arquivo e no README.
 
 ## Commits
 
