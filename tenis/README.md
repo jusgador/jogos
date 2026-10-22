@@ -1,18 +1,12 @@
 # Campos Tennis
 
-Jogo de tênis 3D em um único arquivo HTML ([tenis.html](tenis.html)), feito com three.js (WebGPURenderer, com troca automática para WebGL 2). Tudo é procedural: personagens, quadra, estádio, texturas e sons. Não usa nenhum asset externo além do three.js via CDN.
+Jogo de tênis 3D em um único arquivo HTML ([index.html](index.html)), feito com three.js (WebGPURenderer, com troca automática para WebGL 2). Tudo é procedural: personagens, quadra, estádio, texturas e sons. Não usa nenhum asset externo além do three.js via CDN.
 
-Jogue online: https://jusgador.github.io/campos-tennis/
+Jogue online: https://jusgador.github.io/jogos/tenis/
 
 ## Como jogar
 
-Abra `tenis.html` por um servidor HTTP. Abrir direto do disco funciona no Firefox, mas não em todos os navegadores.
-
-```bash
-python -m http.server 8000
-```
-
-Depois acesse `http://localhost:8000/tenis.html`. No celular, use o IP do PC na mesma rede Wi-Fi.
+Abra pelo servidor de teste da raiz do repositório (ver o README de lá), em `http://localhost:8765/tenis/`. Abrir direto do disco funciona no Firefox, mas não em todos os navegadores. No celular, use o IP do PC na mesma rede Wi-Fi.
 
 ## Controles
 
