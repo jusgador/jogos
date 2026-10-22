@@ -3,8 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icone-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
 <title>Lunar Lander Vetorial</title>
 <style>
+  /* Margens seguras (entalhe, cantos arredondados), lidas pelo script */
+  :root {
+    --seguro-topo: env(safe-area-inset-top, 0px);
+    --seguro-dir: env(safe-area-inset-right, 0px);
+    --seguro-esq: env(safe-area-inset-left, 0px);
+  }
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
   canvas {
     display: block; position: fixed; inset: 0;
@@ -107,14 +119,20 @@ function salvarRecorde() {
 const tela = document.getElementById('tela');
 const ctx = tela.getContext('2d');
 let cw = 0, ch = 0, dpr = 1;
+const seguro = { topo: 0, dir: 0, esq: 0 }; // margens seguras em px (env(safe-area-inset-*))
 function redimensionar() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   // Janela oculta pode informar 0x0; evita divisão por zero na câmera
   cw = Math.max(1, window.innerWidth); ch = Math.max(1, window.innerHeight);
   tela.width = Math.round(cw * dpr); tela.height = Math.round(ch * dpr);
   tela.style.width = cw + 'px'; tela.style.height = ch + 'px';
+  const cs = getComputedStyle(document.documentElement);
+  for (const k in seguro) seguro[k] = parseFloat(cs.getPropertyValue('--seguro-' + k)) || 0;
 }
 window.addEventListener('resize', redimensionar);
+// Entrar ou sair da tela cheia muda o tamanho: reajusta o canvas
+document.addEventListener('fullscreenchange', redimensionar);
+document.addEventListener('webkitfullscreenchange', redimensionar);
 redimensionar();
 
 // =====================================================================
@@ -533,6 +551,12 @@ function irMenu() {
   jogo.estado = 'menu'; jogo.pausado = false; jogo.menuSel = 0;
   destrocos = []; faiscas = [];
 }
+// Volta à lista de jogos (página inicial do app)
+let saindo = false;
+function voltarAosJogos() {
+  saindo = true;
+  location.href = '../';
+}
 function alternarPausa() {
   if (jogo.estado === 'menu') return;
   jogo.pausado = !jogo.pausado;
@@ -868,7 +892,7 @@ const uHUD = () => clamp(Math.min(cw, ch) / 330, 1.25, 2.6);
 
 function desenharHUD(cor, u) {
   const n = nave, m = 14, lh = 11 * u, colL = 21 * 6 * u;
-  const tamBotoes = 4 * (Math.max(30, u * 13) + 8) + 12;
+  const tamBotoes = 4 * (Math.max(30, u * 13) + 8) + 12 + seguro.dir;
   const estreito = m + colL * 2 + 4 * 6 * u + tamBotoes > cw;
   const baixo = jogo.comb > 0 && jogo.comb < CFG.COMB_MAX * CFG.COMB_BAIXO;
   const seg = Math.floor(jogo.tempo);
@@ -942,12 +966,16 @@ function desenharMensagens(cor, u) {
       linhaTxt('FIM DE JOGO', uG);
       linhaTxt('PONTUAÇÃO FINAL ' + jogo.pontos + '   RECORDE ' + jogo.recorde, u);
     }
+    const yPrompt = y;
     if (jogo.tEstado > 1.2 && piscar(1.5)) linhaTxt(prompt + (r.fim ? ' PARA RECOMEÇAR' : ' PARA TENTAR DE NOVO'), u);
+    // Fim de jogo: botão para voltar à lista de jogos (posição fixa, o aviso acima pisca)
+    if (r.fim && jogo.tEstado > 1.2 && !jogo.pausado) desenharBotaoJogos(cor, u, cx, yPrompt + u * 15, true);
   }
   if (jogo.pausado) {
     y = ch * 0.42;
     linhaTxt('PAUSA', uG);
     linhaTxt('P OU ' + prompt + ' PARA CONTINUAR', u);
+    desenharBotaoJogos(cor, u, cx, y + u * 4, true);
   }
 }
 
@@ -993,8 +1021,8 @@ function desenharMenu(cor, u) {
 function desenharBotoesTopo(cor, u) {
   const bs = Math.round(Math.max(30, u * 13)), gap = 8;
   const ids = jogo.estado === 'menu' ? ['som'] : ['pausa', 'som', 'reiniciar', 'menu'];
-  let x = cw - 12 - bs;
-  const y = 12;
+  let x = cw - 12 - seguro.dir - bs;
+  const y = 12 + seguro.topo;
   ctx.lineWidth = Math.max(1, u * 0.5);
   ctx.strokeStyle = cor;
   for (const id of ids) {
@@ -1007,6 +1035,24 @@ function desenharBotoesTopo(cor, u) {
     ctx.stroke();
     x -= bs + gap;
   }
+}
+
+// Botão "⌂ JOGOS": volta à lista de jogos. Só aparece fora da partida em
+// andamento (menu, pausa, fim de jogo). centro: x é o meio do botão.
+function desenharBotaoJogos(cor, u, x, y, centro = false) {
+  const bs = Math.round(Math.max(30, u * 13)), uT = bs / 14;
+  const w = bs * 0.85 + largTexto('JOGOS', uT) + bs * 0.3;
+  if (centro) x -= w / 2;
+  jogo.botoes.push({ id: 'jogos', x, y, w, h: bs, tipo: 'tocar' });
+  ctx.lineWidth = Math.max(1, u * 0.5);
+  ctx.strokeStyle = cor;
+  ctx.globalAlpha = 0.55;
+  ctx.beginPath(); ctx.rect(x, y, w, bs); ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.beginPath();
+  iconeBotao('jogos', x, y, bs);
+  ctx.stroke();
+  texto('JOGOS', x + bs * 0.85, y + bs / 2 - 3 * uT, uT, 'esq', cor);
 }
 
 function iconeBotao(id, x, y, s) {
@@ -1038,6 +1084,10 @@ function iconeBotao(id, x, y, s) {
     ctx.lineTo(ex - tx * k + ty * k, ey - ty * k - tx * k);
   } else if (id === 'menu') {
     for (const b of [0.32, 0.5, 0.68]) linha([[0.27, b], [0.73, b]]);
+  } else if (id === 'jogos') { // casinha
+    linha([[0.2, 0.5], [0.5, 0.24], [0.8, 0.5]]);
+    linha([[0.3, 0.42], [0.3, 0.76], [0.7, 0.76], [0.7, 0.42]]);
+    linha([[0.44, 0.76], [0.44, 0.6], [0.56, 0.6], [0.56, 0.76]]);
   }
 }
 
@@ -1088,6 +1138,7 @@ function desenhar() {
   desenharRotulosPlataformas(cor, Math.max(1.2, u * 0.85));
   if (jogo.estado === 'menu') {
     desenharMenu(cor, u);
+    desenharBotaoJogos(cor, u, 12 + seguro.esq, 12 + seguro.topo);
   } else {
     desenharHUD(cor, u);
     desenharIndicadorAcima(cor, u);
@@ -1139,13 +1190,32 @@ function acharBotao(x, y) {
   return null;
 }
 
+// Tela cheia em aparelhos de toque. Pedida no pointerup (o pointerdown de toque
+// não conta como gesto do usuário no Chrome) e só para toques que começaram fora
+// da partida em andamento: menu, pausa, fim de fase. Sem trava de orientação:
+// o jogo se adapta a retrato e paisagem (ver zoomBase).
+const toquesForaDoJogo = new Set();
+function pedirTelaCheia() {
+  if (saindo || document.fullscreenElement || document.webkitFullscreenElement) return;
+  const el = document.documentElement;
+  try {
+    const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' })
+                                   : el.webkitRequestFullscreen && el.webkitRequestFullscreen();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) {}
+}
+
 tela.addEventListener('pointerdown', e => {
   e.preventDefault();
   iniciarAudio();
-  if (e.pointerType === 'touch') jogo.toque = true;
+  if (e.pointerType === 'touch') {
+    jogo.toque = true;
+    if (jogo.estado !== 'jogando' || jogo.pausado) toquesForaDoJogo.add(e.pointerId);
+  }
   const b = acharBotao(e.clientX, e.clientY);
   if (b) {
     if (b.tipo === 'segurar') { ponteiros.set(e.pointerId, b.id); tela.setPointerCapture?.(e.pointerId); }
+    else if (b.id === 'jogos') voltarAosJogos();
     else if (b.id === 'pausa') alternarPausa();
     else if (b.id === 'som') alternarMudo();
     else if (b.id === 'reiniciar') reiniciar();
@@ -1168,6 +1238,14 @@ tela.addEventListener('pointermove', e => {
 const soltarPonteiro = e => ponteiros.delete(e.pointerId);
 tela.addEventListener('pointerup', soltarPonteiro);
 tela.addEventListener('pointercancel', soltarPonteiro);
+tela.addEventListener('pointerup', e => { if (toquesForaDoJogo.delete(e.pointerId)) pedirTelaCheia(); });
+tela.addEventListener('pointercancel', e => toquesForaDoJogo.delete(e.pointerId));
+// Mouse sobre o botão de jogos: dica
+tela.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse') return;
+  const b = acharBotao(e.clientX, e.clientY);
+  tela.title = b && b.id === 'jogos' ? 'Voltar aos jogos' : '';
+});
 tela.addEventListener('contextmenu', e => e.preventDefault());
 
 // =====================================================================
