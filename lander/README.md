@@ -23,12 +23,15 @@ Os relevos se alternam em ciclo e, a cada volta, a gravidade aumenta e as plataf
 2. Lua: crateras
 3. Marte: cânions com paredes e torres
 4. Marte: montanhas
-5. Daí em diante, "Planeta X", com o ciclo recomeçando mais difícil
+5. Planeta X: caverna. Um poço de paredes irregulares com saliências alternadas dos dois lados: a nave desce em zigue-zague, de lado e depois para baixo. Há plataformas x2 e x3 nas saliências e x5 no fundo. Bater no teto ou na parede destrói a nave.
+6. Daí em diante, o ciclo recomeça mais difícil (na caverna, com mais saliências e mais compridas)
 
-O combustível é recarregado em parte a cada fase. Destruir a nave custa 200 de combustível, e o jogo acaba quando ele zera. O recorde fica salvo no navegador.
+O combustível é recarregado em parte a cada fase, e por completo na caverna.
+
+A câmera aproxima conforme a nave chega perto do terreno, embaixo ou dos lados, e muda o zoom devagar. Plataformas que ficam fora da tela aparecem como setas na borda, com o multiplicador. Destruir a nave custa 200 de combustível, e o jogo acaba quando ele zera. O recorde fica salvo no navegador.
 
 ## Pendências
 
 - Testar num celular de verdade: tamanho do texto, botões cobrindo o terreno, desempenho do brilho.
 - Talvez adaptar a ajuda do menu para o toque.
-- Jogar as quatro fases à mão para ajustar a dificuldade, principalmente o x5 nos cânions.
+- Jogar as cinco fases à mão para ajustar a dificuldade, principalmente o x5 nos cânions e o fundo da caverna.

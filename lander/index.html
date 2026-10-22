@@ -433,7 +433,92 @@ function perfilMontanhas(dif, larg) {
   return { nome: 'MONTANHAS', altura, plats, aspereza: 8 + dif * 3, passo: [7, 18] };
 }
 
-const PERFIS = [perfilPlanicie, perfilCrateras, perfilCanions, perfilMontanhas];
+// --- Perfil 5: caverna. Um poço de paredes irregulares com saliências alternadas dos
+// dois lados: a nave desce em zigue-zague, de lado e depois para baixo, até o fundo.
+// A linha do terreno volta para trás sob as saliências (não é mais uma altura por x).
+function perfilCaverna(dif, larg) {
+  const L = CFG.MUNDO_L, A = CFG.MUNDO_A, volta = Math.floor(dif / PERFIS.length);
+  const sup = A * aleat(0.26, 0.31), fundo = A * 0.95, rug = 4 + volta;
+  const c = aleat(L * 0.38, L * 0.62), S = Math.max(340, aleat(440, 500) - volta * 35);
+  const ondaS = criarOndas(3, 0.002, 0.004), ondaE = criarOndas(3, 0.004, 0.008), ondaD = criarOndas(3, 0.004, 0.008);
+  const ySup = x => sup + ondaS(x) * 35;
+  const xE = y => c - S / 2 + ondaE(y) * 28, xD = y => c + S / 2 + ondaD(y) * 28;
+  const n = volta ? 3 : 2, frac = Math.min(0.58 + volta * 0.05, 0.7), esp = (fundo - sup) / (n + 1);
+  const lado0 = Math.random() < 0.5 ? 1 : -1; // 1: a saliência sai da parede esquerda
+  const sal = [];
+  for (let k = 0; k < n; k++) {
+    const y = sup + esp * (k + 1) + aleat(-12, 12), lado = k % 2 ? -lado0 : lado0;
+    const e = xE(y), d = xD(y), w = (d - e) * (frac + aleat(-0.03, 0.03));
+    sal.push({ y, lado, ponta: lado > 0 ? e + w : d - w, t: aleat(30, 42), plats: [] });
+  }
+  // Plataformas: x2 na primeira saliência, x3 na última, x5 no fundo. Nas saliências, a
+  // plataforma fica no trecho aberto por cima (sob a passagem deixada pela anterior)
+  const wp = larg(2), plats = [];
+  sal.forEach((s, k) => {
+    if (k && k < n - 1) return;
+    const raiz = s.lado > 0 ? xE(s.y) : xD(s.y), ant = sal[k - 1];
+    let a = Math.min(raiz, s.ponta), b = Math.max(raiz, s.ponta);
+    if (ant) { if (s.lado > 0) b = Math.min(b, ant.ponta); else a = Math.max(a, ant.ponta); }
+    const pc = clamp((a + b) / 2, Math.min(raiz, s.ponta) + wp / 2 + 14, Math.max(raiz, s.ponta) - wp / 2 - 14);
+    const p = { ...plataformaEm(pc, wp, k ? 3 : 2), y: s.y };
+    s.plats.push(p); plats.push(p);
+  });
+  const e0 = xE(fundo), d0 = xD(fundo);
+  const pf = { ...plataformaEm(aleat(e0 + S * 0.2 + wp / 2, d0 - S * 0.2 - wp / 2), wp, 5), y: fundo };
+  plats.push(pf);
+
+  const pts = [], ponto = (x, y) => pts.push({ x, y });
+  // Pontos internos de um trecho horizontal (x crescente), com as plataformas planas
+  const horizontal = (xa, xb, yFn, ps = []) => {
+    const feitas = new Set();
+    for (let x = xa + aleat(8, 16); x < xb - 6; x += aleat(10, 22)) {
+      const p = ps.find(q => x > q.x0 - 4 && x < q.x1 + 4);
+      if (p) { if (!feitas.has(p)) { ponto(p.x0, p.y); ponto(p.x1, p.y); feitas.add(p); } continue; }
+      ponto(x, yFn(x) + aleat(-rug, rug));
+    }
+  };
+  // Pontos internos de uma parede, de ya até yb (para baixo ou para cima)
+  const parede = (ya, yb, xFn) => {
+    const s = Math.sign(yb - ya);
+    for (let y = ya + s * aleat(10, 18); s * (yb - y) > 6; y += s * aleat(12, 24)) ponto(xFn(y) + aleat(-rug, rug), y);
+  };
+  // Pontos internos de um trecho inclinado (parte de baixo das saliências)
+  const inclinado = (xa, ya, xb, yb) => {
+    const k = Math.max(1, Math.round(Math.hypot(xb - xa, yb - ya) / 16));
+    for (let i = 1; i < k; i++) ponto(xa + (xb - xa) * i / k + aleat(-3, 3), ya + (yb - ya) * i / k + aleat(-rug, rug));
+  };
+
+  // Superfície da esquerda e boca do poço
+  const yE0 = ySup(xE(sup)), xE0 = xE(yE0), yD0 = ySup(xD(sup)), xD0 = xD(yD0);
+  ponto(0, ySup(0)); horizontal(0, xE0, ySup); ponto(xE0, yE0);
+  // Parede esquerda, descendo, com as saliências que saem dela
+  let y = yE0;
+  for (const s of sal.filter(q => q.lado > 0)) {
+    const yR = s.y + s.t * 1.6;
+    parede(y, s.y, xE); ponto(xE(s.y), s.y);
+    horizontal(xE(s.y), s.ponta, () => s.y, s.plats);
+    ponto(s.ponta, s.y); ponto(s.ponta - 10, s.y + s.t * 0.7);
+    inclinado(s.ponta - 10, s.y + s.t * 0.7, xE(yR), yR); ponto(xE(yR), yR);
+    y = yR;
+  }
+  parede(y, fundo, xE); ponto(e0, fundo);
+  horizontal(e0, d0, () => fundo, [pf]); ponto(d0, fundo);
+  // Parede direita, subindo
+  y = fundo;
+  for (const s of sal.filter(q => q.lado < 0).reverse()) {
+    const yR = s.y + s.t * 1.6;
+    parede(y, yR, xD); ponto(xD(yR), yR);
+    inclinado(xD(yR), yR, s.ponta + 10, s.y + s.t * 0.7);
+    ponto(s.ponta + 10, s.y + s.t * 0.7); ponto(s.ponta, s.y);
+    horizontal(s.ponta, xD(s.y), () => s.y, s.plats); ponto(xD(s.y), s.y);
+    y = s.y;
+  }
+  parede(y, yD0, xD); ponto(xD0, yD0);
+  horizontal(xD0, L, ySup); ponto(L, ySup(L));
+  return { nome: 'CAVERNA', pts, plats, caverna: true, ceu: Math.min(yE0, yD0) };
+}
+
+const PERFIS = [perfilPlanicie, perfilCrateras, perfilCanions, perfilMontanhas, perfilCaverna];
 
 // Monta o terreno da fase: um perfil por fase, em ciclo, cada volta mais difícil
 function gerarTerreno(fase) {
@@ -442,6 +527,7 @@ function gerarTerreno(fase) {
   const larg = m => Math.max(36, { 2: 95, 3: 66, 5: 44 }[m] * escala);
   const limY = y => clamp(y, A * 0.22, A * 0.96);
   const perfil = PERFIS[dif % PERFIS.length](dif, larg);
+  if (perfil.pts) return indexar({ pts: perfil.pts, plataformas: perfil.plats.sort((a, b) => a.x0 - b.x0), nome: perfil.nome, caverna: true, ceu: perfil.ceu });
 
   const plataformas = perfil.plats.sort((a, b) => a.x0 - b.x0);
   for (const p of plataformas) p.y = limY(perfil.altura((p.x0 + p.x1) / 2));
@@ -463,20 +549,54 @@ function gerarTerreno(fase) {
     if (pts.length && x - pts[pts.length - 1].x < 0.5) continue;
     pts.push({ x, y: limY(perfil.altura(x) + aleat(-1, 1) * perfil.aspereza) });
   }
-  return { pts, plataformas, nome: perfil.nome };
+  return indexar({ pts, plataformas, nome: perfil.nome });
 }
 
-// Altura do chão em x (interpolação linear entre os pontos)
-function chaoY(x) {
-  const p = terreno.pts;
-  if (x <= p[0].x) return p[0].y;
-  for (let i = 1; i < p.length; i++) {
-    if (x <= p[i].x) {
-      const a = p[i - 1], b = p[i];
-      return a.y + (b.y - a.y) * ((x - a.x) / ((b.x - a.x) || 1));
+// A linha do terreno vai de x = 0 a x = MUNDO_L e a rocha fica abaixo dela. Nas
+// cavernas a linha volta para trás sob as saliências, então uma vertical pode
+// cruzá-la várias vezes. Os segmentos ficam numa grade por x para consultas rápidas.
+const CEL = 25;
+function indexar(t) {
+  const g = new Map();
+  for (let i = 0; i < t.pts.length - 1; i++) {
+    const a = t.pts[i], b = t.pts[i + 1];
+    for (let k = Math.floor(Math.min(a.x, b.x) / CEL); k <= Math.floor(Math.max(a.x, b.x) / CEL); k++) {
+      if (!g.has(k)) g.set(k, []);
+      g.get(k).push(i);
     }
   }
-  return p[p.length - 1].y;
+  t.grade = g;
+  return t;
+}
+// Alturas (y) em que a vertical x cruza a linha do terreno
+function cruzamentos(x) {
+  x = clamp(x, 0, CFG.MUNDO_L - 0.001);
+  const p = terreno.pts, r = [];
+  for (const i of terreno.grade.get(Math.floor(x / CEL)) || []) {
+    const a = p[i], b = p[i + 1];
+    if (x < Math.min(a.x, b.x) || x >= Math.max(a.x, b.x)) continue;
+    r.push(a.y + (b.y - a.y) * (x - a.x) / (b.x - a.x));
+  }
+  return r;
+}
+// Dentro da rocha: a linha passa um número ímpar de vezes acima do ponto
+const dentroRocha = (x, y) => cruzamentos(x).filter(c => c < y).length % 2 === 1;
+// Primeiro chão abaixo de (x, y)
+const chaoAbaixo = (x, y) => Math.min(...cruzamentos(x).filter(c => c >= y));
+// Superfície vista de cima
+const superficieY = x => Math.min(...cruzamentos(x));
+// Menor distância de (x, y) à linha do terreno, procurada até o raio r
+function distTerreno(x, y, r) {
+  const p = terreno.pts;
+  let m = r;
+  for (let k = Math.floor((x - r) / CEL); k <= Math.floor((x + r) / CEL); k++) {
+    for (const i of terreno.grade.get(k) || []) {
+      const a = p[i], b = p[i + 1], dx = b.x - a.x, dy = b.y - a.y;
+      const t = clamp(((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+      m = Math.min(m, Math.hypot(a.x + dx * t - x, a.y + dy * t - y));
+    }
+  }
+  return m;
 }
 
 // Estrelas ficam no mundo, só acima do terreno
@@ -485,7 +605,7 @@ function gerarEstrelas() {
   const L = CFG.MUNDO_L;
   while (estrelas.length < 170) {
     const x = aleat(-400, L + 400), y = aleat(-700, CFG.MUNDO_A);
-    if (y < chaoY(clamp(x, 0, L)) - 25) {
+    if (y < Math.min(superficieY(x), terreno.ceu ?? Infinity) - 25) {
       estrelas.push({ x, y, b: aleat(0.3, 1), f: aleat(0.5, 3), p: aleat(0, 6.3) });
     }
   }
@@ -529,7 +649,7 @@ function naveMundo(lx, ly) {
   const c = Math.cos(nave.a), s = Math.sin(nave.a);
   return { x: nave.x + lx * c - ly * s, y: nave.y + lx * s + ly * c };
 }
-const altitude = () => chaoY(nave.x) - (nave.y + 10);
+const altitude = () => chaoAbaixo(nave.x, nave.y) - (nave.y + 10);
 
 // =====================================================================
 // 8. FLUXO DO JOGO (início, fases, reinício)
@@ -542,8 +662,9 @@ function reiniciar() {
 }
 function proximaFase() {
   jogo.fase++;
-  jogo.comb = Math.min(CFG.COMB_MAX, jogo.comb + CFG.COMB_MAX * CFG.RECARGA);
   terreno = gerarTerreno(jogo.fase); gerarEstrelas();
+  // A caverna pede um percurso longo: tanque cheio
+  jogo.comb = terreno.caverna ? CFG.COMB_MAX : Math.min(CFG.COMB_MAX, jogo.comb + CFG.COMB_MAX * CFG.RECARGA);
   novaNave();
 }
 function irMenu() {
@@ -649,11 +770,11 @@ function verificarContato() {
   const n = nave, c = Math.cos(n.a), s = Math.sin(n.a);
   let pesTocaram = false, cascoTocou = false;
   const pes = PES.map(p => naveMundo(p[0], p[1]));
-  for (const p of pes) if (p.y >= chaoY(p.x)) pesTocaram = true;
-  for (const p of CASCO) { const w = naveMundo(p[0], p[1]); if (w.y >= chaoY(w.x)) cascoTocou = true; }
-  // Picos do terreno que entram no casco entre dois pontos de teste
+  for (const p of pes) if (dentroRocha(p.x, p.y)) pesTocaram = true;
+  for (const p of CASCO) { const w = naveMundo(p[0], p[1]); if (dentroRocha(w.x, w.y)) cascoTocou = true; }
+  // Picos e quinas do terreno que entram no casco entre dois pontos de teste
   for (const t of terreno.pts) {
-    if (Math.abs(t.x - n.x) > 20) continue;
+    if (Math.abs(t.x - n.x) > 20 || Math.abs(t.y - n.y) > 25) continue;
     const dx = t.x - n.x, dy = t.y - n.y;
     const lx = dx * c + dy * s, ly = -dx * s + dy * c;
     if (lx > -11 && lx < 11 && ly > -17 && ly < 7.5) cascoTocou = true;
@@ -661,14 +782,18 @@ function verificarContato() {
   if (!pesTocaram && !cascoTocou) return;
 
   const xmin = Math.min(pes[0].x, pes[1].x), xmax = Math.max(pes[0].x, pes[1].x);
-  const plat = terreno.plataformas.find(p => xmin >= p.x0 && xmax <= p.x1);
+  const yPes = Math.max(pes[0].y, pes[1].y);
+  const plat = terreno.plataformas.find(p => xmin >= p.x0 && xmax <= p.x1 && Math.abs(yPes - p.y) < 6);
   const okVy = n.vy <= CFG.LIM_VY, okVx = Math.abs(n.vx) <= CFG.LIM_VX, okAng = Math.abs(n.a) <= CFG.LIM_ANG;
 
   if (plat && !cascoTocou && okVy && okVx && okAng) {
     pousar(plat);
   } else {
+    // Pé que entrou de lado: a rocha continua logo acima dele (parede)
+    const deLado = pes.some(p => dentroRocha(p.x, p.y) && dentroRocha(p.x, p.y - 4));
     let motivo = 'NAVE INCLINADA DEMAIS';
-    if (!plat) motivo = 'FORA DA PLATAFORMA';
+    if (deLado) motivo = 'BATEU NA PAREDE';
+    else if (!plat) motivo = pesTocaram ? 'FORA DA PLATAFORMA' : 'COLISÃO COM O CASCO';
     else if (cascoTocou && okAng) motivo = 'COLISÃO COM O CASCO';
     else if (!okVy) motivo = 'IMPACTO VERTICAL FORTE';
     else if (!okVx) motivo = 'VELOCIDADE HORIZONTAL ALTA';
@@ -725,10 +850,13 @@ function atualizarDestrocos(dt) {
   if (!destrocos.length && !faiscas.length) return;
   const g = dadosFase(jogo.fase).g;
   for (const d of destrocos) {
+    d.ang += d.va * dt;
+    // Nasceu dentro da rocha: sobe até sair
+    if (dentroRocha(d.x, d.y)) { d.y -= 1; d.vy = Math.min(d.vy, 0); continue; }
     d.vy += g * dt;
-    d.x += d.vx * dt; d.y += d.vy * dt; d.ang += d.va * dt;
-    const gy = chaoY(d.x) - 1;
-    if (d.y > gy) { d.y = gy; d.vy *= -0.35; d.vx *= 0.7; d.va *= 0.7; }
+    const nx = d.x + d.vx * dt, ny = d.y + d.vy * dt;
+    if (dentroRocha(nx, d.y)) d.vx *= -0.3; else d.x = nx;
+    if (dentroRocha(d.x, ny)) { d.vy *= -0.35; d.vx *= 0.7; d.va *= 0.7; } else d.y = ny;
   }
   for (const f of faiscas) {
     f.vy += g * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vida -= dt;
@@ -739,7 +867,7 @@ function atualizarDestrocos(dt) {
 // =====================================================================
 // 10. CÂMERA COM ZOOM AUTOMÁTICO
 // =====================================================================
-const cam = { x: CFG.MUNDO_L / 2, y: CFG.MUNDO_A / 2, zoom: 1, fator: 1 };
+const cam = { x: CFG.MUNDO_L / 2, y: CFG.MUNDO_A / 2, zoom: 1, fator: 1, chao: NaN };
 
 function zoomBase() {
   const z = Math.min(cw / CFG.MUNDO_L, ch / CFG.MUNDO_A);
@@ -753,17 +881,27 @@ function atualizarCamera(dtReal) {
   const emVoo = jogo.estado !== 'menu';
   if (jogo.estado === 'jogando') {
     // Zoom contínuo: quanto mais perto do terreno (abaixo e dos lados), maior.
-    // Usa o ponto mais alto do terreno ao redor para não oscilar sobre torres e cânions.
-    let alt = Infinity;
-    for (let dx = -60; dx <= 60; dx += 30) alt = Math.min(alt, chaoY(clamp(nave.x + dx, 0, L)) - (nave.y + 10));
-    cam.fator = clamp((ch / zb) * CFG.ZOOM_ALCANCE / Math.max(1, alt), 1, CFG.ZOOM_FATOR);
+    // Mede a distância real até a linha do terreno, que não salta na beira de
+    // paredes e torres, e muda o zoom com velocidade limitada: aproxima devagar
+    // e afasta um pouco mais rápido, sem o vaivém de antes.
+    const r = (ch / zb) * CFG.ZOOM_ALCANCE;
+    const alvo = clamp(r / Math.max(1, distTerreno(nave.x, nave.y, r + 12) - 12), 1, CFG.ZOOM_FATOR);
+    const dl = Math.log(alvo / cam.fator);
+    cam.fator *= Math.exp(clamp(dl * (1 - Math.exp(-dtReal * 2)), -0.9 * dtReal, 0.45 * dtReal));
   }
   if (!emVoo) cam.fator = 1;
 
   const az = zb * cam.fator, vw = cw / az, vh = ch / az;
   let ax = emVoo ? nave.x : L / 2;
-  // Chão a ~70% da altura da tela, sem deixar a nave sair por cima
-  let ay = emVoo ? Math.min(chaoY(nave.x) - vh * 0.2, nave.y + vh * 0.4) : Infinity;
+  // Chão de referência logo abaixo da nave, suavizado (salta na beira dos cânions e das saliências)
+  if (emVoo) {
+    const chao = Math.min(chaoAbaixo(nave.x, nave.y), A);
+    cam.chao = isFinite(cam.chao) ? cam.chao + (chao - cam.chao) * (1 - Math.exp(-dtReal * 2.5)) : chao;
+  }
+  // Chão a ~70% da altura da tela, sem deixar a nave sair por cima. Dentro da
+  // caverna o teto também importa: a nave desce para perto do meio da tela
+  const dentro = terreno.caverna ? clamp((nave.y - terreno.ceu) / 150, 0, 1) : 0;
+  let ay = emVoo ? Math.min(cam.chao - vh * 0.2, nave.y + vh * (0.4 - 0.28 * dentro)) : Infinity;
   // Limita o alvo para não mostrar além das bordas do mundo
   ax = vw < L ? clamp(ax, vw / 2, L - vw / 2) : L / 2;
   ay = Math.min(ay, A + 10 - vh / 2);
@@ -874,6 +1012,32 @@ function desenharRotulosPlataformas(cor, u) {
   }
 }
 
+// Setas na borda da tela apontando as plataformas que ficaram fora do quadro (zoom)
+function desenharSetasPlataformas(cor, u) {
+  if (jogo.estado !== 'jogando') return;
+  const m = 9 * u, cx = cw / 2, cy = ch / 2;
+  const x0 = m + seguro.esq, x1 = cw - m - seguro.dir;
+  const y0 = Math.max(m + seguro.topo, ch * 0.22);
+  const y1 = ch - m - (jogo.toque ? layoutToque()[2].r * 2 + 18 : 0);
+  const k = 3.5 * u, uT = u * 0.85;
+  ctx.lineWidth = Math.max(1, u * 0.5); ctx.strokeStyle = cor;
+  for (const p of terreno.plataformas) {
+    const px = telaX((p.x0 + p.x1) / 2), py = telaY(p.y);
+    if (px > 0 && px < cw && py > 0 && py < ch) continue;
+    const dx = px - cx, dy = py - cy;
+    const t = Math.min(dx > 0 ? (x1 - cx) / dx : dx < 0 ? (x0 - cx) / dx : Infinity,
+                       dy > 0 ? (y1 - cy) / dy : dy < 0 ? (y0 - cy) / dy : Infinity);
+    const sx = cx + dx * t, sy = cy + dy * t, a = Math.atan2(dy, dx), c = Math.cos(a), s = Math.sin(a);
+    ctx.beginPath();
+    ctx.moveTo(sx - c * k * 1.6 - s * k, sy - s * k * 1.6 + c * k);
+    ctx.lineTo(sx, sy);
+    ctx.lineTo(sx - c * k * 1.6 + s * k, sy - s * k * 1.6 - c * k);
+    ctx.closePath();
+    ctx.stroke();
+    texto('x' + p.mult, sx - c * k * 3.6, sy - s * k * 3.6 - 3 * uT, uT, 'centro', cor);
+  }
+}
+
 // Seta indicando a nave quando ela sobe acima da tela
 function desenharIndicadorAcima(cor, u) {
   if (jogo.estado !== 'jogando') return;
@@ -946,6 +1110,7 @@ function desenharMensagens(cor, u) {
   if (jogo.estado === 'jogando' && jogo.tEstado < 3 && !jogo.pausado) {
     const k = textoCabe('FASE ' + jogo.fase, cx, ch * 0.3, uG, 'centro', cor, maxL);
     textoCabe(dadosFase(jogo.fase).nome + ' - ' + terreno.nome, cx, ch * 0.3 + k * 6 + u * 5, u, 'centro', cor, maxL);
+    if (terreno.caverna) textoCabe('DESÇA ATÉ O FUNDO - TANQUE CHEIO', cx, ch * 0.3 + k * 6 + u * 16, u, 'centro', cor, maxL);
   }
   if (jogo.estado === 'jogando' && jogo.comb <= 0 && piscar(2.5)) {
     textoCabe('SEM COMBUSTÍVEL', cx, ch * 0.22, uG, 'centro', COR_ALERTA, maxL);
@@ -1142,6 +1307,7 @@ function desenhar() {
   } else {
     desenharHUD(cor, u);
     desenharIndicadorAcima(cor, u);
+    desenharSetasPlataformas(cor, u);
     desenharMensagens(cor, u);
     desenharControlesToque(cor);
   }
