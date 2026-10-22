@@ -1,0 +1,7 @@
+# Configuração local do Claude Code, menos o servidor de teste
+.claude/*
+!.claude/launch.json
+!.claude/servidor.js
+*.log
+.DS_Store
+Thumbs.db

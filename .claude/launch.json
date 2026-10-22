@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "jogos", "runtimeExecutable": "node", "runtimeArgs": [".claude/servidor.js"], "port": 8765 }
+  ]
+}
