@@ -5,7 +5,6 @@ Um repositório só para a página inicial e todos os jogos, publicado no GitHub
 ## Os jogos andam juntos
 
 - Os jogos dividem o domínio, o app instalável e a publicação. Todo jogo segue a seção "App instalável" do README e usa um prefixo próprio no `localStorage`.
-- As pastas `D:\dev\Jogo 01` a `D:\dev\Jogo 04` são só arquivo. Nunca edite nelas: o jogo está aqui.
 
 ## Commits
 
