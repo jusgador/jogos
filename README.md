@@ -2,16 +2,14 @@
 
 Página inicial e jogos, publicados no GitHub Pages: https://jusgador.github.io/jogos/
 
-| Jogo | Pasta | Antes em |
-|---|---|---|
-| Campos Tennis | `tenis/` | `D:\dev\Jogo 01` (`tenis.html`) |
-| Lunar Lander Vetorial | `lander/` | `D:\dev\Jogo 02` (`lunar-lander.html`) |
-| Asas de Aço | `asas/` | `D:\dev\Jogo 03` |
-| Bruce Lee 64 - A Fortaleza | `fortaleza/` | `D:\dev\Jogo 04` |
+| Jogo | Pasta |
+|---|---|
+| Campos Tennis | `tenis/` |
+| Lunar Lander Vetorial | `lander/` |
+| Asas de Aço | `asas/` |
+| Bruce Lee 64 - A Fortaleza | `fortaleza/` |
 
-Cada jogo é desenvolvido direto na sua pasta, num único `index.html`. O histórico de cada um veio junto (`git log --follow asas/index.html`). As pastas `D:\dev\Jogo 01` a `04` ficaram só como arquivo: não edite nelas.
-
-O endereço antigo do tênis (`jusgador.github.io/campos-tennis/`) continua redirecionando para `tenis/`. Esse redirecionamento fica no repositório `jusgador/campos-tennis` (`D:\dev\Jogo 01`), que não muda mais.
+Cada jogo é desenvolvido direto na sua pasta, num único `index.html`. Os jogos começaram em repositórios próprios, e o histórico de cada um veio junto (`git log --follow asas/index.html`).
 
 ## Testar
 
