@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icone-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
 <title>Campos Tennis</title>
 <!--
   CAMPOS TENNIS
@@ -18,6 +24,8 @@
   --font:"Trebuchet MS","Segoe UI","Arial Rounded MT Bold",system-ui,sans-serif;
   --panel:rgba(16,22,46,.86); --line:rgba(255,255,255,.12);
   --yellow:#ffd23a; --blue:#2f7bff; --green:#25c26a; --red:#ff4d5e;
+  /* margem dos menus respeitando o recorte da tela (notch) no celular */
+  --safePad:max(18px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left));
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden;background:#0b1430;font-family:var(--font);color:#fff;
@@ -32,7 +40,10 @@ button{font-family:var(--font);cursor:pointer}
 #loading small{font-weight:600;font-size:14px;opacity:.7}
 
 /* --- menu --- */
-#menu{position:fixed;inset:0;z-index:20;display:flex;align-items:center;padding:18px;pointer-events:none}
+#menu{position:fixed;inset:0;z-index:20;display:flex;align-items:center;padding:var(--safePad);pointer-events:none}
+.homeBtn{padding:6px 11px;font-size:13px}
+#menu .homeBtn{margin-bottom:10px}
+.overlay .homeBtn{margin-top:14px}
 .panel{pointer-events:auto;width:min(560px,100%);max-height:100%;overflow:auto;background:var(--panel);
   border:3px solid var(--line);border-radius:24px;padding:18px 20px 16px;box-shadow:0 20px 60px rgba(0,0,0,.5);
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -144,13 +155,13 @@ body.touch #hint.show{opacity:.8}
 @keyframes lobPulse{50%{box-shadow:0 0 14px #7fe3ff99}}
 
 /* --- overlays --- */
-.overlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(5,10,25,.45)}
+.overlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:var(--safePad);background:rgba(5,10,25,.45)}
 .overlay .panel{text-align:center}
 .overlay h2{margin:0 0 6px;font-size:40px;font-weight:900;color:var(--yellow);text-shadow:0 4px 0 #c0670c}
 .overlay .row{display:flex;gap:8px}
 .overlay .row .big{flex:1}
 .big.alt{background:linear-gradient(#9cc0ff,#2f7bff);color:#fff;box-shadow:0 6px 0 #1b4aa8,0 10px 20px rgba(0,0,0,.35)}
-#endScreen{align-items:flex-end;padding-bottom:6vh}
+#endScreen{align-items:flex-end;padding-bottom:max(6vh,env(safe-area-inset-bottom))}
 #endSets{font-size:30px;font-weight:900;letter-spacing:3px;margin:8px 0}
 #replayTag{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:31;font-weight:900;font-size:22px;letter-spacing:4px;
   background:rgba(0,0,0,.55);padding:6px 16px;border-radius:12px}
@@ -191,6 +202,7 @@ body.cine .bar{height:9vh}
 
 <div id="menu" class="hidden">
   <div class="panel">
+    <button class="chip homeBtn" title="Voltar aos jogos">⌂ Jogos</button>
     <h1>CAMPOS <span>TENNIS</span></h1>
     <div class="sub" id="menuSub">Campos Open • melhor de 3 sets • tie-break no 6-6</div>
     <h3>Seu jogador</h3><div id="charList" class="cards"></div>
@@ -245,12 +257,14 @@ body.cine .bar{height:9vh}
   <div class="panel"><h2>PAUSA</h2>
     <div class="chips" style="justify-content:center;margin:6px 0 2px"><button class="chip" id="fpsPauseBtn">Mostrar FPS</button></div>
     <div class="row"><button class="big" id="resumeBtn">CONTINUAR</button><button class="big alt" id="quitBtn">MENU</button></div>
+    <button class="chip homeBtn" title="Voltar aos jogos">⌂ Jogos</button>
   </div>
 </div>
 
 <div id="endScreen" class="overlay hidden">
   <div class="panel"><h2 id="endTitle">VITÓRIA!</h2><div id="endSub"></div><div id="endSets"></div><div id="endNews"></div>
     <div class="row"><button class="big" id="againBtn">REINICIAR</button><button class="big alt" id="menuBtn">MENU</button></div>
+    <button class="chip homeBtn" title="Voltar aos jogos">⌂ Jogos</button>
   </div>
 </div>
 
@@ -487,6 +501,7 @@ async function init() {
   initUI();
   onResize();
   addEventListener('resize', onResize);
+  document.addEventListener('fullscreenchange', onResize);   // reajusta ao entrar/sair da tela cheia
 
   enterMenu();
   let last = performance.now();
@@ -2543,6 +2558,20 @@ function initInput() {
   cv.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' && e.button === 0) actionPress(); });
   addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && e.button === 0) actionRelease(); });
   cv.addEventListener('touchstart', () => { if (S.state === 'replay') endReplay(); }, { passive: true });
+  // tela cheia no celular: no primeiro toque e, se o jogador sair dela, nos toques fora da partida.
+  // pointerup de toque conta como gesto do usuário (touchstart nem sempre conta no Chrome).
+  let fsTried = false;
+  addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'touch' || document.fullscreenElement || document.webkitFullscreenElement) return;
+    if (fsTried && (S.state === 'play' || S.state === 'replay')) return;   // não redimensiona no meio do ponto
+    fsTried = true;
+    const el = document.documentElement;
+    const lock = () => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (_) {} };
+    try {
+      if (el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).then(lock, () => {});
+      else if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); lock(); }
+    } catch (_) {}
+  });
   // joystick virtual
   const joy = $('joy'), knob = $('knob'); let jid = null;
   const setJoy = (e) => {
@@ -2815,6 +2844,8 @@ function initUI() {
   $('quitBtn').onclick = () => { $('pauseMenu').classList.add('hidden'); enterMenu(); };
   $('againBtn').onclick = () => { AudioFX.click(); (S.againAction || startMatch)(); };
   $('menuBtn').onclick = () => { AudioFX.click(); enterMenu(); };
+  // volta à lista de jogos (instalado como app não há botão "voltar" do navegador)
+  document.querySelectorAll('.homeBtn').forEach((b) => (b.onclick = () => { location.href = '../'; }));
   refreshMenu();
 }
 // Mostra/oculta o contador de FPS (preferência guardada no navegador)
