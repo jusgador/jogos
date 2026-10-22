@@ -1,6 +1,6 @@
 # Plano: página única para os jogos
 
-Situação (22/10/2026): escolhida a opção A, com o tênis no repositório próprio. A página inicial e o script `publicar.sh` estão prontos em `D:\dev\jogos`, com commit só local. Falta criar o repositório `jusgador/jogos` no GitHub, enviar e ligar o Pages (passos 1, 4 e 5 abaixo). O jogo 04 aparece na página como "A Fortaleza 64", mas o título dentro do jogo ainda é "Bruce Lee 64".
+Situação (22/10/2026): implementada a opção A, com o tênis no repositório próprio. A página inicial está em `D:\dev\jogos` (repositório `jusgador/jogos`) e publicada em https://jusgador.github.io/jogos/. Para atualizar os jogos, rode `./publicar.sh --push` naquela pasta. Falta o teste num celular de verdade (passo 5 e pendências abaixo).
 
 ## Objetivo
 
@@ -11,9 +11,9 @@ Ter uma página inicial onde se escolhe o jogo (Campos Tennis, Lunar Lander e os
 | Jogo | Pasta local | Repositório | Publicação |
 |---|---|---|---|
 | Campos Tennis | `D:\dev\Jogo 01` (`tenis.html`, three.js por CDN) | `jusgador/campos-tennis` (público) | Pages, branch `main`, raiz: https://jusgador.github.io/campos-tennis/ |
-| Lunar Lander | `D:\dev\Jogo 02` (`lunar-lander.html`, sem dependências) | só local | não publicado |
-| Asas de Aço | `D:\dev\Jogo 03` (`index.html`, sem dependências) | só local | não publicado |
-| A Fortaleza 64 (título no jogo: "Bruce Lee 64") | `D:\dev\Jogo 04` (`index.html`, sem dependências) | só local | não publicado |
+| Lunar Lander | `D:\dev\Jogo 02` (`lunar-lander.html`, sem dependências) | cópia em `jusgador/jogos` | https://jusgador.github.io/jogos/lander/ |
+| Asas de Aço | `D:\dev\Jogo 03` (`index.html`, sem dependências) | cópia em `jusgador/jogos` | https://jusgador.github.io/jogos/asas/ |
+| Bruce Lee 64 - A Fortaleza | `D:\dev\Jogo 04` (`index.html`, sem dependências) | cópia em `jusgador/jogos` | https://jusgador.github.io/jogos/fortaleza/ |
 
 - A conta não tem site principal (`jusgador.github.io` na raiz). Outros repositórios públicos já usam Pages de projeto, como as páginas de privacidade.
 - O navegador guarda os dados (`localStorage`) por domínio. Todo Pages em `jusgador.github.io/...` tem o mesmo domínio. As chaves não colidem: o tênis usa `bt-*`, o lander usa `lander-*`, Asas de Aço usa `asasDeAco.*` e A Fortaleza usa `bl64_*`. Cada jogo novo deve usar um prefixo próprio.
