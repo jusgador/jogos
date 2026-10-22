@@ -41,7 +41,77 @@ Cada jogo tem:
 
 ## Acrescentar um jogo
 
-1. Crie a pasta com o `index.html` do jogo.
-2. Inclua o jogo no array `JOGOS` no topo do `index.html` da raiz.
-3. Faça o jogo seguir o que está em "App instalável".
-4. Use um prefixo próprio nas chaves do `localStorage`. Todos os jogos dividem o domínio `jusgador.github.io`. Prefixos em uso: `bt-`, `lander-`, `asasDeAco.` e `bl64_`, além de `jogos-` na própria página.
+Roteiro para uma sessão aberta em `D:\dev\jogos` para criar um jogo novo, do começo até a publicação.
+
+### 1. Nome, pasta e prefixo
+
+- **Pasta:** curta, em minúsculas, sem acento nem espaço (`tenis`, `asas`). Ela vira o endereço público, `https://jusgador.github.io/jogos/<pasta>/`, e não deve mudar depois: mudar quebra os links, os favoritos e o atalho de quem instalou o app.
+- **Prefixo do `localStorage`:** todos os jogos dividem o domínio `jusgador.github.io`, e um prefixo repetido mistura os dados salvos. Prefixos em uso:
+
+  | Prefixo | Dono |
+  |---|---|
+  | `jogos-` | página inicial |
+  | `bt-` | Campos Tennis |
+  | `lander-` | Lunar Lander Vetorial |
+  | `asasDeAco.` | Asas de Aço |
+  | `bl64_` | Bruce Lee 64 - A Fortaleza |
+
+### 2. O arquivo do jogo
+
+Crie `<pasta>/index.html`, como nos outros jogos:
+- um arquivo só, com HTML, CSS e JavaScript puros, sem etapa de build;
+- gráficos e sons feitos por código, sem imagens nem áudio externos;
+- se uma biblioteca for indispensável, carregue-a por CDN, como o three.js do tênis;
+- controles de teclado no computador e de toque no celular, se o jogo funcionar nele.
+
+### 3. App instalável
+
+No `<head>`:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icone-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+```
+
+No jogo:
+- **Botão "Jogos":** fica no menu e na pausa e faz `location.href = '../'`. Ele precisa respeitar o entalhe do celular (`env(safe-area-inset-*)`, liberado pelo `viewport-fit=cover`). Instalado, o app não tem botão de voltar do navegador: esse botão é a única saída.
+- **Tela cheia no toque:** chame `requestFullscreen` num `touchend`, porque o Chrome nem sempre aceita o pedido no `touchstart`. No `fullscreenchange`, reajuste o tamanho do canvas. No iPhone, a tela cheia só funciona com o app instalado.
+
+Os jogos de exemplo mais simples são `lander/index.html` (procure por `voltarAosJogos` e `seguro`) e `fortaleza/index.html` (procure por `goFullscreen` e `'home'`).
+
+### 4. Cartão na página inicial
+
+Inclua uma linha no array `JOGOS`, no topo do `index.html` da raiz, na ordem em que o cartão deve aparecer:
+
+```js
+{ nome: 'Nome do Jogo', url: '<pasta>/', compat: 'Computador e celular',
+  descricao: 'Uma frase que diga o que se faz no jogo.',
+  desenho: '<rect width="160" height="100" fill="#123"/>…' },
+```
+
+- `compat`: "Computador e celular", ou "Melhor no computador · funciona no celular".
+- `desenho`: o miolo de um SVG de 160x100, sem a tag `<svg>`. Siga o estilo dos outros cartões: fundo de cor chapada e formas simples.
+
+### 5. Registro
+
+- Acrescente o jogo à tabela no topo deste README e à lista de pastas no começo do `CLAUDE.md`.
+- Acrescente o prefixo à tabela do passo 1.
+- Se o jogo tiver controles ou regras que valha explicar, escreva um `<pasta>/README.md`, como os de `tenis/` e `lander/`.
+
+### 6. Teste
+
+Com o servidor de teste no ar, confira em `http://localhost:8765/`:
+- o cartão aparece e abre o jogo;
+- o botão "Jogos" volta para a página inicial;
+- o jogo funciona no celular, pelo IP do PC na mesma rede Wi-Fi;
+- todas as chaves salvas começam com o prefixo (veja nas ferramentas do navegador, em Armazenamento).
+
+### 7. Commit e publicação
+
+- O jogo novo é um commit só, com a pasta e a página inicial juntas: `git add <pasta>/ index.html README.md CLAUDE.md`. É a única vez em que um commit de jogo mexe fora da pasta dele. A mensagem fica assim: "Nome do Jogo: novo jogo, ...".
+- Publique com `publicar.bat`. Um ou dois minutos depois, confira o jogo no endereço público.
