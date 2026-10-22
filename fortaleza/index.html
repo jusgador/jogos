@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="theme-color" content="#000000">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icone-180.png">
 <title>Bruce Lee 64 - A Fortaleza</title>
 <style>
   html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden;
@@ -907,6 +910,7 @@ function addSmall(type, label, x, y) {
   el.addEventListener('click', () => smallAction(type));
   ui.appendChild(el);
   ctrls.push({ type, small:true, el });
+  return el;
 }
 
 // Recria os controles conforme o tamanho da tela e o modo de jogo
@@ -915,6 +919,13 @@ function layoutControls() {
   const vw = innerWidth, vh = innerHeight;
   addSmall('pause', game.state === 'pause' ? '▶' : 'II', vw - 50, 8);
   addSmall('mute', muted ? '♪̸' : '♪', vw - 96, 8);
+  // Fora da partida: botão para voltar à lista de jogos (no canto esquerdo, respeitando o entalhe)
+  if (game.state !== 'play') {
+    const h = addSmall('home', '⌂ JOGOS', 0, 0);
+    h.style.left = 'calc(8px + env(safe-area-inset-left, 0px))';
+    h.style.top = 'calc(8px + env(safe-area-inset-top, 0px))';
+    h.style.width = 'auto'; h.style.padding = '0 10px'; h.title = 'Voltar aos jogos';
+  }
   if (!isTouch || (game.state !== 'play' && game.state !== 'pause')) return;
   const m = Math.max(10, vh * 0.04);
   if (game.mode !== 2) {
@@ -936,6 +947,7 @@ function layoutControls() {
 
 function smallAction(type) {
   audioInit();
+  if (type === 'home') { location.href = '../'; return; }
   if (type === 'mute') setMute(!muted);
   else if (type === 'pause') {
     if (game.state === 'play') setState('pause');
@@ -949,12 +961,17 @@ function onTouch(e) {
   audioInit();
   if (e.type === 'touchstart') {
     if (!isTouch) { isTouch = true; layoutControls(); }
+    if (game.state !== 'play') fsPend = true;   // toque em menu: tela cheia no touchend
+    const rotOn = getComputedStyle(rot).display !== 'none';
     for (const t of e.changedTouches) {
-      const sm = ctrls.find(c => c.small && inRect(t, c.el.getBoundingClientRect()));
-      if (sm) { smallAction(sm.type); continue; }
+      // com o aviso de girar por cima, o botão de voltar não responde
+      const sm = ctrls.find(c => c.small && !(rotOn && c.type === 'home') && inRect(t, c.el.getBoundingClientRect()));
+      if (sm) { if (sm.type === 'home') fsPend = false; smallAction(sm.type); continue; }
       if (game.state !== 'play') tapScreen(t.clientX, t.clientY);
     }
-    if (game.state === 'menu') goFullscreen();
+  } else if (e.type === 'touchend' && fsPend) {
+    // touchend conta como gesto do usuário no Chrome; touchstart nem sempre
+    fsPend = false; goFullscreen();
   }
   const st = [blankIn(), blankIn()];
   for (const t of e.touches) {
@@ -990,12 +1007,17 @@ addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('dblclick', e => e.preventDefault());
 cv.addEventListener('mousedown', e => { audioInit(); if (game.state !== 'play') tapScreen(e.clientX, e.clientY); });
 
+// Tela cheia (só no toque); repete a cada toque em menu se o jogador tiver saído dela
+let fsPend = false;
+const rot = document.getElementById('rot');
 function goFullscreen() {
   const d = document.documentElement;
-  if (document.fullscreenElement || !d.requestFullscreen) return;
-  d.requestFullscreen({ navigationUI:'hide' })
-    .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}))
-    .catch(() => {});
+  if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  const lock = () => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {});
+  try {
+    if (d.requestFullscreen) d.requestFullscreen({ navigationUI:'hide' }).then(lock).catch(() => {});
+    else if (d.webkitRequestFullscreen) d.webkitRequestFullscreen();
+  } catch (e) {}
 }
 function vib(ms) { try { if (isTouch && navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
 
@@ -1009,6 +1031,7 @@ function fit() {
 }
 addEventListener('resize', fit);
 addEventListener('orientationchange', () => setTimeout(fit, 200));
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { fit(); setTimeout(fit, 200); });
 
 /* =====================================================================
    7. MUNDO: CARREGAR CÂMARA E CONSULTAR BLOCOS
