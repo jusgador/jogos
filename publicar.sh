@@ -1,9 +1,34 @@
 #!/usr/bin/env bash
-# Copia os jogos das pastas de desenvolvimento para cá e faz o commit.
-# Uso: ./publicar.sh [--push]
-# O Campos Tennis é publicado no repositório dele (jusgador/campos-tennis).
+# Publica os quatro jogos, mas só envia o que mudou.
+# - Lander, Asas de Aço e Bruce Lee 64: copia das pastas de desenvolvimento para cá.
+# - Campos Tennis: publicado pelo repositório dele (../Jogo 01).
+# Mudanças ainda sem commit viram um commit automático.
+# Uso: ./publicar.sh        (publica)
+#      ./publicar.sh --local (só copia e faz commit, sem enviar)
 set -euo pipefail
 cd "$(dirname "$0")"
+ENVIAR=1
+[[ "${1:-}" == "--local" ]] && ENVIAR=0
+
+# Faz commit do que mudou e envia o que ainda não foi enviado. Uso: publicar_repo <pasta> <nome>
+publicar_repo() {
+  local pasta="$1" nome="$2"
+  git -C "$pasta" add -A
+  if git -C "$pasta" diff --cached --quiet; then
+    echo "$nome: nada novo para o commit."
+  else
+    echo "$nome: alterado:"
+    git -C "$pasta" diff --cached --name-only | sed 's/^/  /'
+    git -C "$pasta" commit -q -m "Atualiza os jogos ($(date +%Y-%m-%d))"
+  fi
+  if (( ENVIAR )); then
+    if [[ "$(git -C "$pasta" rev-list --count '@{u}..HEAD')" != 0 ]]; then
+      git -C "$pasta" push -q && echo "$nome: enviado."
+    else
+      echo "$nome: já estava publicado."
+    fi
+  fi
+}
 
 copiar() { # origem destino
   mkdir -p "$(dirname "$2")"
@@ -14,13 +39,8 @@ copiar "../Jogo 02/lunar-lander.html" lander/index.html
 copiar "../Jogo 03/index.html"        asas/index.html
 copiar "../Jogo 04/index.html"        fortaleza/index.html
 
-git add -A
-if git diff --cached --quiet; then
-  echo "Nada mudou."
-else
-  git commit -m "Atualiza os jogos ($(date +%Y-%m-%d))"
-fi
+publicar_repo . "Página dos jogos (lander, asas, fortaleza)"
+publicar_repo "../Jogo 01" "Campos Tennis"
 
-if [[ "${1:-}" == "--push" ]]; then
-  git push
-fi
+(( ENVIAR )) && echo "O GitHub Pages leva um ou dois minutos para atualizar."
+exit 0

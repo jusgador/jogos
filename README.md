@@ -14,10 +14,10 @@ Os jogos são desenvolvidos nas pastas próprias. As subpastas daqui são cópia
 ## Publicar
 
 ```bash
-./publicar.sh --push
+./publicar.sh
 ```
 
-O script copia os arquivos, faz o commit e, com `--push`, envia.
+Ou dê dois cliques em `publicar.bat`. Ele publica os quatro jogos, incluindo o Campos Tennis (pelo repositório `../Jogo 01`), mas só envia o que mudou. Mudanças sem commit viram um commit automático. Com `--local`, só copia e faz o commit, sem enviar.
 
 ## Acrescentar um jogo
 
