@@ -7,7 +7,7 @@ Página inicial dos jogos, publicada no GitHub Pages: https://jusgador.github.io
 | Campos Tennis | https://jusgador.github.io/campos-tennis/ | `D:\dev\Jogo 01` (repositório próprio) |
 | Lunar Lander Vetorial | `lander/` | `D:\dev\Jogo 02` |
 | Asas de Aço | `asas/` | `D:\dev\Jogo 03` |
-| A Fortaleza 64 | `fortaleza/` | `D:\dev\Jogo 04` |
+| Bruce Lee 64 - A Fortaleza | `fortaleza/` | `D:\dev\Jogo 04` |
 
 Os jogos são desenvolvidos nas pastas próprias. As subpastas daqui são cópias: não edite nelas.
 
