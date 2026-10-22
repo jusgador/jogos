@@ -1,10 +1,10 @@
 # Lunar Lander Vetorial
 
-Jogo de pouso de nave no estilo do Lunar Lander (Atari, 1979), em um único arquivo HTML ([lunar-lander.html](lunar-lander.html)), feito com Canvas 2D e JavaScript puro. Não usa bibliotecas nem assets externos: gráficos vetoriais, fonte e sons são todos gerados por código.
+Jogo de pouso de nave no estilo do Lunar Lander (Atari, 1979), em um único arquivo HTML ([index.html](index.html)), feito com Canvas 2D e JavaScript puro. Não usa bibliotecas nem assets externos: gráficos vetoriais, fonte e sons são todos gerados por código.
 
 ## Como jogar
 
-Abra `lunar-lander.html` no navegador. Não precisa de servidor.
+Abra `index.html` no navegador. Não precisa de servidor, mas o botão "Jogos" e a instalação como app só funcionam pelo servidor de teste da raiz (ver o README de lá), em `http://localhost:8765/lander/`.
 
 Pouse numa plataforma plana com velocidade vertical abaixo de 16, horizontal abaixo de 9 e a nave quase na vertical (menos de 8°). Plataformas menores valem mais (x2, x3, x5). Pontos = multiplicador × combustível ÷ 4 + bônus de pouso suave.
 
@@ -27,6 +27,8 @@ Os relevos se alternam em ciclo e, a cada volta, a gravidade aumenta e as plataf
 
 O combustível é recarregado em parte a cada fase. Destruir a nave custa 200 de combustível, e o jogo acaba quando ele zera. O recorde fica salvo no navegador.
 
-## Planos
+## Pendências
 
-Veja [PLANO-PUBLICACAO.md](PLANO-PUBLICACAO.md) para a ideia de uma página única com todos os jogos.
+- Testar num celular de verdade: tamanho do texto, botões cobrindo o terreno, desempenho do brilho.
+- Talvez adaptar a ajuda do menu para o toque.
+- Jogar as quatro fases à mão para ajustar a dificuldade, principalmente o x5 nos cânions.
