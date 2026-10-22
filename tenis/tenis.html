@@ -53,9 +53,6 @@ h3{margin:14px 0 7px;font-size:13px;text-transform:uppercase;letter-spacing:2px;
 .stats{display:flex;gap:3px;margin-top:4px}
 .stats u{display:block;height:5px;border-radius:3px;background:#ffffff25;flex:1;overflow:hidden;text-decoration:none}
 .stats u::after{content:"";display:block;height:100%;width:var(--v);background:var(--c)}
-.swatches{display:flex;flex-wrap:wrap;gap:8px}
-.sw{width:34px;height:34px;border-radius:10px;border:3px solid #ffffff40;box-shadow:inset 0 -4px 0 rgba(0,0,0,.25)}
-.sw.sel{border-color:#fff;transform:scale(1.12)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{padding:8px 13px;border-radius:12px;border:2px solid #ffffff30;background:rgba(255,255,255,.07);color:#fff;font-weight:800;font-size:14px}
 .chip.sel{background:var(--blue);border-color:#9cc0ff}
@@ -71,6 +68,17 @@ h3{margin:14px 0 7px;font-size:13px;text-transform:uppercase;letter-spacing:2px;
 .hist span{font-size:10px;letter-spacing:1px;text-transform:uppercase;opacity:.75}
 .histMore{font-size:12px;opacity:.75;margin-top:6px;line-height:1.5}
 .histMore button{background:none;border:none;color:#9cc0ff;font-size:12px;padding:0;text-decoration:underline}
+.chip.lock{opacity:.45}
+.chip .rk{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px;box-shadow:0 0 0 2px #ffffff40}
+.shelf{display:grid;gap:4px}
+.shRow{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);border-radius:12px;padding:4px 10px}
+.shRow>span{flex:1;font-size:13px;font-weight:800}
+.shRow.slam{background:rgba(255,210,58,.1)}
+.cup{position:relative;width:30px;height:30px}
+.cup svg{width:100%;height:100%}
+.cup b{position:absolute;right:-4px;bottom:-2px;font-size:10px;background:#0b1430;border-radius:6px;padding:0 3px}
+#endNews{font-weight:900;color:var(--yellow);font-size:15px;line-height:1.5;margin-bottom:4px}
+#endNews:empty{display:none}
 .help{margin-top:12px;font-size:12px;line-height:1.5;opacity:.75}
 .help kbd{background:#ffffff22;border-radius:5px;padding:1px 6px;font-family:inherit;font-weight:800}
 
@@ -186,7 +194,7 @@ body.cine .bar{height:9vh}
     <h1>CAMPOS <span>TENNIS</span></h1>
     <div class="sub" id="menuSub">Campos Open • melhor de 3 sets • tie-break no 6-6</div>
     <h3>Seu jogador</h3><div id="charList" class="cards"></div>
-    <h3>Cor do avatar</h3><div id="colorList" class="swatches"></div>
+    <h3>Raquete</h3><div id="racketList" class="chips"></div><div class="sub" id="racketInfo"></div>
     <h3>Modo</h3><div id="modeList" class="chips"></div>
     <div id="tourOpts" class="hidden">
       <h3>Campeonato</h3><div id="tourList" class="chips"></div>
@@ -199,6 +207,7 @@ body.cine .bar{height:9vh}
     <h3>Contador de FPS</h3><div id="fpsList" class="chips"></div>
     <button id="resumeTourBtn" class="big alt hidden"></button>
     <button id="playBtn" class="big">JOGAR ▶</button>
+    <h3>Sala de troféus</h3><div id="shelf" class="shelf"></div>
     <h3>Histórico</h3><div id="histBox"></div>
     <div class="help">
       <kbd>WASD</kbd>/<kbd>setas</kbd> mover • <b>mouse</b> ou <kbd>J</kbd><kbd>L</kbd><kbd>I</kbd><kbd>K</kbd> mirar •
@@ -240,7 +249,7 @@ body.cine .bar{height:9vh}
 </div>
 
 <div id="endScreen" class="overlay hidden">
-  <div class="panel"><h2 id="endTitle">VITÓRIA!</h2><div id="endSub"></div><div id="endSets"></div>
+  <div class="panel"><h2 id="endTitle">VITÓRIA!</h2><div id="endSub"></div><div id="endSets"></div><div id="endNews"></div>
     <div class="row"><button class="big" id="againBtn">REINICIAR</button><button class="big alt" id="menuBtn">MENU</button></div>
   </div>
 </div>
@@ -328,10 +337,24 @@ const TOURNEYS = [
   { id: 'chi', name: 'Chicago Open', venue: 'city', board: ['CHICAGO OPEN', '#c8102e', '#fff'] },
 ];
 const ROUNDS = ['QUARTAS DE FINAL', 'SEMIFINAL', 'FINAL'];
+// Taças: uma por campeonato e dificuldade (bronze = Fácil, prata = Médio, ouro = Difícil)
+const MEDALS = [{ name: 'bronze', color: '#cd7f32' }, { name: 'prata', color: '#d8dde3' }, { name: 'ouro', color: '#ffd23a' }];
+// Raquetes do jogador: a clássica tem a cor do personagem; as outras se ganham com títulos e feitos (só muda o visual).
+// frame/grip/strings = cores; metal = metalizada; glow = brilha; trail = cor do rastro da bola no golpe perfeito
+const RACKETS = [
+  { id: 'cla', name: 'Clássica', how: 'A raquete de sempre, na cor do jogador.' },
+  { id: 'coq', name: 'Coqueiro', frame: 0x2fa84f, grip: 0xe2c68c, trail: 0x7dff9a, how: 'Vença o Porto das Dunas Open.', ok: (A) => hasTitle(A, 'pdd') },
+  { id: 'clu', name: 'Clube', frame: 0xf4f4f4, grip: 0x1f6b3a, trail: 0xffffff, how: 'Vença o Golf Ville Open.', ok: (A) => hasTitle(A, 'gvo') },
+  { id: 'neo', name: 'Neon', frame: 0xff2fd0, glow: true, trail: 0xff4fe0, how: 'Vença o Chicago Open.', ok: (A) => hasTitle(A, 'chi') },
+  { id: 'pne', name: 'Pneu', frame: 0x1a1a1a, grip: 0xffd23a, strings: '#ffd23a', trail: 0xffd23a, how: 'Ganhe um set sem perder games (6-0, ou 4-0 na partida curta).', ok: (A) => A.feats.bagel },
+  { id: 'rel', name: 'Relâmpago', frame: 0x3ad7ff, glow: true, trail: 0x7fe9ff, how: 'Faça 10 golpes perfeitos numa partida.', ok: (A) => A.feats.perf10 },
+  { id: 'djo', name: 'Djoko', frame: 0x1f3c88, grip: 0xd61f26, trail: 0x6f9bff, how: 'Vença o Djokovic num campeonato.', ok: (A) => A.feats.djo },
+  { id: 'pra', name: 'Prata', frame: 0xd8dde3, metal: true, trail: 0xe8f0ff, how: 'Grand Slam no Médio: vença os 3 campeonatos no Médio ou no Difícil.', ok: (A) => slam(A, 1) },
+  { id: 'our', name: 'Dourada', frame: 0xffc93a, metal: true, trail: 0xffd23a, how: 'Grand Slam no Difícil: vença os 3 campeonatos no Difícil.', ok: (A) => slam(A, 2) },
+];
 const UMPIRE = { id: 'ump', name: 'Juiz', height: 1.76, skin: 0xd9a066, hair: 0x2b1d14, brow: '#2b1d14', style: 'cap',
   shorts: 0x2a3550, shirt: 0x1d2a44, trim: 0xffd23a, stats: {} };
 
-const PALETTE = [0x2f7bff, 0xff3b4e, 0x22c55e, 0xffb31a, 0xa855f7, 0xff5fa8, 0x14d1d1, 0xff7a1a, 0x2b2f3a, 0xf4f4f4];
 
 // ============================================================
 // 2. UTILIDADES
@@ -410,7 +433,7 @@ let qualLow = 0, ballGlow, quality = 2, qualT = 0, qualAcc = 0, qualN = 0;
 let sun, courtGroup, netGroup, ballMesh, ballShadow, trailMesh, dustMesh, aimRing, umpire, boardTex;
 const S = {
   state: 'loading',            // loading | menu | play | replay | paused | end
-  sel: { char: 0, color: CHARS[0].shirt, opp: -1, diff: 1, surface: 'hard', mode: 'match', tour: 0, pool: 'pros', short: false },
+  sel: { char: 0, opp: -1, diff: 1, surface: 'hard', mode: 'match', tour: 0, pool: 'pros', short: false },
   tour: null, setsToWin: 2, setGames: 6, eventName: 'Campos Open',
   chars: [], preview: null,
   t: 0, pt: 0,                 // tempo global / tempo do ponto atual
@@ -1495,15 +1518,20 @@ function buildHair(head, def, M) {
   }
 }
 
-function buildRacket(color) {
+// rk = raquete especial do jogador (RACKETS); sem ela, a raquete lisa na cor do personagem
+function buildRacket(color, rk) {
   const r = new THREE.Group();
   r.rotation.x = -0.45;
-  const frame = plastic(color, 0.3), grip = plastic(0x22252c, 0.8);
+  const fc = rk && rk.frame !== undefined ? rk.frame : color;
+  const frame = !rk ? plastic(fc, 0.3)
+    : rk.metal ? plastic(fc, 0.22, { metalness: 0.55, emissive: fc, emissiveIntensity: 0.12 })   // sem mapa de ambiente: um leve brilho próprio evita o metal escuro
+    : rk.glow ? plastic(fc, 0.3, { emissive: fc, emissiveIntensity: 0.7 }) : plastic(fc, 0.3);
+  const grip = plastic(rk && rk.grip !== undefined ? rk.grip : 0x22252c, 0.8);
   const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.24, 8), grip); handle.position.y = -0.08; r.add(handle);
   const throat = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.12, 6), frame); throat.position.y = -0.25; r.add(throat);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.016, 6, 24), frame);
   ring.scale.set(1, 1.28, 1); ring.position.y = -0.5; r.add(ring);
-  const st = canvasTex(64, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = '#f2f2f2'; g.lineWidth = 2;
+  const st = canvasTex(64, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = (rk && rk.strings) || '#f2f2f2'; g.lineWidth = 2;
     for (let i = 2; i < w; i += 6) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.moveTo(0, i); g.lineTo(w, i); g.stroke(); } });
   const strings = new THREE.Mesh(new THREE.CircleGeometry(0.145, 20), new THREE.MeshStandardMaterial({ map: st, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6 }));
   strings.scale.set(1, 1.28, 1); strings.position.y = -0.5; r.add(strings);
@@ -1512,7 +1540,8 @@ function buildRacket(color) {
 }
 
 // Monta o boneco articulado: hips > torso > head / ombros > cotovelos > mãos ; hips > quadris > joelhos
-function buildCharacter(def, shirtHex, withRacket = true) {
+function buildCharacter(def, shirtHex, withRacket = true, rk) {
+  const band = rk && rk.frame !== undefined ? rk.frame : def.racket || 0xffd23a;
   const root = new THREE.Group();
   const body = grp(root); body.scale.setScalar(def.height / 2.05);
   const M = { skin: plastic(def.skin, 0.5), shirt: plastic(shirtHex, 0.45), shorts: plastic(def.shorts, 0.5), hair: plastic(def.hair, 0.6),
@@ -1544,7 +1573,7 @@ function buildCharacter(def, shirtHex, withRacket = true) {
     box(sh, 0.14, 0.3, 0.14, M.skin, 0, -0.16, 0, 0.04);
     const el = grp(sh, 0, -0.3, 0);
     box(el, 0.13, 0.27, 0.13, M.skin, 0, -0.13, 0, 0.04);
-    if (s === 'r') box(el, 0.15, 0.06, 0.15, plastic(def.racket || 0xffd23a, 0.5), 0, -0.22, 0, 0.02);   // munhequeira
+    if (s === 'r') box(el, 0.15, 0.06, 0.15, plastic(band, 0.5), 0, -0.22, 0, 0.02);   // munhequeira
     const hand = grp(el, 0, -0.3, 0);
     box(hand, 0.14, 0.13, 0.14, M.skin, 0, 0, 0, 0.04);
     j[s + 'Sh'] = sh; j[s + 'El'] = el; j[s + 'Hand'] = hand;
@@ -1562,7 +1591,7 @@ function buildCharacter(def, shirtHex, withRacket = true) {
     j[s + 'Hip'] = hp; j[s + 'Knee'] = kn;
   }
   let racket = null;
-  if (withRacket) { racket = buildRacket(def.racket || 0x2f7bff); racket.position.y = -0.02; j.rHand.add(racket); }
+  if (withRacket) { racket = buildRacket(def.racket || 0x2f7bff, rk); racket.position.y = -0.02; j.rHand.add(racket); }
   bakeGroups(root);
   return { root, j, faceMat, faces, racket };
 }
@@ -1715,13 +1744,13 @@ function animateChar(c, dt) {
   c.root.updateMatrixWorld(true);
 }
 
-function createPlayer(def, color, isAI, idx) {
-  const m = buildCharacter(def, color, true);
+function createPlayer(def, color, isAI, idx, rk) {
+  const m = buildCharacter(def, color, true, rk);
   scene.add(m.root);
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.3), new THREE.MeshBasicMaterial({ map: radialTex('rgba(0,0,0,0.55)'), transparent: true, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; scene.add(shadow);    // oclusão de contato sob o personagem
   return {
-    idx, def, color, isAI, root: m.root, j: m.j, faceMat: m.faceMat, faces: m.faces, shadow,
+    idx, def, color, isAI, rk, root: m.root, j: m.j, faceMat: m.faceMat, faces: m.faces, shadow,
     pos: new V3(), vel: new V3(), tv: new V3(), side: idx === 0 ? 1 : -1,
     swing: null, charging: false, chargeT: 0, prep: 'fh',
     pose: new Float32Array(NP), T: new Float32Array(NP), runPhase: 0, phaseOff: Math.random() * 10,
@@ -2203,6 +2232,10 @@ function executeShot(c, q, late) {
 }
 function onShotHit(c, power, perfect, q, late) {
   AudioFX.hit(power, perfect);
+  // golpe perfeito com raquete especial: o rastro da bola sai na cor dela
+  const glow = !c.isAI && perfect && c.rk && c.rk.trail;
+  trailMesh.material.color.setHex(glow || 0xeaff7a); trailMesh.material.opacity = glow ? 0.5 : 0.28;
+  if (!c.isAI && perfect) S.matchPerf++;
   const o = S.chars[other(c.idx)];
   const d = DIFF[S.sel.diff];
   o.ai.react = d.react * (1.25 - 0.25 * o.stats.speed) + rand(0, 0.06);
@@ -2741,14 +2774,8 @@ function initUI() {
     b.innerHTML = `<canvas width="72" height="72"></canvas><div><b>${d.name}</b><i>${d.desc}</i>
       <div class="stats" title="velocidade • força • precisão">${bar(st.speed, '#25c26a')}${bar(st.power, '#ff7a1a')}${bar(st.accuracy, '#2f9bff')}</div></div>`;
     drawPortrait(b.querySelector('canvas'), d);
-    b.onclick = () => { AudioFX.init(); AudioFX.click(); S.sel.char = i; S.sel.color = d.shirt; if (S.sel.opp === i) S.sel.opp = -1; refreshMenu(); refreshPreview(); };
+    b.onclick = () => { AudioFX.init(); AudioFX.click(); S.sel.char = i; if (S.sel.opp === i) S.sel.opp = -1; refreshMenu(); refreshPreview(); };
     cl.appendChild(b);
-  });
-  const col = $('colorList');
-  PALETTE.forEach((c) => {
-    const b = document.createElement('button'); b.className = 'sw'; b.style.background = css(c); b.dataset.c = c;
-    b.onclick = () => { AudioFX.init(); AudioFX.click(); S.sel.color = c; refreshMenu(); refreshPreview(); };
-    col.appendChild(b);
   });
   const chips = (el, items, getSel, onPick) => {
     el.innerHTML = '';
@@ -2799,15 +2826,16 @@ function setShowFps(v) {
 }
 function refreshMenu() {
   document.querySelectorAll('#charList .card').forEach((b) => b.classList.toggle('sel', +b.dataset.i === S.sel.char));
-  document.querySelectorAll('#colorList .sw').forEach((b) => b.classList.toggle('sel', +b.dataset.c === S.sel.color));
   S.renderChips && S.renderChips();
+  renderRackets();
+  renderShelf();
   renderHistory();
   renderResume();
 }
 function refreshPreview() {
   if (S.state !== 'menu') return;
   if (S.preview) removePlayer(S.preview);
-  const p = (S.preview = createPlayer(CHARS[S.sel.char], S.sel.color, false, 0));
+  const p = (S.preview = createPlayer(CHARS[S.sel.char], CHARS[S.sel.char].shirt, false, 0, curRacket()));
   p.pos.set(0, 0, 2); p.side = -1;   // de frente para a câmera
 }
 function enterMenu() {
@@ -2870,7 +2898,7 @@ function readJSON(k) { try { return JSON.parse(store(k) || 'null'); } catch (e) 
 function saveTour(withScore) {
   const T = S.tour; if (!T) return;
   const sv = { tid: T.t.id, round: T.round, opps: T.opps.map((d) => d.id), res: T.res, short: T.short,
-    char: S.sel.char, color: S.sel.color, diff: S.sel.diff, surface: S.sel.surface };
+    char: S.sel.char, diff: S.sel.diff, surface: S.sel.surface };
   if (withScore && S.chars.length) sv.match = { score: { ...score }, side: S.chars[0].side };
   store('bt-tour', JSON.stringify(sv));
 }
@@ -2891,7 +2919,7 @@ function renderResume() {
 }
 function resumeTour() {
   const sv = loadTour(); if (!sv) return renderResume();
-  Object.assign(S.sel, { mode: 'tour', tour: TOURNEYS.findIndex((t) => t.id === sv.tid), char: sv.char, color: sv.color, diff: sv.diff });
+  Object.assign(S.sel, { mode: 'tour', tour: TOURNEYS.findIndex((t) => t.id === sv.tid), char: sv.char, diff: sv.diff });
   if (sv.surface !== S.sel.surface && SURFACES[sv.surface]) { S.sel.surface = sv.surface; buildCourt(sv.surface); }
   refreshVenue();
   S.tour = { t: TOURNEYS[S.sel.tour], round: sv.round, opps: sv.opps.map(findDef), res: sv.res || [], short: !!sv.short };
@@ -2926,17 +2954,84 @@ function renderHistory() {
     ${tile(`${h.sw}-${h.sl}`, 'sets')}${tile(`${h.gw}-${h.gl}`, 'games')}${tile(h.tours, 'campeonatos')}${tile(titles, 'títulos')}</div>
     <div class="histMore">${streak ? `Agora: ${streak} • ` : ''}Melhor sequência: ${h.best}${vs ? `<br>Contra: ${vs}` : ''}<br><button id="histReset">zerar histórico</button></div>`;
   $('histReset').onclick = () => {
-    if (!confirm('Zerar o histórico de partidas e os títulos?')) return;
-    try { localStorage.removeItem('bt-hist'); TOURNEYS.forEach((t) => localStorage.removeItem('bt-tit-' + t.id)); } catch (e) {}
-    refreshMenu();
+    if (!confirm('Zerar o histórico de partidas, os títulos, os troféus e as raquetes ganhas?')) return;
+    try { ['bt-hist', 'bt-ach', 'bt-racket'].concat(TOURNEYS.map((t) => 'bt-tit-' + t.id)).forEach((k) => localStorage.removeItem(k)); } catch (e) {}
+    refreshMenu(); refreshPreview();
   };
+}
+
+// ------------------------------------------------------------
+// Troféus e raquetes especiais (guardados no navegador)
+// bt-ach = { cups: { [campeonato]: [fácil, médio, difícil] }, feats: { bagel, perf10, djo } }; bt-racket = raquete escolhida
+// ------------------------------------------------------------
+function loadAch() {
+  const a = readJSON('bt-ach') || {}, cups = a.cups || {};
+  TOURNEYS.forEach((t) => (cups[t.id] = cups[t.id] || [0, 0, 0]));
+  return { cups, feats: a.feats || {} };
+}
+// títulos de antes das taças (bt-tit-*) também liberam a raquete do campeonato
+const hasTitle = (A, id) => A.cups[id].some((n) => n > 0) || +(store('bt-tit-' + id) || 0) > 0;
+// Grand Slam na dificuldade d: os 3 campeonatos vencidos em d ou acima
+const slam = (A, d) => TOURNEYS.every((t) => A.cups[t.id].slice(d).some((n) => n > 0));
+const unlocked = (r, A) => !r.ok || !!r.ok(A);
+function curRacket() {
+  const r = RACKETS.find((x) => x.id === store('bt-racket'));
+  return r && r.ok && unlocked(r, loadAch()) ? r : null;
+}
+function renderRackets() {
+  const A = loadAch(), cur = curRacket(), el = $('racketList');
+  const n = RACKETS.filter((r) => unlocked(r, A)).length;
+  el.innerHTML = '';
+  RACKETS.forEach((r) => {
+    const open = unlocked(r, A), sel = (cur ? cur.id : 'cla') === r.id;
+    const b = document.createElement('button'); b.className = 'chip' + (sel ? ' sel' : '') + (open ? '' : ' lock');
+    const col = css(r.frame !== undefined ? r.frame : CHARS[S.sel.char].racket);
+    b.innerHTML = open ? `<span class="rk" style="background:${col}${r.glow || r.metal ? `;box-shadow:0 0 8px ${col}` : ''}"></span>${r.name}` : `🔒 ${r.name}`;
+    b.onclick = () => {
+      AudioFX.init(); AudioFX.click();
+      if (!open) { $('racketInfo').textContent = `🔒 ${r.name}: ${r.how}`; return; }
+      store('bt-racket', r.id); renderRackets(); refreshPreview();
+      $('racketInfo').textContent = `${r.name}: ${r.how}`;
+    };
+    el.appendChild(b);
+  });
+  $('racketInfo').textContent = `${n} de ${RACKETS.length} raquetes. Toque numa bloqueada para ver como ganhar.`;
+}
+function cupSVG(color, n, tip) {
+  const full = n > 0;
+  return `<div class="cup" title="${tip}"><svg viewBox="0 0 26 26"><path d="M6 5H2.5v2.5A4.5 4.5 0 0 0 7 12M20 5h3.5v2.5A4.5 4.5 0 0 1 19 12" fill="none" stroke="${full ? color : '#ffffff40'}" stroke-width="1.8"/>
+    <path d="M5.5 2h15v7.5a7.5 7.5 0 0 1-15 0zM11 16.5h4v4h-4zM7 20.5h12V24H7z" fill="${full ? color : '#ffffff14'}" stroke="${full ? '#00000040' : '#ffffff40'}" stroke-width="1" ${full ? '' : 'stroke-dasharray="2 2"'}/>
+    ${full ? '<path d="M9 4.5v4" stroke="#ffffff90" stroke-width="1.6" stroke-linecap="round"/>' : ''}</svg>${n > 1 ? `<b>${n}</b>` : ''}</div>`;
+}
+function renderShelf() {
+  const A = loadAch();
+  const row = (name, cups, cls = '') => `<div class="shRow ${cls}"><span>${name}</span>${cups}</div>`;
+  $('shelf').innerHTML = TOURNEYS.map((t) => row(t.name, MEDALS.map((m, d) => cupSVG(m.color, A.cups[t.id][d], `${t.name} • ${m.name} (${DIFF[d].name})`)).join(''))).join('')
+    + row('Grand Slam', MEDALS.map((m, d) => cupSVG(m.color, slam(A, d) ? 1 : 0, `Grand Slam ${m.name}: os 3 campeonatos no ${DIFF[d].name}${d < 2 ? ' ou acima' : ''}`)).join(''), 'slam')
+    + '<div class="histMore">Bronze no Fácil, prata no Médio, ouro no Difícil.</div>';
+}
+// Fim de partida: guarda taças e feitos e devolve as novidades para a tela final
+function recordAchievements(won) {
+  const A = loadAch(), before = RACKETS.filter((r) => unlocked(r, A)).map((r) => r.id);
+  const slamsBefore = MEDALS.map((_, d) => slam(A, d)), news = [], d = S.sel.diff;
+  if (won && S.tour && S.tour.round === 2) {
+    A.cups[S.tour.t.id][d]++;
+    news.push(`🏆 Taça de ${MEDALS[d].name} na sala de troféus!`);
+  }
+  if (score.sets.some((s) => s[0] === S.setGames && s[1] === 0)) A.feats.bagel = 1;
+  if (S.matchPerf >= 10) A.feats.perf10 = 1;
+  if (won && S.chars[1].def.id === 'djo') A.feats.djo = 1;
+  store('bt-ach', JSON.stringify(A));
+  MEDALS.forEach((m, k) => { if (slam(A, k) && !slamsBefore[k]) news.push(`⭐ GRAND SLAM no ${DIFF[k].name}!`); });
+  RACKETS.forEach((r) => { if (unlocked(r, A) && !before.includes(r.id)) news.push(`🎾 Nova raquete: ${r.name}! Escolha no menu.`); });
+  return news;
 }
 function beginMatch(oppDef) {
   if (S.preview) { removePlayer(S.preview); S.preview = null; }
   for (const c of S.chars) removePlayer(c);
-  let oc = oppDef.shirt;
-  if (oc === S.sel.color) oc = PALETTE[(PALETTE.indexOf(oc) + 3) % PALETTE.length];
-  S.chars = [createPlayer(CHARS[S.sel.char], S.sel.color, false, 0), createPlayer(oppDef, oc, true, 1)];
+  const me = CHARS[S.sel.char];
+  S.chars = [createPlayer(me, me.shirt, false, 0, curRacket()), createPlayer(oppDef, oppDef.shirt, true, 1)];
+  S.matchPerf = 0;
   Object.assign(score, { sets: [], games: [0, 0], pts: [0, 0], tb: false, tbFirst: 0, setsWon: [0, 0], server: Math.random() < 0.5 ? 0 : 1, done: false });
   rally.serveNum = 1; S.pending = null; S.lock = false; S.replay = null; S.sinceReplay = 9;
   ['menu', 'endScreen', 'pauseMenu'].forEach((id) => $(id).classList.add('hidden'));
@@ -2955,6 +3050,7 @@ function showEnd() {
   const me = S.chars[0].def, op = S.chars[1].def, sets = score.sets.map((s) => `${s[0]}-${s[1]}`).join('   ');
   let title, sub, again, line = sets;
   recordMatch(w === 0);
+  $('endNews').innerHTML = recordAchievements(w === 0).join('<br>');
   if (!S.tour) {
     title = w === 0 ? 'VITÓRIA!' : 'DERROTA';
     sub = w === 0 ? `${me.name} venceu ${op.name} (${DIFF[S.sel.diff].name})` : `${op.name} venceu desta vez. Revanche?`;
