@@ -131,8 +131,10 @@
   }
   .assento .nome { font-weight: 600; font-size: clamp(11px, 1.9vmin, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .assento .fichas { color: var(--ouro); font-weight: 700; font-size: clamp(11px, 1.9vmin, 14px); }
-  .assento .estado { font-size: 11px; color: var(--fraco); min-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .assento .forca { font-size: 11px; color: #bfe8cf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 15px; }
+  /* estado e força quebram linha: na caixa estreita do celular o texto não pode sumir em reticências */
+  .assento .estado { font-size: 11px; line-height: 1.25; color: var(--fraco); min-height: 14px; overflow-wrap: anywhere; }
+  .assento .forca { font-size: 11px; line-height: 1.25; color: #bfe8cf; overflow-wrap: anywhere; min-height: 15px; }
+  .assento .forca span { display: inline-block; max-width: 100%; }
   #hud a, #janela a, .tela a { color: #8cc4ff; }
   .assento.vez .caixa { border-color: var(--ouro); box-shadow: 0 0 0 2px rgba(242,193,78,.5), 0 0 18px rgba(242,193,78,.45); }
   .assento.fora { opacity: .35; }
@@ -1798,15 +1800,16 @@ function renderAssento(p) {
   // força da mão (opcional)
   const f = s.querySelector('.forca');
   if (f) {
-    let t = '';
+    // cada parte fica inteira numa linha; a quebra só acontece entre elas
+    const t = [];
     if (cfg.forca && p.cartas.length && nVis >= 2 && !p.fora) {
       const visMesa = G.mesa.slice(0, ui.mesaVis);
-      if (visMesa.length >= 3) t = nomeMao(avaliar(p.cartas.concat(visMesa)));
-      else { const k = classeIdx(p.cartas[0], p.cartas[1]); t = `${classeInfo(k).nome} · top ${pct(PCT[k])}`; }
+      if (visMesa.length >= 3) t.push(nomeMao(avaliar(p.cartas.concat(visMesa))));
+      else { const k = classeIdx(p.cartas[0], p.cartas[1]); t.push(classeInfo(k).nome, `top ${pct(PCT[k])}`); }
       const a = ui.analise;
-      if (a && a.mao === G.mao && a.mesa === G.mesa.length && !p.desistiu) t += ` · eq. ${pct(a.a.eq.eq)}`;
+      if (a && a.mao === G.mao && a.mesa === G.mesa.length && !p.desistiu) t.push(`eq. ${pct(a.a.eq.eq)}`);
     }
-    f.textContent = t;
+    f.innerHTML = t.map((x, k) => `<span>${x}${k < t.length - 1 ? ' ·' : ''}</span>`).join(' ');
   }
 }
 function renderApostas() {
