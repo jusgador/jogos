@@ -1,0 +1,3306 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icone-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>Poker Texas Hold'em</title>
+<style>
+  :root {
+    --seguro-topo: env(safe-area-inset-top, 0px);
+    --seguro-dir: env(safe-area-inset-right, 0px);
+    --seguro-baixo: env(safe-area-inset-bottom, 0px);
+    --seguro-esq: env(safe-area-inset-left, 0px);
+    --fundo: #08100c; --painel: #111a15; --painel2: #17231c; --borda: #2a3b31;
+    --texto: #e8f0ea; --fraco: #93a69a; --verde: #2fbf71; --ouro: #f2c14e;
+    --vermelho: #e5484d; --laranja: #f0883e; --azul: #4ea1ff; --lima: #a3d65c;
+    --cw: clamp(26px, 4.4vmin, 50px);      /* cartas dos bots */
+    --cwm: clamp(36px, 7.6vmin, 72px);     /* cartas da mesa */
+    --cwh: clamp(44px, 9.5vmin, 84px);     /* cartas do jogador */
+    --assento: clamp(76px, 14vmin, 136px);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--fundo); color: var(--texto); overflow: hidden;
+    font: 14px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:disabled { cursor: default; opacity: .38; }
+  kbd { font: 600 10px ui-monospace, Consolas, monospace; padding: 0 3px; border: 1px solid currentColor; border-radius: 3px; opacity: .6; margin-left: 4px; }
+  .oculto { display: none !important; }
+  input[type=number] { font: inherit; color: var(--texto); background: #0b130f; border: 1px solid var(--borda); border-radius: 6px; padding: 5px 6px; }
+  select { font: inherit; color: var(--texto); background: #0b130f; border: 1px solid var(--borda); border-radius: 6px; padding: 5px 6px; }
+
+  /* ---------- Estrutura ---------- */
+  #app {
+    position: fixed; inset: 0; display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr) auto;
+    padding: var(--seguro-topo) var(--seguro-dir) var(--seguro-baixo) var(--seguro-esq);
+  }
+  #topo {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+    background: #0c1511; border-bottom: 1px solid var(--borda); min-height: 40px;
+  }
+  #topo .info { flex: 1; min-width: 0; text-align: center; color: var(--fraco); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #topo .info b { color: var(--texto); font-weight: 600; }
+  .bt-icone {
+    background: var(--painel2); border: 1px solid var(--borda); border-radius: 8px;
+    min-width: 34px; height: 30px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .bt-icone:hover { border-color: var(--verde); }
+  .bt-icone.ativo { border-color: var(--verde); color: var(--verde); }
+  #area { grid-row: 2; grid-column: 1; position: relative; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 45%, #13241b 0%, #08100c 70%); }
+
+  /* ---------- Mesa ---------- */
+  #mesa {
+    position: absolute; border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 40%, #2a8f55 0%, #1c6d3f 45%, #0f4a2a 100%);
+    border: clamp(8px, 1.8vmin, 18px) solid #5b3a1f;
+    box-shadow: 0 0 0 2px #2c1b0d, inset 0 0 0 2px rgba(255,255,255,.08), inset 0 0 40px rgba(0,0,0,.55), 0 14px 40px rgba(0,0,0,.6);
+  }
+  #mesa::after {
+    content: ""; position: absolute; inset: 6%; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.08);
+  }
+  #centro {
+    position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column;
+    align-items: center; gap: 6px; z-index: 2; pointer-events: none;
+  }
+  #potes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; min-height: 22px; }
+  .pote {
+    background: rgba(0,0,0,.45); border-radius: 12px; padding: 2px 9px 2px 4px; font-weight: 700; font-size: 13px;
+    display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  }
+  .pote small { font-weight: 400; color: #cfe3d6; font-size: 11px; }
+  #board { display: flex; gap: clamp(3px, .8vmin, 8px); min-height: calc(var(--cwm) * 1.4); }
+  #board .vaga { width: var(--cwm); height: calc(var(--cwm) * 1.4); border-radius: 7%/5%; border: 1px dashed rgba(255,255,255,.14); }
+  #msgMesa {
+    min-height: 20px; font-weight: 700; color: var(--ouro); text-shadow: 0 1px 3px #000; text-align: center;
+    font-size: clamp(12px, 2.2vmin, 16px); max-width: 80vw;
+  }
+
+  /* ---------- Cartas ---------- */
+  .carta {
+    --c: var(--cw);
+    width: var(--c); height: calc(var(--c) * 1.4); border-radius: 8%/6%; position: relative; flex: none;
+    background: linear-gradient(160deg, #ffffff 0%, #f1f1ec 100%);
+    box-shadow: 0 1px 3px rgba(0,0,0,.5), inset 0 0 0 1px rgba(0,0,0,.15);
+    font-family: Georgia, "Times New Roman", serif; font-weight: 700; user-select: none;
+    transition: transform .25s, box-shadow .25s, opacity .25s, filter .25s;
+  }
+  .carta .canto { position: absolute; left: 7%; top: 3%; line-height: .95; text-align: center; font-size: calc(var(--c) * .32); }
+  .carta .canto i { display: block; font-style: normal; font-size: calc(var(--c) * .27); }
+  .carta .meio { position: absolute; right: 8%; bottom: 4%; font-size: calc(var(--c) * .62); line-height: 1; }
+  .carta.n0 { color: #1a1a1a; } .carta.n1 { color: #d0182b; } .carta.n2 { color: #1767c5; } .carta.n3 { color: #128a3c; }
+  .carta.verso {
+    background:
+      radial-gradient(circle at 50% 50%, transparent 30%, rgba(0,0,0,.15) 31%, transparent 33%),
+      repeating-linear-gradient(45deg, #a3203a 0 3px, #861629 3px 6px),
+      repeating-linear-gradient(-45deg, #a3203a 0 3px, #861629 3px 6px);
+    background-blend-mode: normal, multiply, normal;
+    border: calc(var(--c) * .06) solid #f5f1e8;
+  }
+  .carta.verso::after { content: "♠"; position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.35); font-size: calc(var(--c) * .45); }
+  .carta.mesa { --c: var(--cwm); }
+  .carta.grande { --c: var(--cwh); }
+  .carta.vence { box-shadow: 0 0 0 2px var(--ouro), 0 0 14px 3px rgba(242,193,78,.85); transform: translateY(-6px); }
+  .carta.apaga { filter: brightness(.55) saturate(.6); }
+  .carta.vira { animation: vira .35s ease-out; }
+  @keyframes vira { 0% { transform: rotateY(90deg) scale(.95); } 100% { transform: rotateY(0) scale(1); } }
+
+  /* ---------- Assentos ---------- */
+  .assento {
+    position: absolute; transform: translate(-50%, -50%); width: var(--assento); z-index: 3;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .assento .cartas { display: flex; gap: 2px; height: calc(var(--cw) * 1.4); margin-bottom: -10px; z-index: 1; position: relative; }
+  .assento.humano .cartas { height: calc(var(--cwh) * 1.4); gap: 4px; margin-bottom: -14px; }
+  /* cartas de bot reveladas (all-in ou showdown) ficam maiores, por cima da caixa */
+  .assento:not(.humano) .cartas.aberta { z-index: 3; transform: translateY(-4px) scale(1.28); transform-origin: 50% 100%; }
+  .assento .caixa {
+    position: relative; z-index: 2; width: 100%; padding: 5px 6px 4px; border-radius: 10px; text-align: center;
+    background: linear-gradient(180deg, #1d2a23, #121a16); border: 1px solid #344a3d;
+    box-shadow: 0 3px 10px rgba(0,0,0,.5); transition: box-shadow .2s, border-color .2s, opacity .2s;
+  }
+  .assento .nome { font-weight: 600; font-size: clamp(11px, 1.9vmin, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .assento .fichas { color: var(--ouro); font-weight: 700; font-size: clamp(11px, 1.9vmin, 14px); }
+  .assento .estado { font-size: 11px; color: var(--fraco); min-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .assento .forca { font-size: 11px; color: #bfe8cf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 15px; }
+  #hud a, #janela a, .tela a { color: #8cc4ff; }
+  .assento.vez .caixa { border-color: var(--ouro); box-shadow: 0 0 0 2px rgba(242,193,78,.5), 0 0 18px rgba(242,193,78,.45); }
+  .assento.fora { opacity: .35; }
+  .assento.desistiu .caixa { opacity: .55; }
+  .assento.desistiu .cartas { opacity: .35; }
+  .assento.ganhou .caixa { border-color: var(--verde); box-shadow: 0 0 0 2px rgba(47,191,113,.6), 0 0 22px rgba(47,191,113,.55); }
+  .marca {
+    position: absolute; top: -8px; font: 700 10px/1 system-ui, sans-serif; border-radius: 50%; width: 20px; height: 20px;
+    display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.6);
+  }
+  .marca.d { right: -6px; background: #fff; color: #111; }
+  .marca.sb { left: -6px; background: #4ea1ff; color: #fff; }
+  .marca.bb { left: -6px; background: #f0883e; color: #fff; }
+  .marca.allin { position: static; display: inline-block; width: auto; height: auto; padding: 1px 5px; border-radius: 6px; background: var(--vermelho); color: #fff; }
+  .balao-acao {
+    position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -4px); z-index: 5;
+    background: #fff; color: #111; font-weight: 700; font-size: 12px; padding: 2px 8px; border-radius: 10px; white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,.5); animation: surge .25s ease-out;
+  }
+  @keyframes surge { from { opacity: 0; transform: translate(-50%, 6px); } }
+  .aposta {
+    position: absolute; transform: translate(-50%, -50%); z-index: 2; display: flex; align-items: center; gap: 3px;
+    font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 1px 2px #000; white-space: nowrap;
+  }
+  .ficha {
+    width: 16px; height: 16px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle, var(--fc, #e5484d) 38%, #fff 40%, #fff 52%, var(--fc, #e5484d) 54%);
+    box-shadow: 0 1px 2px rgba(0,0,0,.6), 0 -2px 0 -1px var(--fc2, #b02a2e);
+  }
+  .botao-dealer {
+    position: absolute; transform: translate(-50%, -50%); z-index: 2; width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; color: #111; font: 800 11px/22px system-ui, sans-serif; text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,.6); transition: left .5s, top .5s;
+  }
+  #camada { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+  #camada > * { position: absolute; left: 0; top: 0; }
+
+  /* ---------- Controles ---------- */
+  #controles {
+    grid-row: 3; grid-column: 1; background: #0c1511; border-top: 1px solid var(--borda);
+    padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 6px;
+  }
+  #linhaValor { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  #linhaValor .pre { background: var(--painel2); border: 1px solid var(--borda); border-radius: 7px; padding: 4px 8px; font-size: 12px; }
+  #linhaValor .pre:hover:not(:disabled) { border-color: var(--ouro); }
+  #slider { flex: 1; min-width: 110px; accent-color: var(--ouro); }
+  #valor { width: 86px; }
+  #linhaAcoes { display: flex; gap: 6px; align-items: stretch; }
+  .acao {
+    flex: 1; border: 0; border-radius: 10px; padding: 10px 6px; font-weight: 700; font-size: clamp(13px, 2.2vmin, 16px);
+    box-shadow: 0 2px 0 rgba(0,0,0,.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  }
+  .acao:active:not(:disabled) { transform: translateY(1px); }
+  #btFold { background: #5a2a2c; }
+  #btCall { background: #1f5a8a; }
+  #btRaise { background: #a5781b; }
+  #btDica { flex: 0 0 auto; background: #24402f; padding: 10px 12px; }
+  #avaliacoes { position: absolute; left: 8px; bottom: 6px; z-index: 14; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; max-width: 40%; }
+  #avaliacoes:empty { display: none; }
+  .aval {
+    border: 0; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: 700; color: #111;
+  }
+  .aval.boa { background: var(--verde); } .aval.aceitavel { background: var(--lima); }
+  .aval.questionavel { background: var(--laranja); } .aval.erro { background: var(--vermelho); color: #fff; }
+  #esperando { color: var(--fraco); text-align: center; font-size: 13px; padding: 4px 0; }
+  .vez-humano #controles { box-shadow: inset 0 2px 0 var(--ouro); }
+
+  /* ---------- Log ---------- */
+  #log {
+    grid-row: 2 / 4; grid-column: 2; width: 270px; background: var(--painel); border-left: 1px solid var(--borda);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  #log.fechado { display: none; }
+  #log h3 { margin: 0; padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--borda); display: flex; justify-content: space-between; align-items: center; }
+  #logLista { flex: 1; overflow: auto; padding: 6px 10px; font-size: 12.5px; }
+  #logLista div { padding: 2px 0; border-bottom: 1px dotted #1f2c25; }
+  #logLista .rua { color: var(--ouro); font-weight: 700; border: 0; padding-top: 6px; }
+  #logLista .ganho { color: var(--verde); font-weight: 600; }
+  #logLista .eu { color: #9fd3ff; }
+
+  /* ---------- HUD (Modo Aprendizado / força da mão) ---------- */
+  #hud {
+    position: absolute; left: 8px; top: 8px; z-index: 15; width: min(300px, calc(100% - 16px));
+    background: rgba(13,22,17,.94); border: 1px solid var(--borda); border-radius: 10px; font-size: 12.5px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.5); max-height: calc(100% - 16px); display: flex; flex-direction: column;
+  }
+  #hudTopo { display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer; user-select: none; }
+  #hudTopo .resumo { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hudCorpo { padding: 0 9px 9px; overflow: auto; }
+  #hud.recolhido #hudCorpo { display: none; }
+  .hud-sec { border-top: 1px solid #22322a; padding-top: 6px; margin-top: 6px; }
+  .hud-sec h4 { margin: 0 0 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--fraco); }
+  .barra { position: relative; height: 12px; border-radius: 6px; background: #2a1517; overflow: hidden; margin: 4px 0 2px; }
+  .barra .eq { position: absolute; left: 0; top: 0; bottom: 0; background: var(--verde); }
+  .barra .eq.ruim { background: var(--vermelho); }
+  .barra .need { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #fff; box-shadow: 0 0 3px #000; }
+  .termo { border-bottom: 1px dotted var(--azul); cursor: help; color: #cfe6ff; }
+  .coach { background: #1b2f24; border: 1px solid #2f5a40; border-radius: 8px; padding: 6px 8px; margin-top: 6px; }
+  .coach b.rec { color: var(--ouro); }
+  .coach ul { margin: 4px 0 0; padding-left: 16px; }
+  .nota { color: var(--fraco); font-size: 11.5px; }
+  .ok { color: var(--verde); } .ruim { color: var(--vermelho); } .meio-termo { color: var(--ouro); }
+  .cartinhas { display: inline-flex; gap: 2px; vertical-align: middle; }
+  .cartinha { display: inline-block; background: #fff; border-radius: 3px; padding: 0 3px; font: 700 12px/16px Georgia, serif; }
+  .cartinha.n0 { color: #1a1a1a; } .cartinha.n1 { color: #d0182b; } .cartinha.n2 { color: #1767c5; } .cartinha.n3 { color: #128a3c; }
+
+  /* ---------- Balão de conceito ---------- */
+  #balao {
+    position: absolute; right: 8px; top: 8px; z-index: 16; width: min(300px, calc(100% - 16px));
+    background: #1d2c47; border: 1px solid #3c5a8c; border-radius: 10px; padding: 8px 10px; font-size: 13px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.5); animation: surge .3s ease-out;
+  }
+  #balao h4 { margin: 0 0 4px; color: #9fd3ff; }
+  #balao .bts { display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; }
+  #balao button { background: #2a3f66; border: 1px solid #3c5a8c; border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+
+  /* ---------- Faixa de resultado ---------- */
+  #resultado {
+    position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 18;
+    background: rgba(10,18,14,.95); border: 1px solid var(--ouro); border-radius: 12px; padding: 8px 12px;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 16px);
+    box-shadow: 0 6px 24px rgba(0,0,0,.6); animation: surge .3s ease-out;
+  }
+  #resultado .txt { font-weight: 600; text-align: center; }
+  .bt { background: var(--painel2); border: 1px solid var(--borda); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
+  .bt:hover:not(:disabled) { border-color: var(--verde); }
+  .bt.prim { background: var(--verde); color: #04170c; border-color: var(--verde); }
+  .bt.ouro { background: var(--ouro); color: #2a1e00; border-color: var(--ouro); }
+
+  /* ---------- Telas e janelas ---------- */
+  .tela {
+    position: fixed; inset: 0; z-index: 50; overflow: auto; background: radial-gradient(ellipse at 50% 0%, #17311f 0%, #08100c 65%);
+    padding: calc(16px + var(--seguro-topo)) calc(16px + var(--seguro-dir)) calc(16px + var(--seguro-baixo)) calc(16px + var(--seguro-esq));
+  }
+  .tela .miolo { max-width: 760px; margin: 0 auto; }
+  .tela h1 { margin: 6px 0 2px; font-size: clamp(26px, 6vw, 40px); letter-spacing: .02em; }
+  .tela h1 span { color: var(--ouro); }
+  .tela .sub { color: var(--fraco); margin: 0 0 16px; }
+  .grade-cfg { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .cfg { background: var(--painel); border: 1px solid var(--borda); border-radius: 10px; padding: 9px 11px; display: flex; flex-direction: column; gap: 5px; }
+  .cfg label { font-weight: 600; font-size: 13px; }
+  .cfg .nota { margin: 0; }
+  .cfg .linha { display: flex; gap: 8px; align-items: center; }
+  .cfg input[type=range] { flex: 1; accent-color: var(--ouro); }
+  .chk { display: flex; gap: 7px; align-items: center; font-weight: 400 !important; }
+  .chk input { width: 18px; height: 18px; accent-color: var(--verde); }
+  .botoes-tela { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+  .botoes-tela .bt { padding: 10px 16px; font-size: 15px; }
+  #janela {
+    position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center;
+    padding: calc(10px + var(--seguro-topo)) calc(10px + var(--seguro-dir)) calc(10px + var(--seguro-baixo)) calc(10px + var(--seguro-esq));
+  }
+  #janelaCaixa {
+    background: var(--painel); border: 1px solid var(--borda); border-radius: 12px; width: min(820px, 100%); max-height: 100%;
+    display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,.7);
+  }
+  #janelaTopo { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--borda); }
+  #janelaTopo h2 { margin: 0; font-size: 17px; flex: 1; }
+  #janelaCorpo { padding: 12px; overflow: auto; }
+  .abas { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
+  .abas button { background: var(--painel2); border: 1px solid var(--borda); border-radius: 8px; padding: 5px 10px; }
+  .abas button.ativo { border-color: var(--ouro); color: var(--ouro); }
+  table.tab { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.tab td, table.tab th { padding: 4px 6px; border-bottom: 1px solid #22322a; text-align: left; }
+  table.tab th { color: var(--fraco); font-weight: 600; }
+  .num { text-align: right !important; font-variant-numeric: tabular-nums; }
+
+  /* Grade 13x13 de mãos iniciais */
+  .grade13 { display: grid; grid-template-columns: repeat(13, 1fr); gap: 1px; max-width: 520px; font: 600 clamp(8px, 2.2vw, 12px)/1 system-ui, sans-serif; }
+  .grade13 div { aspect-ratio: 1; display: grid; place-items: center; border-radius: 2px; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.7); position: relative; }
+  .grade13 div.faixa { outline: 2px solid rgba(255,255,255,.75); outline-offset: -2px; }
+  .grade13 div.atual { outline: 3px solid var(--ouro); outline-offset: -3px; z-index: 1; }
+  .legenda { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--fraco); margin: 8px 0; align-items: center; }
+  .legenda i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -2px; margin-right: 3px; }
+
+  /* Revisão da mão */
+  .rev-mesa { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 8px 0; }
+  .rev-jog { background: var(--painel2); border: 1px solid var(--borda); border-radius: 8px; padding: 5px 7px; font-size: 12px; }
+  .rev-jog.agindo { border-color: var(--ouro); }
+  .rev-jog.saiu { opacity: .45; }
+  .rev-passo { background: #0d1611; border: 1px solid var(--borda); border-radius: 8px; padding: 8px 10px; min-height: 60px; }
+  .rev-ctrl { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
+  .rev-ctrl input { flex: 1; accent-color: var(--ouro); }
+  svg.grafico { width: 100%; height: auto; background: #0d1611; border: 1px solid var(--borda); border-radius: 8px; }
+  .quiz-cartas { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin: 8px 0; }
+  .quiz-cartas .grupo { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--fraco); }
+  .quiz-cartas .grupo > div { display: flex; gap: 4px; }
+  .quiz-resp { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .glossario dt { font-weight: 700; color: var(--ouro); margin-top: 8px; }
+  .glossario dd { margin: 2px 0 0 0; }
+  .glossario dt.alvo { background: #3a3215; border-radius: 4px; padding: 0 4px; }
+  #toast {
+    position: fixed; left: 50%; top: calc(54px + var(--seguro-topo)); transform: translateX(-50%); z-index: 70;
+    background: #1d2c47; border: 1px solid #3c5a8c; border-radius: 10px; padding: 7px 12px; font-size: 13px; max-width: 90vw;
+    box-shadow: 0 6px 20px rgba(0,0,0,.5); animation: surge .25s ease-out;
+  }
+  .estat-cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 8px 0; }
+  .estat-cartoes div { background: var(--painel2); border: 1px solid var(--borda); border-radius: 8px; padding: 7px 9px; }
+  .estat-cartoes b { display: block; font-size: 20px; color: var(--ouro); }
+  .estat-cartoes span { font-size: 12px; color: var(--fraco); }
+
+  /* ---------- Celular ---------- */
+  @media (max-width: 760px) {
+    #log { position: absolute; right: 0; top: 0; bottom: 0; z-index: 30; width: min(290px, 86vw); box-shadow: -6px 0 20px rgba(0,0,0,.6); grid-row: auto; grid-column: auto; }
+    #app { grid-template-columns: minmax(0, 1fr); }
+    #hud { max-height: 62%; }
+    #valor { width: 70px; }
+    #slider { min-width: 70px; }
+    .acao { padding: 9px 4px; }
+    #topo .info { font-size: 11.5px; }
+    .bt-icone { min-width: 30px; padding: 0 6px; }
+    #topo .rotulo { display: none; }
+    kbd { display: none; }
+    #hud { font-size: 12px; }
+    #balao { top: auto; bottom: 8px; }
+  }
+  /* Celular deitado (tela baixa): controles numa faixa só, cartas e assentos menores */
+  @media (max-height: 520px) {
+    :root { --cw: clamp(20px, 6vmin, 30px); --cwm: clamp(28px, 9vmin, 46px); --cwh: clamp(32px, 10.5vmin, 54px); --assento: clamp(68px, 19vmin, 100px); }
+    #topo { min-height: 34px; padding: 3px 8px; }
+    .bt-icone { height: 26px; }
+    .assento .caixa { padding: 2px 5px 2px; }
+    .assento .nome, .assento .fichas { font-size: 11px; }
+    .assento .estado, .assento .forca { font-size: 10px; min-height: 12px; }
+    .assento .cartas { margin-bottom: -6px; }
+    .assento.humano .cartas { margin-bottom: -8px; }
+    #controles { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 4px 8px; gap: 4px 8px; }
+    #linhaValor { flex: 1 1 280px; flex-wrap: nowrap; }
+    #slider { min-width: 40px; }
+    #valor { width: 64px; }
+    #linhaAcoes, #esperando { flex: 1 1 340px; }
+    #linhaValor .pre { padding: 3px 6px; }
+    .acao { padding: 7px 4px; }
+    #hud { max-height: calc(100% - 12px); }
+    #resultado { bottom: 4px; padding: 5px 8px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topo">
+    <button class="bt-icone" id="btJogos" title="Voltar aos jogos">◀ <span class="rotulo">Jogos</span></button>
+    <button class="bt-icone" id="btMenu" title="Menu (Esc)">☰</button>
+    <div class="info" id="info"></div>
+    <button class="bt-icone" id="btRanges" title="Tabela de mãos iniciais">▦<span class="rotulo">Ranges</span></button>
+    <button class="bt-icone" id="btGloss" title="Glossário">📖</button>
+    <button class="bt-icone" id="btLog" title="Histórico da mão">☷<span class="rotulo">Log</span></button>
+    <button class="bt-icone" id="btSom" title="Som (M)">🔊</button>
+  </header>
+  <main id="area">
+    <div id="mesa"></div>
+    <div id="centro">
+      <div id="potes"></div>
+      <div id="board"></div>
+      <div id="msgMesa"></div>
+    </div>
+    <div id="assentos"></div>
+    <div id="hud" class="oculto">
+      <div id="hudTopo"><span class="resumo" id="hudResumo">Modo Aprendizado</span><span id="hudSeta">▾</span></div>
+      <div id="hudCorpo"></div>
+    </div>
+    <div id="balao" class="oculto"></div>
+    <div id="resultado" class="oculto"></div>
+    <div id="avaliacoes"></div>
+    <div id="camada"></div>
+  </main>
+  <aside id="log" class="fechado">
+    <h3>Histórico da mão <button class="bt-icone" id="btLogFechar" title="Fechar">✕</button></h3>
+    <div id="logLista"></div>
+  </aside>
+  <footer id="controles">
+    <div id="esperando">Aguardando…</div>
+    <div id="linhaValor">
+      <button class="pre" data-f="0.5">½ pote</button>
+      <button class="pre" data-f="0.66">⅔ pote</button>
+      <button class="pre" data-f="1">Pote</button>
+      <button class="pre" data-f="all">All-in <kbd>A</kbd></button>
+      <input type="range" id="slider" min="0" max="100" step="1">
+      <input type="number" id="valor" inputmode="numeric" min="0" step="1" aria-label="Valor da aposta">
+    </div>
+    <div id="linhaAcoes">
+      <button class="acao" id="btFold">Fold<kbd>F</kbd></button>
+      <button class="acao" id="btCall">Check<kbd>C</kbd></button>
+      <button class="acao" id="btRaise">Raise<kbd>R</kbd></button>
+      <button class="acao oculto" id="btDica" title="Pedir dica (D)">💡<span class="rotulo"> Dica</span></button>
+    </div>
+  </footer>
+</div>
+
+<!-- Tela inicial -->
+<section class="tela" id="telaInicio">
+  <div class="miolo">
+    <h1>♠ Poker <span>Texas Hold'em</span></h1>
+    <p class="sub">No-Limit · você contra a IA · com Modo Aprendizado</p>
+    <div class="botoes-tela">
+      <button class="bt ouro oculto" id="btRetomar">▶ Retomar partida</button>
+      <button class="bt prim" id="btNova">Nova partida</button>
+      <button class="bt" id="btExercicios">🎯 Exercícios</button>
+      <button class="bt" id="btEstat">📈 Estatísticas</button>
+      <button class="bt" id="btGloss2">📖 Glossário</button>
+      <button class="bt" id="btJogos2">◀ Jogos</button>
+    </div>
+    <div class="grade-cfg">
+      <div class="cfg">
+        <label for="cfgBots">Oponentes: <b id="cfgBotsTxt">5</b></label>
+        <input type="range" id="cfgBots" min="1" max="8" step="1" value="5">
+      </div>
+      <div class="cfg">
+        <label for="cfgFichas">Fichas iniciais</label>
+        <select id="cfgFichas"><option>500</option><option selected>1000</option><option>1500</option><option>2000</option><option>5000</option><option>10000</option></select>
+      </div>
+      <div class="cfg">
+        <label for="cfgAumento">Blinds dobram a cada</label>
+        <select id="cfgAumento"><option value="0">nunca (10/20 fixo)</option><option value="5">5 mãos</option><option value="10" selected>10 mãos</option><option value="15">15 mãos</option><option value="20">20 mãos</option><option value="30">30 mãos</option></select>
+        <p class="nota">Blinds iniciais 10/20.</p>
+      </div>
+      <div class="cfg">
+        <label for="cfgDif">Dificuldade da IA</label>
+        <select id="cfgDif"><option value="0">Fácil</option><option value="1" selected>Médio</option><option value="2">Difícil</option></select>
+        <p class="nota">Muda a precisão das contas e a leitura de ranges dos bots.</p>
+      </div>
+      <div class="cfg">
+        <label>Partida</label>
+        <label class="chk"><input type="checkbox" id="cfgRapido"> Velocidade rápida</label>
+        <label class="chk"><input type="checkbox" id="cfgForca" checked> Mostrar força da mão e equidade</label>
+        <label class="chk"><input type="checkbox" id="cfgSom" checked> Som</label>
+      </div>
+      <div class="cfg">
+        <label>Modo Aprendizado</label>
+        <label class="chk"><input type="checkbox" id="cfgAprender"> Ativado</label>
+        <select id="cfgNivel"><option value="0">Iniciante</option><option value="1" selected>Intermediário</option><option value="2">Avançado</option></select>
+        <p class="nota">Probabilidades, outs, dicas do treinador, avaliação das jogadas e revisão das mãos.</p>
+      </div>
+    </div>
+    <p class="nota" style="margin-top:16px">Atalhos: <b>F</b> fold · <b>C</b> check/call · <b>R</b> raise · <b>A</b> all-in · <b>D</b> dica · <b>L</b> histórico · <b>M</b> som. As estatísticas ficam salvas neste navegador. No console, <code>runTests()</code> roda os autotestes.</p>
+  </div>
+</section>
+
+<!-- Fim de partida -->
+<section class="tela oculto" id="telaFim">
+  <div class="miolo">
+    <h1 id="fimTitulo">Vitória!</h1>
+    <p class="sub" id="fimSub"></p>
+    <div class="estat-cartoes" id="fimEstat"></div>
+    <div class="botoes-tela">
+      <button class="bt prim" id="btFimNova">Jogar de novo</button>
+      <button class="bt" id="btFimRevisar">Revisar última mão</button>
+      <button class="bt" id="btFimInicio">Tela inicial</button>
+    </div>
+  </div>
+</section>
+
+<div id="janela" class="oculto">
+  <div id="janelaCaixa" role="dialog" aria-modal="true">
+    <div id="janelaTopo"><h2 id="janelaTitulo"></h2><button class="bt-icone" id="janelaFechar" title="Fechar (Esc)">✕</button></div>
+    <div id="janelaCorpo"></div>
+  </div>
+</div>
+<div id="toast" class="oculto"></div>
+
+<script>
+'use strict';
+// =====================================================================
+//  1. UTILIDADES E ALEATORIEDADE
+// =====================================================================
+const $ = (s, r = document) => r.querySelector(s);
+const fmt = n => Math.round(n).toLocaleString('pt-BR');
+const pct = (x, d = 0) => (x * 100).toFixed(d).replace('.', ',') + '%';
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Inteiro uniforme em [0, n) com crypto.getRandomValues (rejeição evita o viés do módulo)
+const _buf32 = new Uint32Array(1);
+function cryptoInt(n) {
+  const lim = Math.floor(0x100000000 / n) * n;
+  let x;
+  do { crypto.getRandomValues(_buf32); x = _buf32[0]; } while (x >= lim);
+  return x % n;
+}
+// Baralho novo embaralhado por Fisher-Yates com aleatoriedade criptográfica
+function embaralhar() {
+  const d = Array.from({ length: 52 }, (_, i) => i);
+  for (let i = 51; i > 0; i--) { const j = cryptoInt(i + 1); const t = d[i]; d[i] = d[j]; d[j] = t; }
+  return d;
+}
+// Gerador rápido (xorshift32) para simulações e decisões da IA; semente vem do crypto
+let _semente = (crypto.getRandomValues(new Uint32Array(1))[0] | 1) >>> 0;
+function rnd() {
+  let x = _semente; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; _semente = x >>> 0;
+  return _semente / 4294967296;
+}
+const rndInt = n => (rnd() * n) | 0;
+
+// =====================================================================
+//  2. CARTAS E AVALIADOR DE MÃOS
+// =====================================================================
+// Carta = inteiro 0..51: valor = c >> 2 (0 = dois … 12 = ás), naipe = c & 3 (♠ ♥ ♦ ♣)
+const RANK_TXT = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const RANK_CHR = '23456789TJQKA';
+const NAIPE = ['♠', '♥', '♦', '♣'];
+const NAIPE_NOME = ['espadas', 'copas', 'ouros', 'paus'];
+const NOME_UM = ['Dois', 'Três', 'Quatro', 'Cinco', 'Seis', 'Sete', 'Oito', 'Nove', 'Dez', 'Valete', 'Dama', 'Rei', 'Ás'];
+const NOME_PL = ['Dois', 'Três', 'Quatros', 'Cincos', 'Seis', 'Setes', 'Oitos', 'Noves', 'Dez', 'Valetes', 'Damas', 'Reis', 'Ases'];
+const rk = c => c >> 2, np = c => c & 3;
+const cartaTxt = c => RANK_TXT[rk(c)] + NAIPE[np(c)];
+// 'Ah', 'Td', '10c' → carta (usado nos testes)
+function carta(s) {
+  s = s.trim();
+  const n = 'shdc'.indexOf(s.slice(-1).toLowerCase());
+  let r = s.slice(0, -1).toUpperCase(); if (r === '10') r = 'T';
+  return RANK_CHR.indexOf(r) * 4 + n;
+}
+const cartas = s => s.trim().split(/\s+/).map(carta);
+
+const CAT_NOME = ['Carta Alta', 'Par', 'Dois Pares', 'Trinca', 'Sequência', 'Flush', 'Full House', 'Quadra', 'Straight Flush'];
+// Pontuação = categoria (4 bits) seguida de até 5 valores de desempate (4 bits cada): maior número vence.
+const pont = (cat, a = 0, b = 0, c = 0, d = 0, e = 0) => (cat << 20) | (a << 16) | (b << 12) | (c << 8) | (d << 4) | e;
+const catDe = p => p >> 20;
+
+// Carta mais alta de uma sequência no bitmask de valores, ou -1. Ás também vale 1 (A-2-3-4-5, a "wheel").
+function topoSequencia(mask) {
+  for (let h = 12; h >= 4; h--) { const m = 31 << (h - 4); if ((mask & m) === m) return h; }
+  return (mask & 0x100F) === 0x100F ? 3 : -1;
+}
+// Os k maiores valores presentes no bitmask
+function maiores(mask, k) {
+  const r = [];
+  for (let v = 12; v >= 0 && r.length < k; v--) if (mask & (1 << v)) r.push(v);
+  return r;
+}
+const _cnt = new Int8Array(13), _sm = new Int32Array(4), _sc = new Int8Array(4);
+// Avalia a melhor mão de 5 cartas entre as n primeiras de cs (funciona com 1 a 7 cartas)
+function avaliar(cs, n = cs.length) {
+  _cnt.fill(0); _sm.fill(0); _sc.fill(0);
+  let mask = 0;
+  for (let i = 0; i < n; i++) {
+    const c = cs[i], v = c >> 2, s = c & 3;
+    _cnt[v]++; mask |= 1 << v; _sm[s] |= 1 << v; _sc[s]++;
+  }
+  let fs = -1;
+  for (let s = 0; s < 4; s++) if (_sc[s] >= 5) fs = s;
+  if (fs >= 0) { const h = topoSequencia(_sm[fs]); if (h >= 0) return pont(8, h); }
+  let q = -1, t1 = -1, t2 = -1, p1 = -1, p2 = -1;
+  for (let v = 12; v >= 0; v--) {
+    const k = _cnt[v];
+    if (k === 4) q = v;
+    else if (k === 3) { if (t1 < 0) t1 = v; else if (t2 < 0) t2 = v; }
+    else if (k === 2) { if (p1 < 0) p1 = v; else if (p2 < 0) p2 = v; }
+  }
+  if (q >= 0) return pont(7, q, maiores(mask & ~(1 << q), 1)[0] || 0);
+  if (t1 >= 0 && (t2 >= 0 || p1 >= 0)) return pont(6, t1, Math.max(t2, p1));
+  if (fs >= 0) { const k = maiores(_sm[fs], 5); return pont(5, k[0], k[1], k[2], k[3], k[4]); }
+  const h = topoSequencia(mask);
+  if (h >= 0) return pont(4, h);
+  if (t1 >= 0) { const k = maiores(mask & ~(1 << t1), 2); return pont(3, t1, k[0] || 0, k[1] || 0); }
+  if (p1 >= 0 && p2 >= 0) { const k = maiores(mask & ~(1 << p1) & ~(1 << p2), 1); return pont(2, p1, p2, k[0] || 0); }
+  if (p1 >= 0) { const k = maiores(mask & ~(1 << p1), 3); return pont(1, p1, k[0] || 0, k[1] || 0, k[2] || 0); }
+  const k = maiores(mask, 5);
+  return pont(0, k[0] || 0, k[1] || 0, k[2] || 0, k[3] || 0, k[4] || 0);
+}
+// Melhor combinação de 5 entre 5 a 7 cartas, com as cartas usadas (para destacar no showdown)
+function melhorMao(cs) {
+  let melhor = -1, usadas = null;
+  const n = cs.length, t = new Array(5);
+  if (n <= 5) return { pont: avaliar(cs), cartas: cs.slice() };
+  for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) for (let c = b + 1; c < n; c++)
+    for (let d = c + 1; d < n; d++) for (let e = d + 1; e < n; e++) {
+      t[0] = cs[a]; t[1] = cs[b]; t[2] = cs[c]; t[3] = cs[d]; t[4] = cs[e];
+      const p = avaliar(t, 5);
+      if (p > melhor) { melhor = p; usadas = t.slice(); }
+    }
+  return { pont: melhor, cartas: usadas };
+}
+// Nome da mão em português. comChute = acrescenta os kickers (quando eles decidiram).
+function nomeMao(p, comChute = false) {
+  const cat = p >> 20, k = i => (p >> (16 - 4 * i)) & 15;
+  const art = v => (v === 10 ? 'a' : 'o');
+  const lista = (de, ate) => { const r = []; for (let i = de; i <= ate; i++) r.push(RANK_TXT[k(i)]); return r.join('-'); };
+  switch (cat) {
+    case 0: return `Carta Alta, ${NOME_UM[k(0)]}` + (comChute ? ` (${lista(1, 4)})` : '');
+    case 1: return `Par de ${NOME_PL[k(0)]}` + (comChute ? `, kicker ${NOME_UM[k(1)]}` : '');
+    case 2: return `Dois Pares, ${NOME_PL[k(0)]} e ${NOME_PL[k(1)]}` + (comChute ? `, kicker ${NOME_UM[k(2)]}` : '');
+    case 3: return `Trinca de ${NOME_PL[k(0)]}` + (comChute ? `, kickers ${RANK_TXT[k(1)]}-${RANK_TXT[k(2)]}` : '');
+    case 4: return `Sequência até ${art(k(0))} ${NOME_UM[k(0)]}`;
+    case 5: return `Flush, ${NOME_UM[k(0)]} ${k(0) === 10 ? 'alta' : 'alto'}` + (comChute ? ` (${lista(1, 4)})` : '');
+    case 6: return `Full House, ${NOME_PL[k(0)]} com ${NOME_PL[k(1)]}`;
+    case 7: return `Quadra de ${NOME_PL[k(0)]}` + (comChute ? `, kicker ${NOME_UM[k(1)]}` : '');
+    default: return k(0) === 12 ? 'Royal Flush' : `Straight Flush até ${art(k(0))} ${NOME_UM[k(0)]}`;
+  }
+}
+
+// ---------- Mãos iniciais: 169 classes, fórmula de Chen e percentis ----------
+// Grade 13x13: linha/coluna 0 = Ás. Naipadas acima da diagonal, pares na diagonal, offsuit abaixo.
+function classeIdx(c1, c2) {
+  const a = Math.max(rk(c1), rk(c2)), b = Math.min(rk(c1), rk(c2)), s = np(c1) === np(c2);
+  const i = 12 - a, j = 12 - b;
+  return s ? i * 13 + j : j * 13 + i;
+}
+function classeInfo(idx) {
+  const i = (idx / 13) | 0, j = idx % 13;
+  if (i === j) return { a: 12 - i, b: 12 - i, s: false, par: true, nome: RANK_CHR[12 - i] + RANK_CHR[12 - i], combos: 6 };
+  if (i < j) return { a: 12 - i, b: 12 - j, s: true, par: false, nome: RANK_CHR[12 - i] + RANK_CHR[12 - j] + 's', combos: 4 };
+  return { a: 12 - j, b: 12 - i, s: false, par: false, nome: RANK_CHR[12 - j] + RANK_CHR[12 - i] + 'o', combos: 12 };
+}
+// Fórmula de Chen (Bill Chen): pontua a mão inicial de -1 a 20
+function chen(a, b, s) {
+  const base = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 10];
+  if (a === b) return Math.max(5, base[a] * 2);
+  let p = base[a];
+  if (s) p += 2;
+  const gap = a - b - 1;
+  p -= [0, 1, 2, 4][gap] ?? 5;
+  if (gap <= 1 && a < 10) p += 1;   // conectores abaixo da dama
+  return Math.ceil(p);
+}
+const CHEN = new Float32Array(169);   // pontuação de Chen com desempate
+const PCT = new Float32Array(169);    // fração de todas as mãos que são tão fortes ou mais que esta
+const ORDEM169 = [];
+(function () {
+  for (let k = 0; k < 169; k++) {
+    const c = classeInfo(k);
+    CHEN[k] = chen(c.a, c.b, c.s) + (c.a * 13 + c.b) / 400 + (c.s ? 0.1 : 0) + (c.par ? 0.2 : 0);
+    ORDEM169.push(k);
+  }
+  ORDEM169.sort((x, y) => CHEN[y] - CHEN[x]);
+  let acc = 0;
+  for (const k of ORDEM169) { acc += classeInfo(k).combos; PCT[k] = acc / 1326; }
+})();
+// As 1326 combinações de duas cartas
+const COMBOS = [];
+const COMBO_IDX = new Int16Array(52 * 52).fill(-1);
+for (let a = 0; a < 52; a++) for (let b = a + 1; b < 52; b++) {
+  COMBO_IDX[a * 52 + b] = COMBO_IDX[b * 52 + a] = COMBOS.length;
+  COMBOS.push([a, b]);
+}
+const COMBO_CLASSE = COMBOS.map(([a, b]) => classeIdx(a, b));
+
+// Faixa de abertura recomendada (fração das mãos) por posição, sem ninguém ter entrado antes
+const ABRIR = { UTG: 0.12, 'UTG+1': 0.13, 'UTG+2': 0.15, MP: 0.17, HJ: 0.21, CO: 0.27, BTN: 0.42, SB: 0.34, BB: 0.4, 'BTN/SB': 0.62 };
+const FATOR_POS = { UTG: 0.1, 'UTG+1': 0.2, 'UTG+2': 0.25, MP: 0.4, HJ: 0.55, CO: 0.75, BTN: 1, SB: 0.3, BB: 0.35, 'BTN/SB': 0.9 };
+
+// =====================================================================
+//  3. REGRAS E APOSTAS (motor sem interface: máquina de estados por fase)
+// =====================================================================
+// Fases: 'inicio' → 'preflop' → 'flop' → 'turn' → 'river' → 'showdown' → 'fim' (→ próxima mão)
+const RUA_NOME = { preflop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River', showdown: 'Showdown' };
+const BOT_NOMES = ['Ana', 'Bruno', 'Carla', 'Diego', 'Elisa', 'Fábio', 'Gabi', 'Hugo', 'Iara', 'Joel', 'Lia', 'Marcos'];
+const PERFIS = {
+  rocha:   { nome: 'Rocha', tipo: 'tight-passivo', solto: 0.25, agressao: 0.3, blefe: 0.03, cor: '#8fa3b8' },
+  tag:     { nome: 'TAG', tipo: 'tight-agressivo', solto: 0.42, agressao: 0.75, blefe: 0.1, cor: '#4ea1ff' },
+  lag:     { nome: 'LAG', tipo: 'loose-agressivo', solto: 0.7, agressao: 0.8, blefe: 0.18, cor: '#f0883e' },
+  estacao: { nome: 'Calling station', tipo: 'loose-passivo', solto: 0.75, agressao: 0.18, blefe: 0.04, cor: '#a3d65c' },
+  maniaco: { nome: 'Maníaco', tipo: 'muito solto e agressivo', solto: 0.88, agressao: 0.95, blefe: 0.3, cor: '#e5484d' },
+  equilibrado: { nome: 'Equilibrado', tipo: 'regular', solto: 0.5, agressao: 0.55, blefe: 0.1, cor: '#c792ea' },
+};
+
+function novoJogador(i, nome, humano, fichas, perfil) {
+  return { i, nome, humano, fichas, perfil, cartas: [], desistiu: false, allin: false, aposta: 0, total: 0,
+    agiu: false, enfrentou: 0, fora: false, acao: '', colocacao: 0 };
+}
+function novaPartida(cfg) {
+  const nomes = BOT_NOMES.slice(), tipos = ['tag', 'lag', 'rocha', 'estacao', 'equilibrado', 'maniaco', 'tag', 'lag'];
+  for (const arr of [nomes, tipos]) for (let i = arr.length - 1; i > 0; i--) { const j = cryptoInt(i + 1); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+  const jog = [novoJogador(0, 'Você', true, cfg.fichas, null)];
+  for (let k = 1; k <= cfg.bots; k++) jog.push(novoJogador(k, nomes[k - 1], false, cfg.fichas, tipos[k - 1]));
+  return { v: 1, cfg: { ...cfg }, jog, mao: 0, dealer: -1, sbI: -1, bbI: -1, nivel: 0, sb: 10, bb: 20,
+    baralho: [], mesa: [], fase: 'inicio', vez: -1, maiorAposta: 0, minRaise: 20, nRaises: 0,
+    agressor: -1, agressorPre: -1, mh: null, ultimaMao: null, eliminados: 0,
+    estat: { maos: 0, ganhas: 0, vpip: 0, sd: 0, sdGanhos: 0, maiorPote: 0, inicio: Date.now() } };
+}
+const vivos = G => G.jog.filter(p => !p.desistiu && !p.fora);
+const podemAgir = G => G.jog.filter(p => !p.desistiu && !p.fora && !p.allin);
+const potTotal = G => G.jog.reduce((s, p) => s + p.total, 0);
+function proximoVivo(G, i) {
+  const n = G.jog.length;
+  for (let k = 1; k <= n; k++) { const j = (i + k) % n; if (!G.jog[j].fora) return j; }
+  return i;
+}
+function colocar(p, v) {
+  v = Math.min(v, p.fichas);
+  p.fichas -= v; p.aposta += v; p.total += v;
+  if (p.fichas === 0) p.allin = true;
+  return v;
+}
+// Nomes das posições na mão (informação pública)
+function calcularPosicoes(G) {
+  const pos = {};
+  const ordem = []; let i = G.dealer;
+  do { i = proximoVivo(G, i); ordem.push(i); } while (i !== G.dealer);   // SB … dealer
+  if (ordem.length === 2) { pos[G.dealer] = 'BTN/SB'; pos[G.bbI] = 'BB'; return pos; }
+  pos[G.sbI] = 'SB'; pos[G.bbI] = 'BB';
+  const resto = ordem.slice(2);   // UTG … dealer
+  const k = resto.length;
+  resto.forEach((j, idx) => {
+    const d = k - 1 - idx;
+    pos[j] = idx === 0 && d >= 2 ? 'UTG' : d <= 3 ? ['BTN', 'CO', 'HJ', 'MP'][d] : 'UTG+' + idx;
+  });
+  return pos;
+}
+
+// Começa uma mão: gira o botão, posta os blinds e distribui. "fixo" (testes) pode fixar dealer e baralho.
+function iniciarMao(G, fixo = {}) {
+  G.mao++;
+  G.subiuBlind = false;
+  // Aumento automático: a cada N mãos os blinds dobram
+  if (G.cfg.aumento > 0 && G.mao > 1 && (G.mao - 1) % G.cfg.aumento === 0) { G.nivel++; G.sb *= 2; G.bb *= 2; G.subiuBlind = true; }
+  for (const p of G.jog) Object.assign(p, { cartas: [], desistiu: p.fora, allin: false, aposta: 0, total: 0, agiu: false, enfrentou: 0, acao: '' });
+  const nVivos = G.jog.filter(p => !p.fora).length;
+  if (fixo.dealer !== undefined) G.dealer = fixo.dealer;
+  else if (G.dealer < 0) { const v = G.jog.filter(p => !p.fora); G.dealer = v[cryptoInt(v.length)].i; }
+  else G.dealer = proximoVivo(G, G.dealer);
+  // Heads-up: o dealer é o small blind (e age primeiro no pré-flop). Com 3+, SB e BB vêm à esquerda do botão.
+  if (nVivos === 2) { G.sbI = G.dealer; G.bbI = proximoVivo(G, G.dealer); }
+  else { G.sbI = proximoVivo(G, G.dealer); G.bbI = proximoVivo(G, G.sbI); }
+  G.baralho = fixo.baralho ? fixo.baralho.slice() : embaralhar();
+  G.mesa = []; G.fase = 'preflop'; G.agressor = -1; G.agressorPre = -1; G.nRaises = 0;
+  G.mh = { n: G.mao, dealer: G.dealer, sbI: G.sbI, bbI: G.bbI, sb: G.sb, bb: G.bb,
+    nomes: G.jog.map(p => p.nome), perfis: G.jog.map(p => p.perfil), fora: G.jog.map(p => p.fora),
+    fichasIni: G.jog.map(p => p.fichas), pos: calcularPosicoes(G), eventos: [], pensamentos: {}, decisoes: [],
+    cartas: [], mesa: [], resultado: null, vpip: false };
+  const postar = (i, valor, tipo) => {
+    const p = G.jog[i], v = colocar(p, valor);
+    p.acao = tipo + (p.allin ? ' (all-in)' : '');
+    G.mh.eventos.push({ t: 'blind', i, a: tipo, v, colocou: v, rua: 'preflop', pote: potTotal(G) });
+  };
+  postar(G.sbI, G.sb, 'SB');
+  postar(G.bbI, G.bb, 'BB');
+  // Quem entra precisa igualar o big blind inteiro, mesmo que o BB tenha ficado all-in com menos
+  G.maiorAposta = Math.max(G.bb, ...G.jog.map(p => p.aposta));
+  G.minRaise = G.bb;
+  // Duas cartas para cada um, uma de cada vez, começando à esquerda do botão
+  for (let volta = 0; volta < 2; volta++) {
+    let i = G.dealer;
+    do { i = proximoVivo(G, i); G.jog[i].cartas.push(G.baralho.pop()); } while (i !== G.dealer);
+  }
+  if (fixo.cartas) fixo.cartas.forEach((cs, i) => { if (cs) G.jog[i].cartas = cs.slice(); });
+  G.mh.cartas = G.jog.map(p => p.cartas.slice());
+  // ORDEM DE AÇÃO no pré-flop: começa à esquerda do big blind (UTG). No heads-up, é o dealer/SB.
+  // Os blinds ainda não "agiram": o BB tem a opção de aumentar mesmo se todos só pagarem.
+  G.vez = proximaVez(G, G.bbI);
+}
+
+// Próximo a agir depois do assento "de", ou -1 quando a rodada de apostas terminou.
+// Terminou quando todos os que ainda podem agir já agiram nesta rua E igualaram a maior aposta
+// (ou estão all-in). Quem está all-in ou desistiu é pulado.
+function proximaVez(G, de) {
+  if (vivos(G).length < 2) return -1;
+  const ativos = podemAgir(G);
+  if (ativos.length === 0) return -1;
+  // Só um jogador com fichas: não há contra quem apostar; ele só age se ainda deve pagar uma aposta
+  if (ativos.length === 1) { const p = ativos[0]; return p.aposta < G.maiorAposta ? p.i : -1; }
+  const n = G.jog.length;
+  for (let k = 1; k <= n; k++) {
+    const p = G.jog[(de + k) % n];
+    if (p.desistiu || p.fora || p.allin) continue;
+    if (!p.agiu || p.aposta < G.maiorAposta) return p.i;
+  }
+  return -1;
+}
+
+// Ações legais de quem tem a vez (ou de outro jogador, para análise)
+function legais(G, i = G.vez) {
+  const p = G.jog[i];
+  const pagar = Math.min(G.maiorAposta - p.aposta, p.fichas);
+  const maxPara = p.aposta + p.fichas;
+  // REABERTURA: quem já agiu nesta rua só pode reaumentar se, desde a última vez que agiu, a aposta
+  // subiu pelo menos um raise completo. Um all-in abaixo do raise mínimo NÃO reabre a ação para ele
+  // (pode só pagar ou desistir). Vários all-ins curtos que somados chegam a um raise completo reabrem.
+  const reaberta = !p.agiu || G.maiorAposta - p.enfrentou >= G.minRaise;
+  const outros = G.jog.some(q => q !== p && !q.desistiu && !q.fora && !q.allin);
+  const podeAumentar = reaberta && outros && maxPara > G.maiorAposta;
+  // RAISE MÍNIMO (no-limit): aumentar pelo menos o tamanho do último aumento completo da rua
+  // (no começo da rua, o big blind). Sem fichas para isso, sobra só o all-in.
+  const minPara = Math.min(G.maiorAposta + G.minRaise, maxPara);
+  return { pagar, podeCheck: pagar === 0, podeAumentar, minPara, maxPara, aposta: G.maiorAposta === 0, pote: potTotal(G) };
+}
+
+// Executa a ação de quem tem a vez: {tipo: 'fold'|'check'|'call'|'raise'|'allin', para}
+function agir(G, acao) {
+  const i = G.vez, p = G.jog[i], L = legais(G);
+  let tipo = acao.tipo, para = p.aposta, texto;
+  // Normaliza ações impossíveis para a mais próxima legal
+  if (tipo === 'check' && !L.podeCheck) tipo = 'call';
+  if (tipo === 'call' && L.pagar === 0) tipo = 'check';
+  if ((tipo === 'raise' || tipo === 'allin') && !L.podeAumentar) tipo = L.pagar ? 'call' : 'check';
+  if (tipo === 'raise' && clamp(Math.round(acao.para || 0), L.minPara, L.maxPara) >= L.maxPara) tipo = 'allin';
+  const antes = p.fichas;
+  switch (tipo) {
+    case 'fold':
+      p.desistiu = true; texto = 'Fold'; break;
+    case 'check':
+      texto = 'Check'; break;
+    case 'call':
+      colocar(p, L.pagar); para = p.aposta;
+      texto = 'Call ' + fmt(antes - p.fichas) + (p.allin ? ' (all-in)' : ''); break;
+    default: {   // raise / bet / all-in
+      para = tipo === 'allin' ? L.maxPara : clamp(Math.round(acao.para), L.minPara, L.maxPara);
+      const aumento = para - G.maiorAposta;
+      // Raise completo: vira o novo tamanho mínimo de aumento e reabre a ação para todos.
+      // All-in curto: sobe a aposta a pagar, mas não muda o raise mínimo nem reabre a ação.
+      if (aumento >= G.minRaise) G.minRaise = aumento;
+      const eraAposta = G.maiorAposta === 0;
+      G.maiorAposta = para; G.agressor = i; G.nRaises++;
+      if (G.fase === 'preflop') G.agressorPre = i;
+      colocar(p, para - p.aposta);
+      texto = p.allin ? 'All-in ' + fmt(para) : (eraAposta ? 'Bet ' : 'Raise para ') + fmt(para);
+    }
+  }
+  p.agiu = true;
+  p.enfrentou = G.maiorAposta;
+  p.acao = texto;
+  if (p.humano && G.fase === 'preflop' && (tipo === 'call' || tipo === 'raise' || tipo === 'allin')) G.mh.vpip = true;
+  G.mh.eventos.push({ t: 'acao', i, a: tipo, v: para, colocou: antes - p.fichas, faltava: L.pagar, poteAntes: L.pote,
+    pote: potTotal(G), rua: G.fase, texto, allin: p.allin });
+  G.vez = proximaVez(G, i);
+  return { tipo, para, texto };
+}
+
+// Fecha a rodada de apostas: devolve a aposta não paga e zera as apostas da rua.
+function fecharRua(G) {
+  // Aposta não paga: se ninguém igualou a maior aposta, o excedente sobre a segunda maior volta a quem apostou
+  let m1 = 0, m2 = 0, im = -1;
+  for (const p of G.jog) {
+    if (p.aposta > m1) { m2 = m1; m1 = p.aposta; im = p.i; }
+    else if (p.aposta > m2) m2 = p.aposta;
+  }
+  let devolvido = null;
+  if (im >= 0 && m1 > m2) {
+    const p = G.jog[im], v = m1 - m2;
+    p.fichas += v; p.aposta -= v; p.total -= v;
+    if (p.fichas > 0) p.allin = false;
+    devolvido = { i: im, v };
+    G.mh.eventos.push({ t: 'devolve', i: im, v, rua: G.fase, pote: potTotal(G) });
+  }
+  for (const p of G.jog) { p.aposta = 0; p.agiu = false; p.enfrentou = 0; }
+  G.maiorAposta = 0; G.minRaise = G.bb; G.nRaises = 0; G.agressor = -1;
+  return devolvido;
+}
+// Abre a próxima rua: queima uma carta e vira 3 (flop) ou 1 (turn/river)
+function abrirRua(G) {
+  const prox = { preflop: 'flop', flop: 'turn', turn: 'river' }[G.fase];
+  G.fase = prox;
+  G.baralho.pop();
+  for (let k = prox === 'flop' ? 3 : 1; k > 0; k--) G.mesa.push(G.baralho.pop());
+  for (const p of G.jog) if (!p.desistiu && !p.fora) p.acao = p.allin ? 'All-in' : '';
+  G.mh.eventos.push({ t: 'rua', rua: prox, mesa: G.mesa.slice(), pote: potTotal(G) });
+  // ORDEM DE AÇÃO depois do flop: o primeiro ativo à esquerda do botão (no heads-up, o big blind)
+  G.vez = proximaVez(G, G.dealer);
+}
+
+// SIDE POTS. Cada nível é a contribuição total de um jogador ainda na mão (os all-ins criam os níveis).
+// O pote de cada nível recebe de TODOS os jogadores (inclusive dos que desistiram: dinheiro morto) a parte
+// da contribuição entre o nível anterior e o atual; só disputa esse pote quem contribuiu até o nível.
+// soColetado = ignora as apostas da rua atual (para mostrar na mesa o que já está no centro).
+function calcularPotes(jog, soColetado = false) {
+  const contrib = p => p.total - (soColetado ? p.aposta : 0);
+  const naMao = jog.filter(p => !p.desistiu && !p.fora);
+  const niveis = [...new Set(naMao.map(contrib).filter(v => v > 0))].sort((a, b) => a - b);
+  const potes = [];
+  let ant = 0;
+  for (const L of niveis) {
+    let valor = 0;
+    for (const p of jog) valor += Math.max(0, Math.min(contrib(p), L) - ant);
+    const eleg = naMao.filter(p => contrib(p) >= L).map(p => p.i);
+    const ult = potes[potes.length - 1];
+    if (ult && ult.eleg.length === eleg.length && ult.eleg.every((x, k) => x === eleg[k])) ult.valor += valor;
+    else if (valor > 0) potes.push({ valor, eleg });
+    ant = L;
+  }
+  // Dinheiro morto acima do maior nível (não sobra depois da devolução da aposta não paga, mas por garantia)
+  let resto = 0;
+  for (const p of jog) resto += Math.max(0, contrib(p) - ant);
+  if (resto) {
+    if (potes.length) potes[potes.length - 1].valor += resto;
+    else potes.push({ valor: resto, eleg: naMao.map(p => p.i) });
+  }
+  return potes;
+}
+// SPLIT POT: divide igualmente; as fichas ímpares que sobram vão, uma a uma, aos vencedores
+// na ordem a partir do primeiro jogador à esquerda do dealer.
+function dividir(valor, venc, dealer, n) {
+  const parte = Math.floor(valor / venc.length);
+  let sobra = valor - parte * venc.length;
+  const dist = i => (i - dealer - 1 + n) % n;
+  const ordem = venc.slice().sort((a, b) => dist(a) - dist(b));
+  const r = {};
+  for (const i of ordem) { r[i] = parte + (sobra > 0 ? 1 : 0); if (sobra > 0) sobra--; }
+  return r;
+}
+// Showdown: avalia as mãos, distribui cada pote só entre os elegíveis
+function resolverShowdown(G) {
+  const naMao = vivos(G), melhor = {};
+  for (const p of naMao) melhor[p.i] = melhorMao(p.cartas.concat(G.mesa));
+  const potes = calcularPotes(G.jog), res = [], ganhos = {};
+  potes.forEach((pt, k) => {
+    let max = -1;
+    for (const i of pt.eleg) max = Math.max(max, melhor[i].pont);
+    const venc = pt.eleg.filter(i => melhor[i].pont === max);
+    const div = dividir(pt.valor, venc, G.dealer, G.jog.length);
+    for (const i in div) { G.jog[i].fichas += div[i]; ganhos[i] = (ganhos[i] || 0) + div[i]; }
+    // Mostra os kickers quando um perdedor tinha a mesma mão principal
+    const chave = p => catDe(p) === 2 || catDe(p) === 6 ? p >> 12 : p >> 16;
+    const comChute = pt.eleg.some(i => !venc.includes(i) && chave(melhor[i].pont) === chave(max));
+    res.push({ k, valor: pt.valor, eleg: pt.eleg, venc, div, nome: nomeMao(max, comChute) });
+  });
+  for (const p of G.jog) { p.total = 0; p.aposta = 0; }
+  return { potes: res, melhor, ganhos };
+}
+// Todos desistiram: o último leva tudo sem mostrar as cartas
+function ganharSemShowdown(G) {
+  const w = vivos(G)[0], valor = potTotal(G);
+  w.fichas += valor;
+  for (const p of G.jog) { p.total = 0; p.aposta = 0; }
+  return { i: w.i, valor };
+}
+// Elimina quem ficou sem fichas; a colocação segue o tamanho da pilha no começo da mão
+function eliminar(G) {
+  const restantes = G.jog.filter(p => !p.fora).length;
+  const quebrados = G.jog.filter(p => !p.fora && p.fichas <= 0)
+    .sort((a, b) => G.mh.fichasIni[a.i] - G.mh.fichasIni[b.i]);
+  quebrados.forEach((p, k) => { p.fora = true; p.desistiu = true; p.colocacao = restantes - k; });
+  const sobra = G.jog.filter(p => !p.fora);
+  if (sobra.length === 1) sobra[0].colocacao = 1;
+  return quebrados;
+}
+
+// =====================================================================
+//  4. PROBABILIDADES: EQUIDADE, FAIXAS (RANGES) E OUTS
+// =====================================================================
+// Distribuição acumulada de uma faixa (pesos das 1326 combinações), sem as cartas já conhecidas
+function cdfFaixa(f, base) {
+  const idx = [], acum = [];
+  let s = 0;
+  for (let k = 0; k < 1326; k++) {
+    const w = f[k];
+    if (w <= 0) continue;
+    const [a, b] = COMBOS[k];
+    if (base[a] || base[b]) continue;
+    s += w; idx.push(k); acum.push(s);
+  }
+  return s > 0 ? { idx, acum, s } : null;
+}
+function sortearCombo(cdf) {
+  const x = rnd() * cdf.s;
+  let lo = 0, hi = cdf.acum.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (cdf.acum[m] < x) lo = m + 1; else hi = m; }
+  return cdf.idx[lo];
+}
+// Equidade por Monte Carlo: sorteia as mãos dos oponentes e o resto da mesa e compara.
+// faixas (opcional): uma faixa por oponente (pesos), para calcular contra mãos prováveis em vez de aleatórias.
+// Devolve { vit, emp, eq }: vitória, empate e equidade (empates contam a fração do pote).
+function equidade(minhas, mesa, nOpp, iter, faixas = null) {
+  const base = new Uint8Array(52);
+  for (const c of minhas) base[c] = 1;
+  for (const c of mesa) base[c] = 1;
+  const resto = [];
+  for (let c = 0; c < 52; c++) if (!base[c]) resto.push(c);
+  const cdfs = faixas ? faixas.map(f => (f ? cdfFaixa(f, base) : null)) : null;
+  const nr = resto.length;
+  const marca = new Int32Array(52), t = new Array(7), opp = new Array(nOpp * 2);
+  let selo = 0, vit = 0, emp = 0, eq = 0;
+  for (let it = 0; it < iter; it++) {
+    selo++;
+    let j = 0;
+    const tira = () => {
+      for (;;) {
+        const r = j + rndInt(nr - j), c = resto[r];
+        resto[r] = resto[j]; resto[j] = c; j++;
+        if (marca[c] !== selo) { marca[c] = selo; return c; }
+      }
+    };
+    for (let o = 0; o < nOpp; o++) {
+      let a = -1, b = -1;
+      const cdf = cdfs && cdfs[o];
+      if (cdf) for (let tent = 0; tent < 15; tent++) {
+        const cb = COMBOS[sortearCombo(cdf)];
+        if (marca[cb[0]] !== selo && marca[cb[1]] !== selo) { a = cb[0]; b = cb[1]; marca[a] = marca[b] = selo; break; }
+      }
+      if (a < 0) { a = tira(); b = tira(); }
+      opp[o * 2] = a; opp[o * 2 + 1] = b;
+    }
+    for (let k = 0; k < mesa.length; k++) t[2 + k] = mesa[k];
+    for (let k = mesa.length; k < 5; k++) t[2 + k] = tira();
+    t[0] = minhas[0]; t[1] = minhas[1];
+    const eu = avaliar(t, 7);
+    let melhor = -1, nMelhor = 0;
+    for (let o = 0; o < nOpp; o++) {
+      t[0] = opp[o * 2]; t[1] = opp[o * 2 + 1];
+      const s = avaliar(t, 7);
+      if (s > melhor) { melhor = s; nMelhor = 1; } else if (s === melhor) nMelhor++;
+    }
+    if (eu > melhor) { vit++; eq += 1; }
+    else if (eu === melhor) { emp++; eq += 1 / (nMelhor + 1); }
+  }
+  return { vit: vit / iter, emp: emp / iter, eq: eq / iter };
+}
+// Equidade exata (ou quase) com as cartas de todos conhecidas — usada na revisão da mão
+function equidadesConhecidas(maos, mesa) {
+  const usado = new Uint8Array(52);
+  for (const m of maos) for (const c of m) usado[c] = 1;
+  for (const c of mesa) usado[c] = 1;
+  const resto = [];
+  for (let c = 0; c < 52; c++) if (!usado[c]) resto.push(c);
+  const eq = maos.map(() => 0), t = new Array(7);
+  let total = 0;
+  const contar = board => {
+    for (let k = 0; k < 5; k++) t[2 + k] = board[k];
+    let melhor = -1;
+    const s = maos.map(m => { t[0] = m[0]; t[1] = m[1]; const v = avaliar(t, 7); if (v > melhor) melhor = v; return v; });
+    const venc = s.filter(v => v === melhor).length;
+    s.forEach((v, k) => { if (v === melhor) eq[k] += 1 / venc; });
+    total++;
+  };
+  const faltam = 5 - mesa.length;
+  if (faltam === 0) contar(mesa);
+  else if (faltam === 1) for (const c of resto) contar(mesa.concat([c]));
+  else if (faltam === 2) { for (let a = 0; a < resto.length; a++) for (let b = a + 1; b < resto.length; b++) contar(mesa.concat([resto[a], resto[b]])); }
+  else for (let it = 0; it < 4000; it++) {
+    const d = resto.slice(), b = mesa.slice();
+    for (let k = 0; k < faltam; k++) { const r = k + rndInt(d.length - k); [d[k], d[r]] = [d[r], d[k]]; b.push(d[k]); }
+    contar(b);
+  }
+  return eq.map(v => v / total);
+}
+
+// ---------- Faixas (ranges) estimadas a partir das ações públicas ----------
+const faixaCheia = () => new Float32Array(1326).fill(1);
+// Força relativa de cada combinação num board: percentil (0..1) e se tem projeto (draw)
+const _cacheForca = new Map();
+function forcaNoBoard(mesa) {
+  const chave = mesa.join(',');
+  if (_cacheForca.has(chave)) return _cacheForca.get(chave);
+  const usado = new Uint8Array(52);
+  for (const c of mesa) usado[c] = 1;
+  const lista = [], t = mesa.slice(), n = mesa.length + 2;
+  const hs = new Float32Array(1326), draw = new Uint8Array(1326);
+  for (let k = 0; k < 1326; k++) {
+    const [a, b] = COMBOS[k];
+    if (usado[a] || usado[b]) { hs[k] = -1; continue; }
+    t[mesa.length] = a; t[mesa.length + 1] = b;
+    lista.push([avaliar(t, n), k]);
+    if (mesa.length < 5) draw[k] = temProjeto([a, b], mesa) ? 1 : 0;
+  }
+  lista.sort((x, y) => x[0] - y[0]);
+  for (let p = 0; p < lista.length;) {
+    let q = p;
+    while (q < lista.length && lista[q][0] === lista[p][0]) q++;
+    const v = ((p + q - 1) / 2) / Math.max(1, lista.length - 1);
+    for (let r = p; r < q; r++) hs[lista[r][1]] = v;
+    p = q;
+  }
+  const res = { hs, draw };
+  if (_cacheForca.size > 40) _cacheForca.clear();
+  _cacheForca.set(chave, res);
+  return res;
+}
+// Projeto de flush (4 do naipe, com carta da mão) ou de sequência (4 de 5 valores seguidos, com carta da mão)
+function temProjeto(mao, mesa) {
+  const todas = mao.concat(mesa);
+  for (let s = 0; s < 4; s++) {
+    const n = todas.filter(c => np(c) === s).length;
+    if (n === 4 && mao.some(c => np(c) === s)) return true;
+  }
+  // bit 0 = ás baixo, bit v+1 = valor v; janelas de 5 valores seguidos, de A-5 a T-A
+  let mask = 0, mm = 0;
+  for (const c of todas) mask |= 1 << (rk(c) + 1);
+  for (const c of mao) mm |= 1 << (rk(c) + 1);
+  if (mask & (1 << 13)) mask |= 1;
+  if (mm & (1 << 13)) mm |= 1;
+  for (let lo = 0; lo <= 9; lo++) {
+    const w = 31 << lo;
+    if (bitsLigados(mask & w) === 4 && (mm & w)) return true;
+  }
+  return false;
+}
+function bitsLigados(x) { let n = 0; while (x) { x &= x - 1; n++; } return n; }
+const pesoTopo = (p, X, suave = 0.06) => (p <= X ? 1 : Math.max(0.02, Math.exp(-(p - X) / suave)));
+
+// Reconstrói as faixas de todos a partir dos eventos públicos da mão (não usa cartas fechadas de ninguém)
+function estimarFaixas(eventos, n, posicoes, bb) {
+  const f = Array.from({ length: n }, faixaCheia);
+  let mesa = [], raises = 0;
+  for (const e of eventos) {
+    if (e.t === 'rua') { mesa = e.mesa; raises = 0; continue; }
+    if (e.t !== 'acao' || e.a === 'fold') continue;
+    const w = f[e.i];
+    if (e.rua === 'preflop') {
+      const pos = posicoes[e.i] || 'MP';
+      let X = null, topoReduz = 0;
+      if (e.a === 'raise' || e.a === 'allin') {
+        X = raises === 0 ? (ABRIR[pos] || 0.2) : raises === 1 ? 0.08 : 0.035;
+        if (e.a === 'allin' && e.v <= 12 * bb) X = Math.max(X, 0.3);
+      } else if (e.a === 'call') {
+        if (raises === 0) { X = 0.55; topoReduz = 0.04; }
+        else { X = raises === 1 ? 0.28 : 0.1; topoReduz = X * 0.15; }
+        if (pos === 'BB' && raises === 1) X = 0.45;
+      }
+      if (X !== null) for (let k = 0; k < 1326; k++) {
+        const p = PCT[COMBO_CLASSE[k]];
+        let m = pesoTopo(p, X);
+        if (p <= topoReduz) m *= 0.45;            // com as melhores, provavelmente teria aumentado
+        w[k] *= m;
+      }
+      if (e.a === 'raise' || e.a === 'allin') raises++;
+    } else if (mesa.length >= 3) {
+      const { hs, draw } = forcaNoBoard(mesa);
+      for (let k = 0; k < 1326; k++) {
+        if (hs[k] < 0) { w[k] = 0; continue; }
+        const h = hs[k], d = draw[k];
+        let m;
+        if (e.a === 'raise' || e.a === 'allin') m = 0.18 + 0.82 * h * h * h + (d ? 0.35 : 0);
+        else if (e.a === 'call') m = h > 0.94 ? 0.55 : 0.2 + 0.8 * Math.min(1, h * 1.35) + (d ? 0.3 : 0);
+        else m = 1 - 0.55 * h * h * h;            // check: mãos muito fortes às vezes fazem slowplay
+        w[k] *= Math.min(1, m);
+      }
+      if (e.a === 'raise' || e.a === 'allin') raises++;
+    }
+  }
+  return f;
+}
+// Resumo de uma faixa: % das combinações (ponderado) e as classes mais prováveis
+function resumoFaixa(f, excluir = []) {
+  const porClasse = new Float32Array(169), nClasse = new Float32Array(169);
+  const morto = new Uint8Array(52);
+  for (const c of excluir) morto[c] = 1;
+  let soma = 0, n = 0;
+  for (let k = 0; k < 1326; k++) {
+    const [a, b] = COMBOS[k];
+    if (morto[a] || morto[b]) continue;
+    porClasse[COMBO_CLASSE[k]] += f[k]; nClasse[COMBO_CLASSE[k]]++;
+    soma += f[k]; n++;
+  }
+  const media = Array.from(porClasse, (s, k) => (nClasse[k] ? s / nClasse[k] : 0));
+  const fortes = ORDEM169.filter(k => media[k] >= 0.5).map(k => classeInfo(k).nome);
+  return { pct: n ? soma / n : 0, media, exemplos: fortes };
+}
+function textoFaixa(r) {
+  const ex = r.exemplos;
+  if (!ex.length) return `~${pct(r.pct)} das mãos (faixa difusa)`;
+  return `~${pct(r.pct)} das mãos: ${ex.slice(0, 12).join(', ')}${ex.length > 12 ? '…' : ''}`;
+}
+
+// ---------- Outs ----------
+// Outs = cartas que melhoram a sua mão para uma categoria maior usando as suas cartas.
+// "Sujas" = melhoram a sua mão mas podem dar uma mão ainda maior a um adversário
+// (sequência com 3 do naipe na mesa → flush possível; carta que pareia a mesa → full house possível).
+function contarOuts(m, mesa) {
+  if (mesa.length < 3 || mesa.length > 4) return null;
+  const atual = avaliar(m.concat(mesa)), catA = catDe(atual);
+  const usado = new Set(m.concat(mesa));
+  const maxMesa = Math.max(...mesa.map(rk));
+  const grupos = {};
+  let total = 0, sujas = 0;
+  for (let c = 0; c < 52; c++) {
+    if (usado.has(c)) continue;
+    const cat = catDe(avaliar(m.concat(mesa, [c])));
+    if (cat <= catA) continue;
+    if (catDe(avaliar(mesa.concat([c]))) >= cat) continue;          // a melhora está só na mesa
+    if (catA === 0 && cat === 1 && !(rk(c) > maxMesa && m.some(h => rk(h) === rk(c)))) continue;   // só par do topo
+    if (catA === 1 && cat === 2 && !m.some(h => rk(h) === rk(c))) continue;                       // dois pares com a mão
+    let suja = false;
+    if (cat === 4 || cat === 5) {
+      if (mesa.some(b => rk(b) === rk(c))) suja = true;
+      if (cat === 4 && mesa.filter(b => np(b) === np(c)).length >= 2) suja = true;
+    }
+    (grupos[cat] = grupos[cat] || []).push({ c, suja });
+    total++; if (suja) sujas++;
+  }
+  const lista = Object.keys(grupos).map(Number).sort((a, b) => b - a).map(cat => {
+    const cs = grupos[cat];
+    const naipes = new Set(cs.map(x => np(x.c)));
+    let desc;
+    if (naipes.size === 1 && cs.length >= 7) desc = `qualquer ${NAIPE[[...naipes][0]]}`;
+    else {
+      const porValor = {};
+      for (const x of cs) porValor[rk(x.c)] = (porValor[rk(x.c)] || 0) + 1;
+      desc = Object.keys(porValor).map(Number).sort((a, b) => b - a)
+        .map(v => `${porValor[v]} ${porValor[v] > 1 ? NOME_PL[v] : NOME_UM[v]}`).join(', ');
+    }
+    return { cat, n: cs.length, sujas: cs.filter(x => x.suja).length, desc, cartas: cs.map(x => x.c) };
+  });
+  const naoVistas = 52 - 2 - mesa.length;
+  const limpas = total - sujas, efetivas = limpas + sujas / 2;
+  const pProx = efetivas / naoVistas;
+  const pRiver = mesa.length === 3 ? 1 - ((naoVistas - efetivas) * (naoVistas - 1 - efetivas)) / (naoVistas * (naoVistas - 1)) : pProx;
+  return { total, sujas, limpas, efetivas, lista, naoVistas, pProx, pRiver,
+    regra2: Math.min(100, Math.round(efetivas * 2)), regra4: Math.min(100, Math.round(efetivas * 4)) };
+}
+// Textura do board: seco, molhado (projetos possíveis) ou pareado
+function textura(mesa) {
+  if (mesa.length < 3) return null;
+  const naipes = [0, 0, 0, 0];
+  for (const c of mesa) naipes[np(c)]++;
+  const maxN = Math.max(...naipes);
+  const vs = [...new Set(mesa.map(rk))].sort((a, b) => a - b);
+  let conectado = false;
+  for (let i = 0; i + 2 < vs.length; i++) if (vs[i + 2] - vs[i] <= 4) conectado = true;
+  if (vs.includes(12) && vs.filter(v => v <= 3).length >= 2) conectado = true;
+  const pareado = vs.length < mesa.length;
+  const molhado = maxN >= 3 || (maxN === 2 && conectado) || (conectado && vs.length >= 3);
+  return { molhado, pareado, monotom: maxN >= 3, conectado,
+    nome: pareado && !molhado ? 'seco e pareado' : molhado ? (maxN >= 3 ? 'molhado (3+ do mesmo naipe)' : 'molhado (conectado)') : 'seco' };
+}
+
+// =====================================================================
+//  5. IA DOS OPONENTES
+// =====================================================================
+// A IA só recebe esta visão: as próprias cartas e informações públicas. Nunca as cartas dos outros.
+function visaoDe(G, i) {
+  const p = G.jog[i], L = legais(G, i), naMao = vivos(G);
+  // quantos ainda agem depois dele nesta rua (posição relativa)
+  const n = G.jog.length, ordem = [];
+  for (let k = 1; k <= n; k++) { const q = G.jog[(G.dealer + k) % n]; if (!q.desistiu && !q.fora && !q.allin) ordem.push(q.i); }
+  if (G.fase === 'preflop') { const ib = ordem.indexOf(G.bbI); if (ib >= 0) ordem.push(...ordem.splice(0, ib + 1)); }
+  const depois = Math.max(0, ordem.length - 1 - ordem.indexOf(i));
+  return Object.freeze({
+    eu: i, cartas: p.cartas.slice(), mesa: G.mesa.slice(), rua: G.fase,
+    pote: L.pote, pagar: L.pagar, podeCheck: L.podeCheck, podeAumentar: L.podeAumentar,
+    minPara: L.minPara, maxPara: L.maxPara, maiorAposta: G.maiorAposta, minhaAposta: p.aposta,
+    fichas: p.fichas, bb: G.bb, nOpp: naMao.length - 1, nRaises: G.nRaises, depois,
+    pos: G.mh.pos[i] || 'MP', posicoes: { ...G.mh.pos }, euAgressorPre: G.agressorPre === i, agressorPre: G.agressorPre,
+    oponentes: naMao.filter(q => q.i !== i).map(q => ({ i: q.i, fichas: q.fichas, aposta: q.aposta, allin: q.allin })),
+    eventos: G.mh.eventos.map(e => ({ ...e })), n, limpers: G.fase === 'preflop' && G.nRaises === 0
+      ? G.mh.eventos.filter(e => e.t === 'acao' && e.a === 'call').length : 0,
+  });
+}
+// Faixas dos oponentes vivos a partir da visão (só ações públicas)
+function faixasOponentes(v) {
+  const todas = estimarFaixas(v.eventos, v.n, v.posicoes, v.bb);
+  return v.oponentes.map(o => todas[o.i]);
+}
+const ITER_DIF = [500, 1000, 2000];
+const RUIDO_DIF = [0.12, 0.05, 0.015];
+
+// Arredonda apostas para múltiplos de 1/4 do big blind (com blinds 10/20, de 5 em 5)
+const arred = (v, bb) => { const u = Math.max(1, Math.round(bb / 4)); return Math.round(v / u) * u; };
+// Valor-alvo de uma aposta/raise como fração do pote (pote depois de pagar, padrão no-limit)
+function valorAposta(v, frac) {
+  const poteDepois = v.pote + v.pagar;
+  let para = arred(v.maiorAposta + frac * poteDepois, v.bb);
+  if (v.maiorAposta === 0) para = arred(frac * v.pote, v.bb);
+  para = clamp(para, v.minPara, v.maxPara);
+  if (para > v.maxPara * 0.8) para = v.maxPara;   // perto do all-in: vai de all-in
+  return para;
+}
+const FRACS = [[0.5, '½ pote'], [0.66, '⅔ do pote'], [1, 'pote']];
+
+function decidirBot(v, perfilChave, dif) {
+  const P = PERFIS[perfilChave] || PERFIS.equilibrado;
+  return v.rua === 'preflop' ? decidirPre(v, P, dif) : decidirPos(v, P, dif);
+}
+function decidirPre(v, P, dif) {
+  const k = classeIdx(v.cartas[0], v.cartas[1]), info = classeInfo(k);
+  let p = PCT[k];
+  p = clamp(p + (rnd() * 2 - 1) * [0.1, 0.04, 0.01][dif], 0, 1);
+  const pilha = v.fichas + v.minhaAposta, bbs = pilha / v.bb;
+  const solto = 0.55 + P.solto * 0.9;
+  const X = (ABRIR[v.pos] || 0.2) * solto * (dif === 0 ? 1.25 : 1);
+  const nome = `${info.nome} (top ${pct(PCT[k])})`;
+  const R = (tipo, para, txt) => ({ tipo, para, pensou: `${nome}, posição ${v.pos}. ${txt}` });
+  // Pilha curta: empurra ou desiste
+  if (bbs <= 12) {
+    const push = Math.min(0.55, (0.18 + 0.12 * (FATOR_POS[v.pos] || 0.4)) * solto * (v.nRaises ? 0.6 : 1));
+    if (p <= push && v.podeAumentar) return R('allin', v.maxPara, `Pilha curta (${Math.round(bbs)} BB): mão boa o bastante para all-in.`);
+    if (v.podeCheck) return R('check', 0, 'Pilha curta, mão fraca: check.');
+    if (p <= push * 1.3 && v.pagar <= v.fichas) return R('call', 0, 'Pilha curta: pago o all-in com mão razoável.');
+    return R('fold', 0, `Pilha curta (${Math.round(bbs)} BB) e mão fora da faixa de all-in.`);
+  }
+  if (v.nRaises === 0) {
+    if (p <= X && v.podeAumentar) {
+      const para = clamp(arred(v.bb * (2.3 + rnd() * 1 + P.agressao * 0.5) + v.limpers * v.bb, v.bb), v.minPara, v.maxPara);
+      return R('raise', para, `Ninguém aumentou; mão dentro da minha faixa de abertura (~${pct(X)}): aumento.`);
+    }
+    if (v.podeCheck) {
+      if (v.podeAumentar && rnd() < P.blefe * 0.5 && p < 0.5) return R('raise', clamp(v.bb * 3, v.minPara, v.maxPara), 'Big blind: aumento de vez em quando para não ficar previsível.');
+      return R('check', 0, 'Big blind sem aumento: vejo o flop de graça.');
+    }
+    const barato = v.pagar <= v.bb;
+    if (barato && p <= X * (1.4 + (1 - P.agressao)) && rnd() < 0.4 + P.solto * 0.5) return R('call', 0, 'Mão especulativa e entrada barata: pago (limp).');
+    if (v.pos === 'SB' && barato && p <= 0.6 && P.solto > 0.6) return R('call', 0, 'Small blind: completo o blind com mão jogável.');
+    if (v.podeAumentar && rnd() < P.blefe * (FATOR_POS[v.pos] || 0.4) * 0.8) {
+      return R('raise', clamp(v.bb * 3, v.minPara, v.maxPara), 'Mão fraca, mas em boa posição: aumento de blefe para roubar os blinds.');
+    }
+    return R('fold', 0, `Mão fora da minha faixa (~${pct(X)}) nesta posição.`);
+  }
+  // Alguém já aumentou
+  const custo = v.pagar / Math.max(1, pilha);
+  const X3 = (v.nRaises === 1 ? 0.03 + P.agressao * 0.025 : 0.014) * (dif === 0 ? 0.8 : 1);
+  let Xc = v.nRaises === 1 ? X * 0.55 + (v.pos === 'BB' ? 0.08 : 0) : 0.035 * solto;
+  if (custo > 0.3) Xc = Math.min(Xc, 0.05);
+  if (dif === 0) Xc *= 1.4;   // fácil paga demais
+  if (p <= X3 && v.podeAumentar) {
+    const para = v.nRaises >= 2 || custo > 0.25 ? v.maxPara : clamp(arred(v.maiorAposta * (2.8 + rnd() * 0.6), v.bb), v.minPara, v.maxPara);
+    return R(para >= v.maxPara ? 'allin' : 'raise', para, `Enfrento ${v.nRaises} aumento(s) com mão premium: reaumento.`);
+  }
+  if (p <= Xc) return R('call', 0, `Enfrento aumento; mão boa o bastante para pagar (faixa ~${pct(Xc)}).`);
+  if (v.nRaises === 1 && v.podeAumentar && rnd() < P.blefe * 0.35 && info.s && info.a === 12) {
+    return R('raise', clamp(arred(v.maiorAposta * 3, v.bb), v.minPara, v.maxPara), 'Reaumento de blefe com ás naipado (bloqueia AA/AK).');
+  }
+  if (v.pagar <= v.bb * 0.5 && v.pos === 'BB' && p < 0.7) return R('call', 0, 'Preço baixo no big blind: pago.');
+  return R('fold', 0, `Enfrento aumento e a mão não chega à faixa de pagar (~${pct(Xc)}).`);
+}
+function decidirPos(v, P, dif) {
+  const faixas = dif === 2 ? faixasOponentes(v) : null;
+  const e = equidade(v.cartas, v.mesa, v.nOpp, ITER_DIF[dif], faixas);
+  const ruido = (rnd() * 2 - 1) * RUIDO_DIF[dif];
+  const eq = clamp(e.eq + ruido, 0, 1);
+  const mao = avaliar(v.cartas.concat(v.mesa)), nomeM = nomeMao(mao);
+  const outs = contarOuts(v.cartas, v.mesa);
+  const projeto = outs && outs.efetivas >= 8 && catDe(mao) < 4;
+  const need = v.pagar ? v.pagar / (v.pote + v.pagar) : 0;
+  const tex = textura(v.mesa);
+  const spr = v.fichas / Math.max(1, v.pote);
+  const contra = faixas ? 'faixas estimadas' : 'mãos aleatórias';
+  const base = `${nomeM}; equidade ~${pct(eq)} contra ${v.nOpp} (${contra})` + (v.pagar ? `; pot odds pedem ${pct(need)}` : '') + '. ';
+  const R = (tipo, para, txt) => ({ tipo, para, pensou: base + txt, eq, need });
+  const escolherFrac = forte => {
+    const r = rnd();
+    if (forte > 0.85 && spr < 1.5) return 99;
+    if (forte > 0.8) return r < 0.4 ? 1 : r < 0.8 ? 0.66 : 0.5;
+    return r < 0.5 ? 0.5 : r < 0.85 ? 0.66 : 1;
+  };
+  const apostar = (frac, txt) => {
+    const para = frac === 99 ? v.maxPara : valorAposta(v, frac);
+    const rot = frac === 99 ? 'all-in' : (FRACS.find(f => f[0] === frac) || [0, ''])[1];
+    return R(para >= v.maxPara ? 'allin' : 'raise', para, `${txt} (${rot}).`);
+  };
+  // Calling station e fácil: dão menos valor às pot odds e pagam mais
+  const margem = (P.solto - 0.5) * -0.12 + (dif === 0 ? -0.08 : 0) + (dif === 2 ? 0.01 : 0);
+  if (v.podeCheck) {
+    const limValor = 0.62 - P.agressao * 0.1 + (v.nOpp - 1) * 0.04;
+    if (eq >= limValor && v.podeAumentar) {
+      if (eq > 0.85 && rnd() < (1 - P.agressao) * 0.5 && v.rua !== 'river') return R('check', 0, 'Mão muito forte: slowplay, deixo o adversário apostar.');
+      return apostar(escolherFrac(eq), 'Aposto por valor');
+    }
+    if (projeto && v.podeAumentar && v.rua !== 'river' && rnd() < 0.25 + P.agressao * 0.5) return apostar(rnd() < 0.6 ? 0.5 : 0.66, `Semi-blefe com ${outs.limpas} outs`);
+    let blefe = P.blefe * (v.nOpp === 1 ? 1.6 : 0.5);
+    if (v.euAgressorPre && v.rua === 'flop') blefe += 0.25 + P.agressao * 0.3;     // c-bet
+    if (tex && !tex.molhado) blefe *= 1.3;
+    if (v.podeAumentar && rnd() < blefe && v.nOpp <= 2) {
+      return apostar(rnd() < 0.6 ? 0.5 : 0.66, v.euAgressorPre && v.rua === 'flop' ? 'Continuation bet: aumentei antes do flop e mantenho a iniciativa' : 'Blefe: ninguém mostrou força');
+    }
+    return R('check', 0, 'Sem força para apostar: check.');
+  }
+  const limRaise = 0.74 - P.agressao * 0.1 + (v.nOpp - 1) * 0.05;
+  if (eq >= limRaise && v.podeAumentar) return apostar(spr < 2 ? 99 : escolherFrac(eq), 'Mão forte contra a aposta: aumento por valor');
+  // implied odds: projeto forte com pilhas fundas compensa pagar um pouco abaixo do preço
+  const implied = projeto && v.rua !== 'river' && spr > 3 ? 0.07 : 0;
+  if (eq + implied >= need + margem) {
+    if (projeto && v.podeAumentar && rnd() < P.agressao * 0.25 && v.rua === 'flop') return apostar(0.66, `Semi-blefe: aumento com ${outs.limpas} outs`);
+    return R('call', 0, eq >= need ? 'A equidade cobre as pot odds: pago.' : 'Pago pelas implied odds do projeto.');
+  }
+  if (v.nOpp === 1 && v.podeAumentar && rnd() < P.blefe * 0.3 && v.rua !== 'river') return apostar(0.66, 'Raise de blefe: represento uma mão forte');
+  return R('fold', 0, 'Equidade abaixo das pot odds: desisto.');
+}
+
+// =====================================================================
+//  6. TREINADOR: ANÁLISE, RECOMENDAÇÃO, EV E AVALIAÇÃO DAS DECISÕES
+// =====================================================================
+// Análise para o jogador humano: só com a visão dele (informação pública + as próprias cartas)
+function analisar(v, nivel, iter = 2500) {
+  const a = { v };
+  a.classe = classeIdx(v.cartas[0], v.cartas[1]);
+  a.pctMao = PCT[a.classe];
+  a.mao = v.mesa.length ? melhorMao(v.cartas.concat(v.mesa)) : null;
+  a.faixas = nivel === 2 ? faixasOponentes(v) : null;
+  a.eq = equidade(v.cartas, v.mesa, Math.max(1, v.nOpp), iter, a.faixas);
+  a.need = v.pagar ? v.pagar / (v.pote + v.pagar) : 0;
+  a.outs = contarOuts(v.cartas, v.mesa);
+  a.tex = textura(v.mesa);
+  a.rec = recomendar(v, a);
+  return a;
+}
+// Estimativa simplificada de EV (em fichas) para cada tipo de ação
+function foldEquity(v, d) {
+  const r = d / Math.max(1, v.pote);
+  return clamp(0.08 + 0.4 * r / (1 + r) - 0.07 * (v.nOpp - 1), 0.02, 0.5);
+}
+function estimarEV(v, a, tipo, para) {
+  const eq = a.eq.eq;
+  if (tipo === 'fold') return 0;
+  if (tipo === 'check') return eq * v.pote * 0.9;
+  if (tipo === 'call') return eq * (v.pote + v.pagar) - v.pagar;
+  const d = para - v.minhaAposta, fe = foldEquity(v, d);
+  const eqChamado = eq * (eq > 0.5 ? 0.9 : 0.8);
+  const chamado = eqChamado * (v.pote + d + (para - v.maiorAposta)) - d;
+  return fe * v.pote + (1 - fe) * chamado;
+}
+const ROT_ACAO = { fold: 'Fold', check: 'Check', call: 'Call', raise: 'Raise', allin: 'All-in' };
+function rotuloAcao(v, tipo, para) {
+  if (tipo === 'raise' || tipo === 'allin') {
+    if (para >= v.maxPara) return `All-in (${fmt(para)})`;
+    return (v.maiorAposta === 0 ? 'Bet ' : 'Raise para ') + fmt(para);
+  }
+  if (tipo === 'call') return `Call ${fmt(v.pagar)}`;
+  return ROT_ACAO[tipo];
+}
+function recomendar(v, a) {
+  const motivos = [];
+  let tipo, para = 0;
+  if (v.rua === 'preflop') {
+    const info = classeInfo(a.classe), p = a.pctMao;
+    const X = ABRIR[v.pos] || 0.2, pilha = v.fichas + v.minhaAposta, bbs = pilha / v.bb;
+    motivos.push(`${info.nome} está entre os ${pct(p)} melhores inícios.`);
+    if (bbs <= 12) {
+      const push = 0.18 + 0.12 * (FATOR_POS[v.pos] || 0.4);
+      if (p <= push && v.podeAumentar) { tipo = 'allin'; para = v.maxPara; motivos.push(`Com ${Math.round(bbs)} BB, o jogo é "all-in ou fold": esta mão está na faixa de all-in (~${pct(push)}).`); }
+      else if (v.podeCheck) { tipo = 'check'; motivos.push('Pilha curta e mão fraca: veja o flop de graça.'); }
+      else if (p <= push * 1.3) { tipo = 'call'; motivos.push('Pilha curta: a mão é boa o bastante para pagar.'); }
+      else { tipo = 'fold'; motivos.push(`Com pilha curta (${Math.round(bbs)} BB), espere uma mão melhor para ir de all-in.`); }
+    } else if (v.nRaises === 0) {
+      motivos.push(`Na posição ${v.pos}, a faixa de abertura recomendada é ~${pct(X)} das mãos.`);
+      if (p <= X && v.podeAumentar) {
+        tipo = 'raise'; para = clamp(Math.round(v.bb * 3 + v.limpers * v.bb), v.minPara, v.maxPara);
+        motivos.push(`Entre aumentando (${v.limpers ? '3 BB + 1 BB por limper' : 'cerca de 3 BB'}): ganha os blinds ou joga com a iniciativa.`);
+      } else if (v.podeCheck) { tipo = 'check'; motivos.push('Você está no big blind e ninguém aumentou: veja o flop de graça.'); }
+      else if (v.limpers > 0 && p <= X * 1.6 && (info.par || info.s)) { tipo = 'call'; motivos.push('Já há limpers e a mão é especulativa (par ou naipada): pagar barato é aceitável.'); }
+      else { tipo = 'fold'; motivos.push('A mão está fora da faixa para esta posição: jogar fora de faixa perde fichas no longo prazo.'); }
+    } else {
+      const custo = v.pagar / Math.max(1, pilha);
+      const X3 = v.nRaises === 1 ? 0.035 : 0.015;
+      let Xc = v.nRaises === 1 ? Math.min(0.22, X * 0.55 + (v.pos === 'BB' ? 0.1 : 0)) : 0.04;
+      if (custo > 0.3) Xc = Math.min(Xc, 0.05);
+      motivos.push(`Houve ${v.nRaises === 1 ? 'um aumento' : v.nRaises + ' aumentos'}: a faixa para continuar fica bem menor (pagar: ~${pct(Xc)}, reaumentar: ~${pct(X3)}).`);
+      if (p <= X3 && v.podeAumentar) { tipo = 'raise'; para = clamp(arred(v.maiorAposta * 3, v.bb), v.minPara, v.maxPara); if (para > v.maxPara * 0.6) para = v.maxPara; motivos.push('Mão premium: reaumente (3-bet) para construir o pote.'); }
+      else if (p <= Xc) { tipo = 'call'; motivos.push(v.pos === 'BB' ? 'No big blind você já tem fichas no pote e fecha a ação: pagar é razoável.' : 'Mão boa o bastante para pagar e ver o flop.'); }
+      else { tipo = 'fold'; motivos.push('Contra aumento, esta mão costuma estar dominada: desista.'); }
+    }
+  } else {
+    const eq = a.eq.eq, o = a.outs;
+    const projeto = o && o.efetivas >= 8 && catDe(a.mao.pont) < 4;
+    motivos.push(`Você tem ${nomeMao(a.mao.pont)}; equidade estimada ${pct(eq)} contra ${v.nOpp} oponente${v.nOpp > 1 ? 's' : ''}.`);
+    if (a.tex) motivos.push(`Board ${a.tex.nome}.`);
+    if (v.podeCheck) {
+      if (eq >= 0.62 + (v.nOpp - 1) * 0.04 && v.podeAumentar) {
+        tipo = 'raise'; para = valorAposta(v, 0.66);
+        motivos.push('Mão à frente na maioria das vezes: aposte por valor (~⅔ do pote) para ser pago por mãos piores.');
+      } else if (projeto && v.podeAumentar && v.rua !== 'river' && v.nOpp <= 2) {
+        tipo = 'raise'; para = valorAposta(v, 0.5);
+        motivos.push(`Semi-blefe: com ${o.limpas} outs limpas você pode ganhar já (se desistirem) ou acertar depois.`);
+      } else if (v.euAgressorPre && v.rua === 'flop' && v.nOpp === 1 && a.tex && !a.tex.molhado && v.podeAumentar) {
+        tipo = 'raise'; para = valorAposta(v, 0.5);
+        motivos.push('Continuation bet: você aumentou antes do flop e o board seco raramente ajudou o adversário.');
+      } else { tipo = 'check'; motivos.push('Sem mão para apostar por valor nem bom blefe: check e controle o pote.'); }
+    } else {
+      motivos.push(`Pot odds: pagar ${fmt(v.pagar)} para ganhar ${fmt(v.pote)} exige ${pct(a.need)} de equidade.`);
+      const spr = v.fichas / Math.max(1, v.pote);
+      if (eq >= 0.74 + (v.nOpp - 1) * 0.05 && v.podeAumentar) {
+        tipo = 'raise'; para = spr < 2 ? v.maxPara : valorAposta(v, 0.75);
+        motivos.push('Sua mão é forte o bastante para aumentar por valor.');
+      } else if (eq >= a.need) { tipo = 'call'; motivos.push('A equidade cobre as pot odds: pagar é lucrativo no longo prazo.'); }
+      else if (projeto && v.rua !== 'river' && spr > 3 && eq + 0.07 >= a.need) { tipo = 'call'; motivos.push('Fica um pouco abaixo do preço, mas as implied odds (o que você ganha depois se acertar) compensam.'); }
+      else { tipo = 'fold'; motivos.push('A equidade não cobre as pot odds: desistir economiza fichas.'); }
+    }
+  }
+  return { tipo, para, rotulo: rotuloAcao(v, tipo, para), motivos };
+}
+// Compara a ação do humano com a recomendação. Notas: boa, aceitavel, questionavel, erro.
+const NOTA_TXT = { boa: 'Boa', aceitavel: 'Aceitável', questionavel: 'Questionável', erro: 'Erro' };
+const NOTA_ICONE = { boa: '✓', aceitavel: '≈', questionavel: '?', erro: '✗' };
+function avaliarDecisao(v, a, tipo, para) {
+  const rec = a.rec, agressivo = t => t === 'raise' || t === 'allin';
+  const igual = rec.tipo === tipo || (agressivo(rec.tipo) && agressivo(tipo));
+  let nota, txt = [];
+  if (v.rua === 'preflop') {
+    const p = a.pctMao, X = ABRIR[v.pos] || 0.2;
+    if (igual) nota = 'boa';
+    else if (tipo === 'fold' && v.podeCheck) { nota = 'erro'; txt.push('Você podia dar check de graça e desistiu da mão.'); }
+    else if (tipo === 'fold') nota = rec.tipo === 'call' ? (p > X * 0.6 ? 'aceitavel' : 'questionavel') : (p <= X * 0.5 ? 'erro' : 'questionavel');
+    else if (rec.tipo === 'fold') { const ex = (p - X) / X; nota = ex < 0.4 ? 'aceitavel' : ex < 1.5 ? 'questionavel' : 'erro'; }
+    else if (rec.tipo === 'check') nota = agressivo(tipo) ? (p < 0.5 ? 'aceitavel' : 'questionavel') : 'boa';
+    else nota = 'aceitavel';   // call em vez de raise ou o contrário
+  } else {
+    const evEsc = estimarEV(v, a, tipo, para), evRec = estimarEV(v, a, rec.tipo, rec.para);
+    const melhorEV = Math.max(evEsc, evRec, 0);
+    const dif = (melhorEV - evEsc) / Math.max(v.pote, v.bb * 2);
+    if (igual || dif < 0.04) nota = 'boa';
+    else if (dif < 0.12) nota = 'aceitavel';
+    else if (dif < 0.3) nota = 'questionavel';
+    else nota = 'erro';
+    if (tipo === 'fold' && v.podeCheck) { nota = 'erro'; txt.push('Você podia dar check de graça e desistiu da mão.'); }
+    txt.push(`EV estimado da sua jogada: ${evEsc >= 0 ? '+' : ''}${fmt(evEsc)} fichas; da recomendada: ${evRec >= 0 ? '+' : ''}${fmt(evRec)}.`);
+  }
+  const leak = detectarLeak(v, a, tipo, nota);
+  return { nota, rua: v.rua, sua: rotuloAcao(v, tipo, para), rec: rec.rotulo, motivos: rec.motivos, extra: txt, leak,
+    eq: a.eq.eq, need: a.need, pctMao: a.pctMao, classe: classeInfo(a.classe).nome };
+}
+const LEAKS = {
+  pagaRiver: { nome: 'Paga demais no river', dica: 'No river não há mais cartas: pague só se a sua mão vence com frequência suficiente contra as mãos que apostam.' },
+  fogeCbet: { nome: 'Foge demais de c-bet', dica: 'Continuation bets muitas vezes são blefes. Com equidade razoável e bom preço, pague ou aumente.' },
+  fracaForaPosicao: { nome: 'Joga mãos fracas fora de posição', dica: 'Nas primeiras posições e nos blinds, jogue uma faixa mais apertada: você age primeiro nas ruas seguintes.' },
+  soltoPre: { nome: 'Entra em mãos demais no pré-flop', dica: 'Respeite as faixas de abertura da tabela de ranges para cada posição.' },
+  apertadoPre: { nome: 'Desiste de mãos boas no pré-flop', dica: 'Mãos dentro da faixa recomendada dão lucro: entre aumentando.' },
+  desisteComOdds: { nome: 'Desiste mesmo com pot odds favoráveis', dica: 'Compare a equidade com as pot odds: se a equidade é maior, pagar é lucrativo.' },
+  pagaSemOdds: { nome: 'Paga sem odds suficientes', dica: 'Antes de pagar, calcule as pot odds e conte os outs (regra do 2 e 4).' },
+  passivoForte: { nome: 'Passivo com mãos fortes', dica: 'Com mão forte, aposte e aumente: check/call deixa de ganhar valor.' },
+  blefaDemais: { nome: 'Aposta sem força demais', dica: 'Blefe em boas situações: poucos oponentes, board seco, história coerente. Evite blefar contra muitos.' },
+};
+function detectarLeak(v, a, tipo, nota) {
+  if (nota === 'boa' || nota === 'aceitavel') return null;
+  const agressivo = tipo === 'raise' || tipo === 'allin';
+  if (v.rua === 'preflop') {
+    if (tipo === 'fold') return 'apertadoPre';
+    const cedo = ['UTG', 'UTG+1', 'UTG+2', 'MP', 'SB', 'BB'].includes(v.pos);
+    return cedo ? 'fracaForaPosicao' : 'soltoPre';
+  }
+  const eq = a.eq.eq;
+  if (tipo === 'fold') {
+    if (v.rua === 'flop' && v.agressorPre >= 0 && !v.euAgressorPre) return 'fogeCbet';
+    return 'desisteComOdds';
+  }
+  if (tipo === 'call') return v.rua === 'river' ? 'pagaRiver' : eq >= 0.7 ? 'passivoForte' : 'pagaSemOdds';
+  if (tipo === 'check' && eq >= 0.65) return 'passivoForte';
+  if (agressivo && eq < 0.4) return 'blefaDemais';
+  return null;
+}
+
+// =====================================================================
+//  7. PERSISTÊNCIA (localStorage, sempre com o prefixo "poker-")
+// =====================================================================
+const CH = { cfg: 'poker-config', estat: 'poker-estatisticas', partida: 'poker-partida', apr: 'poker-aprendizado',
+  conceitos: 'poker-conceitos', iface: 'poker-interface' };
+function ler(k, padrao) { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : padrao; } catch (e) { return padrao; } }
+function gravar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* cheio ou bloqueado */ } }
+function apagar(k) { try { localStorage.removeItem(k); } catch (e) { /* ignora */ } }
+
+const CFG_PADRAO = { bots: 5, fichas: 1000, aumento: 10, dif: 1, rapido: false, forca: true, som: true, aprender: false, nivel: 1 };
+let cfg = { ...CFG_PADRAO, ...ler(CH.cfg, {}) };
+const ESTAT_PADRAO = { maos: 0, ganhas: 0, maiorPote: 0, vpip: 0, sd: 0, sdGanhos: 0, partidas: 0, vitorias: 0, melhorColocacao: 0 };
+let estat = { ...ESTAT_PADRAO, ...ler(CH.estat, {}) };
+const notasZero = () => ({ boa: 0, aceitavel: 0, questionavel: 0, erro: 0 });
+const APR_PADRAO = () => ({ ruas: { preflop: notasZero(), flop: notasZero(), turn: notasZero(), river: notasZero() },
+  leaks: {}, sessoes: [], quiz: { certas: 0, total: 0 }, outs: { certas: 0, total: 0 } });
+let apr = { ...APR_PADRAO(), ...ler(CH.apr, {}) };
+let conceitosVistos = new Set(ler(CH.conceitos, []));
+let iface = { log: false, ...ler(CH.iface, {}) };
+// HUD aberto ou recolhido, lembrado à parte no celular (onde começa recolhido para não cobrir a mesa)
+const telaPequena = () => innerWidth < 760 || innerHeight < 520;
+const chaveHud = () => (telaPequena() ? 'hudCel' : 'hud');
+const hudAberto = () => iface[chaveHud()] ?? !telaPequena();
+function definirHud(v) { iface[chaveHud()] = v; salvarIface(); }
+const salvarCfg = () => gravar(CH.cfg, cfg);
+const salvarIface = () => gravar(CH.iface, iface);
+function salvar() { if (G && G.fase !== 'acabou') gravar(CH.partida, G); }
+
+// =====================================================================
+//  8. SONS (Web Audio API, gerados na hora)
+// =====================================================================
+const Som = {
+  ctx: null,
+  iniciar() {
+    if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  tom(freq, dur, tipo = 'sine', vol = 0.12, quando = 0) {
+    if (!cfg.som || !this.ctx) return;
+    const t = this.ctx.currentTime + quando, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = tipo; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.ctx.destination); o.start(t); o.stop(t + dur + 0.02);
+  },
+  ruido(dur, vol, freq) {
+    if (!cfg.som || !this.ctx) return;
+    const n = Math.floor(this.ctx.sampleRate * dur), b = this.ctx.createBuffer(1, n, this.ctx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const s = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
+    s.buffer = b; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.8; g.gain.value = vol;
+    s.connect(f).connect(g).connect(this.ctx.destination); s.start();
+  },
+  carta() { this.ruido(0.07, 0.35, 2600); },
+  ficha() { this.tom(2300, 0.05, 'triangle', 0.09); this.tom(3100, 0.06, 'triangle', 0.06, 0.035); },
+  fichas() { for (let k = 0; k < 4; k++) this.tom(2000 + rnd() * 1400, 0.05, 'triangle', 0.07, k * 0.045); },
+  vitoria() { [523, 659, 784, 1047].forEach((f, k) => this.tom(f, 0.22, 'triangle', 0.12, k * 0.09)); },
+  derrota() { [392, 330, 262].forEach((f, k) => this.tom(f, 0.25, 'sine', 0.1, k * 0.12)); },
+  vez() { this.tom(880, 0.12, 'sine', 0.1); this.tom(1320, 0.14, 'sine', 0.07, 0.09); },
+  fold() { this.tom(180, 0.12, 'sine', 0.07); },
+  check() { this.tom(320, 0.05, 'square', 0.04); this.tom(320, 0.05, 'square', 0.04, 0.07); },
+};
+
+// =====================================================================
+//  9. INTERFACE: MESA, CARTAS, FICHAS E ANIMAÇÕES
+// =====================================================================
+const area = $('#area'), mesaEl = $('#mesa'), centroEl = $('#centro'), assentosEl = $('#assentos'), camada = $('#camada');
+let G = null;   // estado da partida (serializável)
+const ui = {
+  laco: 0, pausado: false, visiveis: [], mesaVis: 0, revelar: new Set(), destaque: new Set(), vencedores: new Set(),
+  potesFixos: null, fichasExib: null, geom: [], analise: null, dica: false, esperaHumano: null, proxima: null,
+  conceitosSessao: new Set(), filaConceitos: [], ultimaDecisao: null,
+};
+const vel = () => (cfg.rapido ? 0.45 : 1);
+const emAposta = () => G && ['preflop', 'flop', 'turn', 'river'].includes(G.fase);
+const assentoEl = i => assentosEl.querySelector(`.assento[data-i="${i}"]`);
+const apostaEl = i => assentosEl.querySelector(`.aposta[data-i="${i}"]`);
+
+function htmlCarta(c, cls = '') {
+  if (c == null || c < 0) return `<div class="carta verso ${cls}"></div>`;
+  return `<div class="carta n${np(c)} ${cls}" data-c="${c}"><div class="canto">${RANK_TXT[rk(c)]}<i>${NAIPE[np(c)]}</i></div><div class="meio">${NAIPE[np(c)]}</div></div>`;
+}
+const cartinha = c => `<span class="cartinha n${np(c)}">${cartaTxt(c)}</span>`;
+const cartinhas = cs => `<span class="cartinhas">${cs.map(cartinha).join('')}</span>`;
+function corFicha(v) {
+  const r = v / Math.max(1, G ? G.bb : 20);
+  if (r >= 50) return ['#7b2cbf', '#4a1a75'];
+  if (r >= 10) return ['#222', '#000'];
+  if (r >= 3) return ['#1f8a4c', '#125c31'];
+  if (r >= 1) return ['#1767c5', '#0d3f7a'];
+  return ['#e5484d', '#9b2226'];
+}
+const htmlFicha = v => { const [a, b] = corFicha(v); return `<span class="ficha" style="--fc:${a};--fc2:${b}"></span>`; };
+
+function montarMesa() {
+  assentosEl.innerHTML = '';
+  for (const p of G.jog) {
+    const s = document.createElement('div');
+    s.className = 'assento' + (p.humano ? ' humano' : '');
+    s.dataset.i = p.i;
+    s.innerHTML = `<div class="cartas"></div><div class="caixa"><div class="nome"></div><div class="fichas"></div>` +
+      `<div class="estado"></div>${p.humano ? '<div class="forca"></div>' : ''}</div>`;
+    assentosEl.appendChild(s);
+    const ap = document.createElement('div');
+    ap.className = 'aposta oculto'; ap.dataset.i = p.i;
+    assentosEl.appendChild(ap);
+  }
+  const d = document.createElement('div');
+  d.className = 'botao-dealer'; d.id = 'botaoDealer'; d.textContent = 'D';
+  assentosEl.appendChild(d);
+  $('#board').innerHTML = '<div class="vaga"></div>'.repeat(5);
+  render();
+  posicionar();
+}
+
+// Distribui os assentos numa elipse ao redor da mesa; o humano fica embaixo, no centro.
+// A ordem dos índices segue o sentido horário (a ação passa para a esquerda).
+function posicionar() {
+  if (!G) return;
+  const W = area.clientWidth, H = area.clientHeight;
+  if (!W || !H) return;
+  const retrato = H > W * 1.05;
+  const hud = $('#hud');
+  const hudLado = !hud.classList.contains('oculto') && !hud.classList.contains('recolhido') && !retrato && W > 1000;
+  const sEl = assentosEl.querySelector('.assento:not(.humano)'), hEl = assentosEl.querySelector('.assento.humano');
+  const sw = sEl ? sEl.offsetWidth : 100, sh = sEl ? sEl.offsetHeight : 90, hh = hEl ? hEl.offsetHeight : 140;
+  const util = W - (hudLado ? 320 : 0), cx = (hudLado ? 320 : 0) + util / 2;
+  const topo = sh * 0.5 + 4, baixo = hh * 0.62 + 4;
+  const cy = (topo + (H - baixo)) / 2;
+  let ry = Math.max(60, (H - baixo - topo) / 2 - 2);
+  let rx = retrato ? Math.min(util / 2 - sw * 0.3, ry * 0.78) : Math.min(util / 2 - sw * 0.55, ry * 2.2);
+  rx = Math.max(70, rx);
+  Object.assign(mesaEl.style, { left: cx - rx + 'px', top: cy - ry + 'px', width: 2 * rx + 'px', height: 2 * ry + 'px' });
+  Object.assign(centroEl.style, { left: cx + 'px', top: cy + 'px' });
+  const n = G.jog.length;
+  ui.geom = G.jog.map((p, k) => {
+    const th = Math.PI / 2 + (k * 2 * Math.PI) / n, c = Math.cos(th), s = Math.sin(th);
+    let x = cx + rx * c * 1.02, y = cy + ry * s * 1.04;
+    const h = p.humano ? hh : sh;
+    if (p.humano) y = H - hh / 2 - 2;
+    x = clamp(x, sw / 2 + 2, W - sw / 2 - 2);
+    y = clamp(y, h / 2 + 2, H - h / 2 - 2);
+    const bx = cx + rx * 0.6 * c, by = cy + ry * (p.humano ? 0.56 : 0.6) * s;
+    const dx = cx + rx * 0.78 * Math.cos(th + 0.3), dy = cy + ry * 0.74 * Math.sin(th + 0.3);
+    const el = assentoEl(p.i);
+    if (el) { el.style.left = x + 'px'; el.style.top = y + 'px'; }
+    const ap = apostaEl(p.i);
+    if (ap) { ap.style.left = bx + 'px'; ap.style.top = by + 'px'; }
+    return { x, y, bx, by, dx, dy };
+  });
+  posicionarDealer();
+}
+function posicionarDealer() {
+  const d = $('#botaoDealer');
+  if (!d || !G || G.dealer < 0 || !ui.geom[G.dealer]) { if (d) d.classList.add('oculto'); return; }
+  d.classList.remove('oculto');
+  d.style.left = ui.geom[G.dealer].dx + 'px'; d.style.top = ui.geom[G.dealer].dy + 'px';
+}
+function pontoDe(el) {
+  const a = area.getBoundingClientRect(), r = el.getBoundingClientRect();
+  return { x: r.left - a.left + r.width / 2, y: r.top - a.top + r.height / 2 };
+}
+// Faz um elemento voar de um ponto a outro da área (Web Animations API)
+function voar(html, de, para, dur) {
+  if (dur <= 0 || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return Promise.resolve();
+  const t = document.createElement('div');
+  t.innerHTML = html;
+  const el = t.firstElementChild;
+  camada.appendChild(el);
+  const w = el.offsetWidth, h = el.offsetHeight;
+  const anim = el.animate([
+    { transform: `translate(${de.x - w / 2}px, ${de.y - h / 2}px) scale(.9)` },
+    { transform: `translate(${para.x - w / 2}px, ${para.y - h / 2}px) scale(1)` },
+  ], { duration: dur, easing: 'cubic-bezier(.25,.8,.3,1)', fill: 'forwards' });
+  // Com a aba em segundo plano a animação para e "finished" não resolve: o tempo-limite garante que o jogo siga
+  return Promise.race([anim.finished.catch(() => {}), sleep(dur + 150)]).then(() => el.remove());
+}
+
+// ---------- Renderização ----------
+function render() {
+  if (!G) return;
+  renderInfo();
+  for (const p of G.jog) renderAssento(p);
+  renderApostas();
+  renderPotes();
+  renderMesa();
+  posicionarDealer();
+  atualizarControles();
+  renderHud();
+  renderAvaliacoes();
+  // A altura do assento do jogador muda com o texto: reposiciona quando mudar
+  const h = assentoEl(0);
+  if (h && h.offsetHeight !== ui.altHumano) { ui.altHumano = h.offsetHeight; posicionar(); }
+}
+function renderInfo() {
+  let t = `Mão <b>${G.mao}</b> · Blinds <b>${fmt(G.sb)}/${fmt(G.bb)}</b>`;
+  if (G.cfg.aumento > 0) {
+    const resta = G.cfg.aumento - ((G.mao - 1) % G.cfg.aumento);
+    t += ` · sobem em ${resta} mão${resta > 1 ? 's' : ''}`;
+  }
+  t += ` · ${G.jog.filter(p => !p.fora).length} na mesa`;
+  $('#info').innerHTML = t;
+}
+function renderAssento(p) {
+  const s = assentoEl(p.i);
+  if (!s) return;
+  s.classList.toggle('vez', emAposta() && G.vez === p.i);
+  s.classList.toggle('fora', p.fora);
+  s.classList.toggle('desistiu', p.desistiu && !p.fora);
+  s.classList.toggle('ganhou', ui.vencedores.has(p.i));
+  s.querySelector('.nome').textContent = p.nome;
+  const fichas = ui.fichasExib ? ui.fichasExib[p.i] : p.fichas;
+  s.querySelector('.fichas').textContent = p.fora ? '—' : fmt(fichas);
+  const est = s.querySelector('.estado');
+  if (p.fora) est.textContent = `Eliminado · ${p.colocacao}º`;
+  else if (p.allin && G.fase !== 'fim') est.innerHTML = '<span class="marca allin">ALL-IN</span>';
+  else est.textContent = p.acao || '';
+  // marcas de blind
+  const caixa = s.querySelector('.caixa');
+  caixa.querySelectorAll('.marca.sb,.marca.bb').forEach(m => m.remove());
+  if (G.mh && !p.fora && G.fase !== 'inicio') {
+    if (p.i === G.sbI) caixa.insertAdjacentHTML('beforeend', '<span class="marca sb">SB</span>');
+    else if (p.i === G.bbI) caixa.insertAdjacentHTML('beforeend', '<span class="marca bb">BB</span>');
+  }
+  // cartas
+  const nVis = Math.min(ui.visiveis[p.i] ?? p.cartas.length, p.cartas.length);
+  const aberta = p.humano || ui.revelar.has(p.i);
+  let html = '', chave = '';
+  if (!p.fora && !(p.desistiu && !p.humano)) {
+    for (let k = 0; k < nVis; k++) {
+      const c = p.cartas[k];
+      let cls = p.humano ? 'grande' : '';
+      if (aberta && ui.destaque.size) cls += ui.destaque.has(c) ? ' vence' : ' apaga';
+      html += aberta ? htmlCarta(c, cls) : htmlCarta(-1, cls);
+      chave += (aberta ? c : 'x') + cls + '|';
+    }
+  }
+  const cEl = s.querySelector('.cartas');
+  if (cEl.dataset.k !== chave) {
+    const viraram = cEl.dataset.aberta === '0' && aberta && !p.humano && nVis > 0;
+    cEl.innerHTML = html; cEl.dataset.k = chave; cEl.dataset.aberta = aberta ? '1' : '0';
+    cEl.classList.toggle('aberta', aberta && !p.humano && nVis > 0);
+    if (viraram) cEl.querySelectorAll('.carta').forEach(c => c.classList.add('vira'));
+  }
+  // força da mão (opcional)
+  const f = s.querySelector('.forca');
+  if (f) {
+    let t = '';
+    if (cfg.forca && p.cartas.length && nVis >= 2 && !p.fora) {
+      const visMesa = G.mesa.slice(0, ui.mesaVis);
+      if (visMesa.length >= 3) t = nomeMao(avaliar(p.cartas.concat(visMesa)));
+      else { const k = classeIdx(p.cartas[0], p.cartas[1]); t = `${classeInfo(k).nome} · top ${pct(PCT[k])}`; }
+      const a = ui.analise;
+      if (a && a.mao === G.mao && a.mesa === G.mesa.length && !p.desistiu) t += ` · eq. ${pct(a.a.eq.eq)}`;
+    }
+    f.textContent = t;
+  }
+}
+function renderApostas() {
+  for (const p of G.jog) {
+    const el = apostaEl(p.i);
+    if (!el) continue;
+    const v = emAposta() || G.fase === 'showdown' ? p.aposta : 0;
+    el.classList.toggle('oculto', !(v > 0));
+    if (v > 0) el.innerHTML = `${htmlFicha(v)}<span>${fmt(v)}</span>`;
+  }
+}
+function renderPotes() {
+  const potes = ui.potesFixos || (G.fase === 'inicio' || G.fase === 'fim' ? [] : calcularPotes(G.jog, true));
+  $('#potes').innerHTML = potes.map((pt, k) =>
+    `<span class="pote">${htmlFicha(pt.valor)}${k === 0 ? 'Pote' : 'Lateral ' + k} ${fmt(pt.valor)}` +
+    (potes.length > 1 ? ` <small>(${pt.eleg.length} disputam)</small>` : '') + '</span>').join('');
+}
+function renderMesa(vira = false) {
+  const b = $('#board');
+  [...b.children].forEach((vaga, k) => {
+    const c = k < ui.mesaVis ? G.mesa[k] : null;
+    let cls = 'mesa';
+    if (c != null && ui.destaque.size) cls += ui.destaque.has(c) ? ' vence' : ' apaga';
+    const chave = c == null ? '' : c + cls;
+    if (vaga.dataset.k === chave) return;
+    const nova = vaga.dataset.k === '' || vaga.dataset.k === undefined;
+    vaga.dataset.k = chave;
+    vaga.className = c == null ? 'vaga' : '';
+    vaga.innerHTML = c == null ? '' : htmlCarta(c, cls + (vira && nova ? ' vira' : ''));
+  });
+}
+function msgMesa(t) { $('#msgMesa').innerHTML = t || ''; }
+
+// ---------- Controles do jogador ----------
+const btFold = $('#btFold'), btCall = $('#btCall'), btRaise = $('#btRaise'), btDica = $('#btDica');
+const slider = $('#slider'), valorIn = $('#valor');
+function vezHumano() { return G && emAposta() && G.vez === 0 && ui.esperaHumano; }
+function atualizarControles() {
+  const meu = vezHumano();
+  document.body.classList.toggle('vez-humano', !!meu);
+  btDica.classList.toggle('oculto', !cfg.aprender);
+  const botoes = [btFold, btCall, btRaise, ...document.querySelectorAll('#linhaValor .pre')];
+  if (!meu) {
+    botoes.forEach(b => (b.disabled = true));
+    slider.disabled = valorIn.disabled = btDica.disabled = true;
+    let t = 'Aguardando…';
+    if (G && emAposta() && G.vez >= 0) t = `Vez de ${G.jog[G.vez].nome}…`;
+    else if (G && G.jog[0].desistiu && !G.jog[0].fora && G.fase !== 'fim') t = 'Você desistiu desta mão.';
+    $('#esperando').textContent = t;
+    $('#esperando').classList.remove('oculto');
+    $('#linhaValor').classList.add('oculto');
+    btCall.innerHTML = 'Check/Call<kbd>C</kbd>'; btRaise.innerHTML = 'Raise<kbd>R</kbd>';
+    return;
+  }
+  const L = legais(G);
+  $('#esperando').classList.add('oculto');
+  $('#linhaValor').classList.remove('oculto');
+  btFold.disabled = false;
+  btCall.disabled = false;
+  btDica.disabled = false;
+  const p = G.jog[0];
+  btCall.innerHTML = L.podeCheck ? 'Check<kbd>C</kbd>' : `Call ${fmt(L.pagar)}${L.pagar >= p.fichas ? ' (all-in)' : ''}<kbd>C</kbd>`;
+  btRaise.disabled = !L.podeAumentar;
+  document.querySelectorAll('#linhaValor .pre').forEach(b => (b.disabled = !L.podeAumentar));
+  slider.disabled = valorIn.disabled = !L.podeAumentar;
+  if (L.podeAumentar) {
+    slider.min = L.minPara; slider.max = L.maxPara;
+    slider.step = Math.max(1, Math.round(G.bb / 10));
+    valorIn.min = L.minPara; valorIn.max = L.maxPara;
+    let v = Number(valorIn.value);
+    if (!(v >= L.minPara && v <= L.maxPara) || valorIn.dataset.mao !== G.mao + G.fase) v = L.minPara;
+    valorIn.dataset.mao = G.mao + G.fase;
+    definirValor(v);
+  } else valorIn.value = '';
+}
+function definirValor(v) {
+  const L = legais(G);
+  v = clamp(Math.round(v), L.minPara, L.maxPara);
+  valorIn.value = v; slider.value = v;
+  btRaise.innerHTML = (v >= L.maxPara ? `All-in ${fmt(v)}` : (L.aposta ? `Bet ${fmt(v)}` : `Raise p/ ${fmt(v)}`)) + '<kbd>R</kbd>';
+}
+function humanoAge(acao) {
+  if (!vezHumano()) return;
+  const r = ui.esperaHumano;
+  ui.esperaHumano = null;
+  r(acao);
+}
+function aguardarHumano() { return new Promise(res => { ui.esperaHumano = res; render(); }); }
+btFold.onclick = () => humanoAge({ tipo: 'fold' });
+btCall.onclick = () => { const L = legais(G); humanoAge({ tipo: L.podeCheck ? 'check' : 'call' }); };
+btRaise.onclick = () => humanoAge({ tipo: 'raise', para: Number(valorIn.value) });
+slider.oninput = () => definirValor(Number(slider.value));
+valorIn.onchange = () => definirValor(Number(valorIn.value));
+valorIn.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); definirValor(Number(valorIn.value)); btRaise.click(); } };
+document.querySelectorAll('#linhaValor .pre').forEach(b => b.onclick = () => {
+  if (!vezHumano()) return;
+  const L = legais(G), f = b.dataset.f;
+  if (f === 'all') return definirValor(L.maxPara);
+  // Pote depois de pagar: raise "do tamanho do pote" = pagar + o pote resultante
+  const para = L.aposta ? Math.round(Number(f) * L.pote) : G.maiorAposta + Math.round(Number(f) * (L.pote + L.pagar));
+  definirValor(arred(para, G.bb));
+});
+btDica.onclick = () => { if (!vezHumano()) return; ui.dica = true; renderHud(); abrirHud(); };
+
+// ---------- Histórico (log) ----------
+function textoEvento(e, nomes) {
+  const n = nomes[e.i];
+  if (e.t === 'blind') return `${n} posta ${e.a === 'SB' ? 'small blind' : 'big blind'} ${fmt(e.v)}`;
+  if (e.t === 'acao') return `${n}: ${e.texto}`;
+  if (e.t === 'devolve') return `${n} recebe de volta ${fmt(e.v)} (aposta não paga)`;
+  if (e.t === 'rua') return `${RUA_NOME[e.rua]}: ${e.mesa.map(cartaTxt).join(' ')} · pote ${fmt(e.pote)}`;
+  return '';
+}
+function renderLog() {
+  const L = $('#logLista');
+  if (!G || !G.mh) { L.innerHTML = ''; return; }
+  const linhas = [`<div class="rua">Mão ${G.mh.n} · dealer: ${esc(G.mh.nomes[G.mh.dealer])}</div>`];
+  linhas.push(`<div class="eu">Suas cartas: ${G.mh.cartas[0].length ? cartinhas(G.mh.cartas[0]) : '—'}</div>`);
+  for (const e of G.mh.eventos) {
+    const cls = e.t === 'rua' ? 'rua' : e.i === 0 ? 'eu' : '';
+    linhas.push(`<div class="${cls}">${esc(textoEvento(e, G.mh.nomes))}</div>`);
+  }
+  for (const r of G.mh.linhasFim || []) linhas.push(`<div class="ganho">${esc(r)}</div>`);
+  L.innerHTML = linhas.join('');
+  L.scrollTop = L.scrollHeight;
+}
+function alternarLog(forcar) {
+  iface.log = forcar ?? !iface.log;
+  salvarIface();
+  $('#log').classList.toggle('fechado', !iface.log);
+  $('#btLog').classList.toggle('ativo', iface.log);
+  requestAnimationFrame(posicionar);
+}
+$('#btLog').onclick = () => alternarLog();
+$('#btLogFechar').onclick = () => alternarLog(false);
+
+// =====================================================================
+//  10. LAÇO DO JOGO (controla a máquina de estados com pausas e animações)
+// =====================================================================
+async function esperar(ms, id) {
+  if (ms > 0) await sleep(ms);
+  while (ui.pausado && id === ui.laco) await sleep(120);
+}
+function botAtraso() { return cfg.rapido ? 150 + rnd() * 250 : 600 + rnd() * 900; }
+
+async function jogar() {
+  const id = ++ui.laco;
+  const vivo = () => id === ui.laco;
+  while (vivo()) {
+    await esperar(0, id);
+    if (!vivo()) return;
+    if (G.fase === 'inicio' || G.fase === 'fim') {
+      if (verificarFim()) return;
+      comecarMao();
+      await animarDistribuicao(id);
+      if (!vivo()) return;
+      await analisarSeguindo(id);
+      continue;
+    }
+    if (G.fase === 'showdown') { await fazerShowdown(id); continue; }
+    if (vivos(G).length === 1) { await vitoriaSemShowdown(id); continue; }
+    if (G.vez >= 0) {
+      const i = G.vez, p = G.jog[i];
+      render();
+      let acao;
+      if (p.humano) {
+        await prepararVezHumano(id);
+        if (!vivo()) return;
+        acao = await aguardarHumano();
+      } else {
+        const t0 = performance.now();
+        // A IA recebe só a visão pública + as próprias cartas
+        acao = decidirBot(visaoDe(G, i), p.perfil, G.cfg.dif);
+        await esperar(Math.max(0, botAtraso() - (performance.now() - t0)), id);
+      }
+      if (!vivo()) return;
+      executar(i, acao);
+      salvar();
+      continue;
+    }
+    // Rodada de apostas encerrada
+    await recolherApostas(id);
+    if (!vivo()) return;
+    if (vivos(G).length === 1) { await vitoriaSemShowdown(id); continue; }
+    if (G.fase === 'river') { G.fase = 'showdown'; salvar(); await fazerShowdown(id); continue; }
+    // Todos (ou todos menos um) all-in: as cartas são viradas e o board sai sozinho, com pausas
+    const corrida = podemAgir(G).length <= 1;
+    if (corrida) {
+      const antes = ui.revelar.size;
+      vivos(G).forEach(q => ui.revelar.add(q.i));
+      if (ui.revelar.size !== antes) { render(); msgMesa('All-in! As cartas são reveladas.'); await esperar(1000 * vel(), id); }
+    }
+    abrirRua(G);
+    salvar();
+    renderLog();
+    await animarMesa(id);
+    if (!vivo()) return;
+    if (corrida) await esperar(1100 * vel(), id);
+    await analisarSeguindo(id);
+  }
+}
+function comecarMao() {
+  iniciarMao(G);
+  ui.visiveis = G.jog.map(() => 0); ui.mesaVis = 0; ui.revelar = new Set(); ui.destaque = new Set();
+  ui.vencedores = new Set(); ui.potesFixos = null; ui.fichasExib = null; ui.analise = null; ui.dica = false;
+  $('#resultado').classList.add('oculto');
+  msgMesa(G.subiuBlind ? `Blinds sobem para ${fmt(G.sb)}/${fmt(G.bb)}` : '');
+  if (G.subiuBlind) toast(`Os blinds subiram para ${fmt(G.sb)}/${fmt(G.bb)}.`);
+  salvar();
+  renderLog();
+  render();
+}
+async function animarDistribuicao(id) {
+  const ordem = [];
+  let i = G.dealer;
+  do { i = proximoVivo(G, i); ordem.push(i); } while (i !== G.dealer);
+  ui.visiveis = G.jog.map(() => 0);
+  render();
+  posicionar();
+  const origem = ui.geom[G.dealer] ? { x: ui.geom[G.dealer].dx, y: ui.geom[G.dealer].dy } : pontoDe(centroEl);
+  const promessas = [];
+  let k = 0;
+  for (let volta = 0; volta < 2; volta++) for (const j of ordem) {
+    const atraso = k++ * 85 * vel();
+    promessas.push(sleep(atraso).then(() => {
+      if (id !== ui.laco) return;
+      Som.carta();
+      const alvo = pontoDe(assentoEl(j).querySelector('.cartas'));
+      return voar(htmlCarta(-1, j === 0 ? 'grande' : ''), origem, alvo, 260 * vel());
+    }).then(() => { if (id !== ui.laco) return; ui.visiveis[j]++; renderAssento(G.jog[j]); }));
+  }
+  await Promise.all(promessas);
+  ui.visiveis = G.jog.map(p => p.cartas.length);
+  render();
+}
+async function animarMesa(id) {
+  for (let k = ui.mesaVis; k < G.mesa.length; k++) {
+    if (id !== ui.laco) return;
+    const vaga = $('#board').children[k];
+    const de = ui.geom[G.dealer] ? { x: ui.geom[G.dealer].dx, y: ui.geom[G.dealer].dy } : { x: area.clientWidth / 2, y: 0 };
+    Som.carta();
+    await voar(htmlCarta(-1, 'mesa'), de, pontoDe(vaga), 260 * vel());
+    ui.mesaVis = k + 1;
+    renderMesa(true);
+    renderAssento(G.jog[0]);
+    await sleep(90 * vel());
+  }
+  render();
+}
+async function recolherApostas(id) {
+  const comAposta = G.jog.filter(p => p.aposta > 0).map(p => ({ i: p.i, v: p.aposta }));
+  const dev = fecharRua(G);
+  if (dev && dev.v > 0) toastCurto(`${G.jog[dev.i].nome} recebe de volta ${fmt(dev.v)} (aposta não paga)`);
+  if (comAposta.length) {
+    Som.fichas();
+    const alvo = pontoDe($('#potes'));
+    const voos = comAposta.map(({ i, v }) => voar(htmlFicha(v), { x: ui.geom[i].bx, y: ui.geom[i].by }, alvo, 320 * vel()));
+    render();
+    await Promise.all(voos);
+    await esperar(150 * vel(), id);
+  }
+  render();
+  renderLog();
+}
+function executar(i, acao) {
+  const p = G.jog[i];
+  let aval = null;
+  // Avaliação da decisão do humano (Modo Aprendizado), com a visão de antes da ação
+  if (p.humano && cfg.aprender && ui.analise && ui.analise.vez === G.mh.eventos.length) {
+    const L = legais(G);
+    let tipo = acao.tipo, para = acao.para || 0;
+    if (tipo === 'raise') para = clamp(Math.round(para), L.minPara, L.maxPara);
+    if (tipo === 'allin') para = L.maxPara;
+    if ((tipo === 'raise' || tipo === 'allin') && !L.podeAumentar) tipo = L.pagar ? 'call' : 'check';
+    aval = avaliarDecisao(ui.analise.a.v, ui.analise.a, tipo, para);
+  }
+  const antes = p.aposta;
+  const r = agir(G, acao);
+  const k = G.mh.eventos.length - 1;
+  if (!p.humano && acao.pensou) G.mh.pensamentos[k] = acao.pensou;
+  if (aval) { aval.ev = k; G.mh.decisoes.push(aval); registrarAprendizado(aval); }
+  // som e animação das fichas
+  if (r.tipo === 'fold') Som.fold();
+  else if (r.tipo === 'check') Som.check();
+  else {
+    Som.ficha();
+    if (ui.geom[i] && p.aposta > antes) {
+      const s = assentoEl(i);
+      voar(htmlFicha(p.aposta), pontoDe(s.querySelector('.caixa')), { x: ui.geom[i].bx, y: ui.geom[i].by }, 260 * vel());
+    }
+  }
+  balaoAcao(i, r.texto);
+  if (p.humano) { ui.dica = false; document.body.classList.remove('vez-humano'); fecharBalao(); }
+  render();
+  renderLog();
+}
+function balaoAcao(i, texto) {
+  const s = assentoEl(i);
+  if (!s) return;
+  s.querySelectorAll('.balao-acao').forEach(b => b.remove());
+  const b = document.createElement('div');
+  b.className = 'balao-acao'; b.textContent = texto;
+  s.querySelector('.caixa').appendChild(b);
+  setTimeout(() => b.remove(), cfg.rapido ? 900 : 1600);
+}
+async function vitoriaSemShowdown(id) {
+  await recolherApostas(id);
+  const ant = G.jog.map(p => p.fichas);
+  const valor = potTotal(G);
+  ui.potesFixos = [{ valor, eleg: [] }];
+  const r = ganharSemShowdown(G);
+  const w = G.jog[r.i];
+  ui.fichasExib = ant;
+  ui.vencedores = new Set([r.i]);
+  msgMesa(`${esc(w.nome)} leva ${fmt(r.valor)} — todos desistiram`);
+  render();
+  await animarPremio([r.i], r.valor, id);
+  ui.potesFixos = [];
+  ui.fichasExib = null;
+  if (r.i === 0) Som.vitoria();
+  render();
+  await terminarMao(id, { tipo: 'fold', ganhos: { [r.i]: r.valor }, potes: [{ valor: r.valor, venc: [r.i], nome: null }],
+    linhas: [`${w.nome} leva ${fmt(r.valor)} sem mostrar as cartas (todos desistiram)`] });
+}
+async function animarPremio(venc, valor, id) {
+  const de = pontoDe($('#potes'));
+  Som.fichas();
+  await Promise.all(venc.map(i => voar(htmlFicha(valor), de, pontoDe(assentoEl(i).querySelector('.caixa')), 480 * vel())));
+  await esperar(100, id);
+}
+async function fazerShowdown(id) {
+  G.fase = 'showdown';
+  document.querySelectorAll('.balao-acao').forEach(b => b.remove());
+  const naMao = vivos(G);
+  naMao.forEach(p => ui.revelar.add(p.i));
+  ui.mesaVis = G.mesa.length;
+  ui.visiveis = G.jog.map(p => p.cartas.length);
+  const ant = G.jog.map(p => p.fichas);
+  const r = resolverShowdown(G);
+  ui.fichasExib = ant.slice();
+  ui.potesFixos = r.potes.map(pt => ({ valor: pt.valor, eleg: pt.eleg }));
+  render();
+  renderLog();
+  msgMesa('Showdown');
+  await esperar(900 * vel(), id);
+  const linhas = [];
+  // Os potes laterais são resolvidos primeiro, o principal por último
+  for (let k = r.potes.length - 1; k >= 0; k--) {
+    if (id !== ui.laco) return;
+    const pt = r.potes[k];
+    ui.destaque = new Set();
+    pt.venc.forEach(i => r.melhor[i].cartas.forEach(c => ui.destaque.add(c)));
+    ui.vencedores = new Set(pt.venc);
+    const nomes = pt.venc.map(i => G.jog[i].nome).join(' e ');
+    const rot = r.potes.length > 1 ? (k === 0 ? 'o pote principal' : `o pote lateral ${k}`) : 'o pote';
+    const txt = pt.venc.length > 1
+      ? `${nomes} dividem ${rot} (${fmt(pt.valor)}) com ${pt.nome}`
+      : `${nomes} ${pt.venc[0] === 0 ? 'vence' : 'vence'} ${rot} (${fmt(pt.valor)}) com ${pt.nome}`;
+    linhas.unshift(txt);
+    msgMesa(esc(txt));
+    render();
+    if (pt.venc.includes(0)) Som.vitoria(); else if (pt.eleg.includes(0)) Som.derrota();
+    await animarPremio(pt.venc, pt.valor, id);
+    for (const i in pt.div) ui.fichasExib[i] += pt.div[i];
+    ui.potesFixos.splice(k, 1);
+    render();
+    await esperar((r.potes.length > 1 ? 1500 : 1900) * vel(), id);
+  }
+  // Mão de cada um que foi ao showdown, para o histórico
+  for (const p of naMao) linhas.push(`${p.nome} mostra ${p.cartas.map(cartaTxt).join(' ')}: ${nomeMao(r.melhor[p.i].pont)}`);
+  ui.fichasExib = null;
+  await terminarMao(id, { tipo: 'showdown', ganhos: r.ganhos,
+    potes: r.potes.map(pt => ({ valor: pt.valor, venc: pt.venc, nome: pt.nome, eleg: pt.eleg })),
+    maos: Object.fromEntries(naMao.map(p => [p.i, nomeMao(r.melhor[p.i].pont)])), linhas });
+}
+async function terminarMao(id, info) {
+  G.fase = 'fim';
+  G.mh.mesa = G.mesa.slice();
+  G.mh.resultado = info;
+  G.mh.linhasFim = info.linhas.slice();
+  // Estatísticas do jogador humano
+  const participou = !G.mh.fora[0];
+  if (participou) {
+    const ganho = info.ganhos[0] || 0;
+    estat.maos++; G.estat.maos++;
+    if (G.mh.vpip) { estat.vpip++; G.estat.vpip++; }
+    if (ganho > 0) {
+      estat.ganhas++; G.estat.ganhas++;
+      const maior = Math.max(...info.potes.filter(pt => pt.venc.includes(0)).map(pt => pt.valor));
+      estat.maiorPote = Math.max(estat.maiorPote, maior); G.estat.maiorPote = Math.max(G.estat.maiorPote, maior);
+    }
+    if (info.tipo === 'showdown' && !G.jog[0].desistiu) {
+      estat.sd++; G.estat.sd++;
+      if (ganho > 0) { estat.sdGanhos++; G.estat.sdGanhos++; }
+    }
+    gravar(CH.estat, estat);
+  }
+  const quebrados = eliminar(G);
+  for (const q of quebrados) G.mh.linhasFim.push(`${q.nome} foi eliminado (${q.colocacao}º lugar)`);
+  G.ultimaMao = G.mh;
+  salvar();
+  renderLog();
+  render();
+  if (id !== ui.laco) return;
+  await mostrarResultado(id, info, quebrados);
+}
+function fimDeJogo() { return G.jog[0].fora || G.jog.filter(p => !p.fora).length <= 1; }
+function mostrarResultado(id, info, quebrados) {
+  return new Promise(res => {
+    const el = $('#resultado');
+    const ganho = info.ganhos[0] || 0;
+    let txt = info.linhas[0] || '';
+    if (info.tipo === 'showdown' && info.potes.length > 1) txt = info.linhas.slice(0, info.potes.length).join(' · ');
+    if (quebrados.length) txt += ' · ' + quebrados.map(q => `${q.nome} eliminado`).join(', ');
+    const fim = fimDeJogo();
+    el.innerHTML = `<span class="txt">${ganho > 0 ? '🏆 ' : ''}${esc(txt)}</span>` +
+      (cfg.aprender || G.mh.decisoes.length ? '<button class="bt" id="btRevisar">🔍 Revisar mão</button>' : '<button class="bt" id="btRevisar">🔍 Revisar</button>') +
+      `<button class="bt prim" id="btProxima">${fim ? 'Ver resultado ▶' : 'Próxima mão ▶'}</button>`;
+    el.classList.remove('oculto');
+    let feito = false;
+    const seguir = () => {
+      if (feito) return;
+      feito = true; clearInterval(timer); el.classList.add('oculto');
+      ui.proxima = null; res();
+    };
+    ui.proxima = seguir;
+    $('#btProxima').onclick = seguir;
+    $('#btRevisar').onclick = () => { congelado = true; abrirRevisao(G.ultimaMao); };
+    // Avança sozinho depois de alguns segundos (a contagem para enquanto há janela aberta ou revisão)
+    let congelado = false, resta = (fim ? 2.5 : cfg.aprender ? 7 : cfg.rapido ? 2.2 : 4) * 1000;
+    const timer = setInterval(() => {
+      if (id !== ui.laco) { clearInterval(timer); return; }
+      if (ui.pausado || congelado) return;
+      resta -= 200;
+      if (resta <= 0) seguir();
+    }, 200);
+  });
+}
+function verificarFim() {
+  if (!fimDeJogo()) return false;
+  mostrarFim();
+  return true;
+}
+function mostrarFim() {
+  const h = G.jog[0], venceu = !h.fora;
+  const lugar = venceu ? 1 : h.colocacao;
+  estat.partidas++;
+  if (venceu) estat.vitorias++;
+  if (!estat.melhorColocacao || lugar < estat.melhorColocacao) estat.melhorColocacao = lugar;
+  gravar(CH.estat, estat);
+  apagar(CH.partida);
+  const e = G.estat, minutos = Math.max(1, Math.round((Date.now() - e.inicio) / 60000));
+  $('#fimTitulo').innerHTML = venceu ? '🏆 Vitória!' : 'Fim de jogo';
+  $('#fimSub').textContent = venceu
+    ? `Você ficou com todas as fichas em ${G.mao} mãos.`
+    : `Você terminou em ${lugar}º lugar entre ${G.jog.length} jogadores, na mão ${G.mao}.`;
+  const sess = apr.sessoes.find(s => s.id === e.inicio);
+  const cartoes = [
+    [e.maos, 'mãos jogadas'], [e.maos ? pct(e.ganhas / e.maos) : '—', 'mãos ganhas'],
+    [fmt(e.maiorPote), 'maior pote ganho'], [e.maos ? pct(e.vpip / e.maos) : '—', 'VPIP'],
+    [e.sd ? pct(e.sdGanhos / e.sd) : '—', `vitórias no showdown (${e.sd})`], [minutos + ' min', 'duração'],
+  ];
+  if (sess && sess.total) cartoes.push([pct((sess.boa + sess.aceitavel) / sess.total), `decisões boas/aceitáveis (${sess.total})`]);
+  $('#fimEstat').innerHTML = cartoes.map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join('');
+  $('#btFimRevisar').classList.toggle('oculto', !G.ultimaMao);
+  G.fase = 'acabou';
+  ui.laco++;
+  $('#telaFim').classList.remove('oculto');
+  if (venceu) Som.vitoria(); else Som.derrota();
+}
+
+// =====================================================================
+//  11. MODO APRENDIZADO: HUD, TREINADOR, CONCEITOS E AVALIAÇÕES
+// =====================================================================
+const termo = (k, txt) => `<span class="termo" data-g="${k}">${txt}</span>`;
+const nivelApr = () => (cfg.aprender ? cfg.nivel : 1);
+
+// Análise na vez do humano (com pot odds e recomendação) — feita antes de liberar os botões
+async function prepararVezHumano(id) {
+  Som.vez();
+  await sleep(20);
+  if (id !== ui.laco) return;
+  if (cfg.aprender || cfg.forca) {
+    const v = visaoDe(G, 0);
+    const a = analisar(v, nivelApr(), cfg.aprender ? 2500 : 1500);
+    ui.analise = { a, mao: G.mao, mesa: G.mesa.length, vez: G.mh.eventos.length, decisao: true };
+    ui.dica = cfg.aprender && cfg.nivel === 0;   // no nível Iniciante a dica aparece sozinha
+    verConceitos(a);
+  }
+  render();
+}
+// Análise quando o humano ainda está na mão mas não é a vez dele (equidade atualizada a cada rua)
+async function analisarSeguindo(id) {
+  const h = G.jog[0];
+  if (!(cfg.aprender || cfg.forca) || h.fora || h.desistiu || !h.cartas.length) return;
+  await sleep(10);
+  if (id !== ui.laco || !emAposta()) return;
+  const v = visaoDe(G, 0);
+  ui.analise = { a: analisar(v, nivelApr(), 1500), mao: G.mao, mesa: G.mesa.length, vez: -1, decisao: false };
+  render();
+  if (cfg.aprender && G.mesa.length === 3 && ui.analise.a.tex) verConceitos(ui.analise.a);
+}
+function abrirHud() { definirHud(true); $('#hud').classList.remove('recolhido'); $('#hudSeta').textContent = '▾'; requestAnimationFrame(posicionar); }
+$('#hudTopo').onclick = () => {
+  definirHud(!hudAberto());
+  $('#hud').classList.toggle('recolhido', !hudAberto());
+  $('#hudSeta').textContent = hudAberto() ? '▾' : '▸';
+  requestAnimationFrame(posicionar);
+};
+function renderHud() {
+  const hud = $('#hud');
+  const mostrar = !!G && cfg.aprender && !G.jog[0].fora && G.fase !== 'acabou';
+  const mudou = hud.classList.contains('oculto') === mostrar;
+  hud.classList.toggle('oculto', !mostrar);
+  hud.classList.toggle('recolhido', !hudAberto());
+  $('#hudSeta').textContent = hudAberto() ? '▾' : '▸';
+  if (mudou) requestAnimationFrame(posicionar);
+  if (!mostrar) return;
+  const h = G.jog[0], A = ui.analise, nivel = cfg.nivel;
+  const corpo = $('#hudCorpo');
+  const rodape = `<div class="hud-sec nota">Nível ${['Iniciante', 'Intermediário', 'Avançado'][nivel]} · ` +
+    `<a href="#" data-acao="ranges">tabela de ranges</a> · <a href="#" data-acao="gloss">glossário</a></div>`;
+  if (!A || A.mao !== G.mao || h.desistiu || !h.cartas.length || !emAposta()) {
+    $('#hudResumo').textContent = h.desistiu && emAposta() ? 'Você desistiu desta mão' : 'Modo Aprendizado';
+    corpo.innerHTML = `<div class="nota">As probabilidades aparecem quando você tiver cartas na mão.</div>` + rodape;
+    return;
+  }
+  const a = A.a, v = a.v, eq = a.eq, decisao = A.decisao && vezHumano();
+  const maoTxt = a.mao ? nomeMao(a.mao.pont) : `${classeInfo(a.classe).nome}`;
+  $('#hudResumo').textContent = (decisao && ui.dica ? `💡 ${a.rec.rotulo} · ` : '') + `${maoTxt} · eq. ${pct(eq.eq)}` + (decisao && v.pagar ? ` · precisa ${pct(a.need)}` : '') +
+    (a.outs && a.outs.total ? ` · ${a.outs.total} outs` : '');
+  let s = '';
+  // Mão
+  if (!a.mao) {
+    s += `<div><b>${classeInfo(a.classe).nome}</b> ${cartinhas(v.cartas)} — top ${pct(a.pctMao)} das mãos iniciais. ` +
+      `${termo('posicao', 'Posição')}: <b>${v.pos}</b> (abrir ~${pct(ABRIR[v.pos] || 0.2)}).</div>`;
+    if (nivel === 0) s += `<div class="nota">Quanto menor o "top %", mais forte a mão. Veja a tabela de ranges para a faixa de cada posição.</div>`;
+  } else {
+    s += `<div><b>${nomeMao(a.mao.pont)}</b> ${cartinhas(a.mao.cartas)}</div>`;
+    if (a.tex) s += `<div class="nota">Board ${termo(a.tex.molhado ? 'molhado' : 'seco', a.tex.nome)}.</div>`;
+  }
+  // Equidade
+  s += `<div class="hud-sec"><h4>${termo('equidade', 'Equidade')}</h4>` +
+    `Vitória <b>${pct(eq.vit)}</b> + empate ${pct(eq.emp)} → <b>${pct(eq.eq)}</b> contra ${v.nOpp} oponente${v.nOpp > 1 ? 's' : ''} ` +
+    `<span class="nota">(${a.faixas ? termo('range', 'faixas estimadas') + ' pelas ações' : 'mãos aleatórias'}, ${termo('montecarlo', 'Monte Carlo')})</span>`;
+  if (nivel === 0) s += `<div class="nota">Equidade é a fatia do pote que você ganha, em média, se as cartas forem até o fim agora.</div>`;
+  s += '</div>';
+  // Pot odds
+  if (decisao && v.pagar > 0) {
+    const bom = eq.eq >= a.need;
+    s += `<div class="hud-sec"><h4>${termo('potodds', 'Pot odds')}</h4>` +
+      `Você paga <b>${fmt(v.pagar)}</b> para ganhar <b>${fmt(v.pote)}</b> → precisa de <b>${pct(a.need)}</b> de equidade.` +
+      `<div class="barra"><div class="eq ${bom ? '' : 'ruim'}" style="width:${(eq.eq * 100).toFixed(1)}%"></div>` +
+      `<div class="need" style="left:${(a.need * 100).toFixed(1)}%"></div></div>` +
+      `<div class="${bom ? 'ok' : 'ruim'}">${bom ? '✓ Pagar é lucrativo (+EV)' : '✗ Pagar perde fichas no longo prazo (−EV)'}: equidade ${pct(eq.eq)} ${bom ? '≥' : '<'} ${pct(a.need)}</div>`;
+    if (nivel === 0) s += `<div class="nota">Conta: ${fmt(v.pagar)} ÷ (${fmt(v.pote)} + ${fmt(v.pagar)}) = ${pct(a.need)}. A barra verde é sua equidade; o traço branco, o mínimo necessário.</div>`;
+    s += '</div>';
+  }
+  // Outs
+  const o = a.outs;
+  if (o) {
+    s += `<div class="hud-sec"><h4>${termo('outs', 'Outs')}</h4>`;
+    if (!o.total) s += '<div class="nota">Nenhuma carta melhora sua mão de forma clara.</div>';
+    else {
+      s += o.lista.map(g => `<div><b>${g.n}</b> out${g.n > 1 ? 's' : ''} para ${CAT_NOME[g.cat].toLowerCase()}: ${g.desc}` +
+        (g.sujas ? ` <span class="meio-termo">(${g.sujas} suja${g.sujas > 1 ? 's' : ''})</span>` : '') + '</div>').join('');
+      if (o.sujas) s += `<div class="nota">${termo('outsujo', 'Outs sujos')}: completam a sua mão mas podem dar uma maior a um adversário (pareiam a mesa ou trazem 3 do naipe). Contam como meio out: ~${String(o.efetivas).replace('.', ',')} efetivos.</div>`;
+      s += `<div>Próxima carta: <b>${pct(o.pProx, 1)}</b> <span class="nota">· ${termo('regra24', 'regra do 2')}: ~${o.regra2}%</span></div>`;
+      if (v.mesa.length === 3) s += `<div>Até o river: <b>${pct(o.pRiver, 1)}</b> <span class="nota">· regra do 4: ~${o.regra4}%</span></div>`;
+      if (nivel === 0) s += `<div class="nota">Atalho: outs × 2 = % para a próxima carta; no flop, outs × 4 = % até o river.</div>`;
+    }
+    s += '</div>';
+  }
+  // Implied odds e reverse implied odds
+  const notas = [];
+  if (decisao && o && o.efetivas >= 4 && v.pagar > 0 && eq.eq < a.need && eq.eq + 0.1 >= a.need && v.rua !== 'river') {
+    const pilhaOpp = Math.max(0, ...v.oponentes.map(q => q.fichas));
+    notas.push(`${termo('implied', 'Implied odds')}: o preço está um pouco acima das pot odds, mas se acertar você pode ganhar mais fichas nas próximas ruas (o adversário ainda tem ${fmt(pilhaOpp)}). Vale quando as pilhas são fundas.`);
+  }
+  if (a.mao && catDe(a.mao.pont) === 1) {
+    const topo = Math.max(...v.mesa.map(rk));
+    const parTopo = v.cartas.some(c => rk(c) === topo);
+    const kicker = v.cartas.find(c => rk(c) !== topo);
+    if (parTopo && kicker != null && rk(kicker) < 9) notas.push(`${termo('reverse', 'Reverse implied odds')}: par do topo com kicker fraco. Quando alguém paga muito, muitas vezes tem o mesmo par com kicker maior: cuidado com potes grandes.`);
+  }
+  if (o && o.lista.some(g => g.cat === 5)) {
+    const naipeF = np(o.lista.find(g => g.cat === 5).cartas[0]);
+    const alta = Math.max(...v.cartas.filter(c => np(c) === naipeF).map(rk));
+    if (alta < 9) notas.push(`${termo('reverse', 'Reverse implied odds')}: seu flush seria baixo (até ${RANK_TXT[alta]}); um flush maior pode ganhar de você.`);
+  }
+  if (notas.length) s += `<div class="hud-sec">${notas.map(n => `<div class="nota" style="color:#cfe6ff">${n}</div>`).join('')}</div>`;
+  // Treinador
+  if (decisao) {
+    if (ui.dica) s += `<div class="coach">💡 Sugestão: <b class="rec">${a.rec.rotulo}</b><ul>${a.rec.motivos.map(m => `<li>${m}</li>`).join('')}</ul></div>`;
+    else s += `<div class="hud-sec"><button class="bt" data-acao="dica">💡 Pedir dica</button></div>`;
+  }
+  // Avançado: faixas dos oponentes
+  if (nivel === 2 && a.faixas) {
+    s += `<div class="hud-sec"><h4>${termo('range', 'Ranges')} estimadas dos oponentes</h4>` +
+      v.oponentes.map((q, k) => `<div><b>${esc(G.jog[q.i].nome)}</b>: ${textoFaixa(resumoFaixa(a.faixas[k], v.cartas.concat(v.mesa)))}</div>`).join('') +
+      `<div class="nota"><a href="#" data-acao="oponentes">ver na grade 13×13</a></div></div>`;
+  }
+  corpo.innerHTML = s + rodape;
+}
+$('#hudCorpo').addEventListener('click', e => {
+  const t = e.target.closest('[data-acao]');
+  if (t) {
+    e.preventDefault();
+    const ac = t.dataset.acao;
+    if (ac === 'dica') btDica.click();
+    else if (ac === 'ranges') abrirRanges('maos');
+    else if (ac === 'oponentes') abrirRanges('oponentes');
+    else if (ac === 'gloss') abrirGlossario();
+  }
+});
+// Termos clicáveis em qualquer lugar levam ao glossário
+document.addEventListener('click', e => {
+  const t = e.target.closest('.termo');
+  if (t) { e.preventDefault(); abrirGlossario(t.dataset.g); }
+});
+
+// ---------- Conceitos (balões na primeira vez) ----------
+const CONCEITOS = {
+  posicao: { t: 'Posição', x: 'Quem age por último em cada rua (o botão, "BTN", é a melhor posição) vê o que os outros fizeram antes de decidir. Por isso dá para jogar mais mãos nas posições finais e menos nas primeiras (UTG).' },
+  potodds: { t: 'Pot odds', x: 'Compare o que você paga com o tamanho do pote. Pagar 50 num pote de 150 exige 50 ÷ (150 + 50) = 25% de equidade para não perder no longo prazo.' },
+  outs: { t: 'Outs e a regra do 2 e 4', x: 'Outs são as cartas que melhoram a sua mão. Outs × 2 dá a chance aproximada na próxima carta; no flop, outs × 4 dá a chance até o river.' },
+  cbet: { t: 'Continuation bet (c-bet)', x: 'Quem aumentou antes do flop costuma apostar de novo no flop, acertando ou não. A iniciativa faz o adversário desistir muitas vezes — e nem toda c-bet é mão forte.' },
+  semiblefe: { t: 'Semi-blefe', x: 'Apostar com um projeto (flush ou sequência por completar): você ganha na hora se o adversário desistir e ainda pode acertar a mão nas próximas cartas.' },
+  slowplay: { t: 'Slowplay', x: 'Com uma mão muito forte, às vezes vale dar check ou só pagar para o adversário continuar apostando. Cuidado em boards molhados: dar carta grátis pode custar o pote.' },
+  seco: { t: 'Board seco', x: 'Cartas desconectadas e de naipes diferentes: poucos projetos possíveis. O board muda pouco nas próximas cartas — bom para c-bets e blefes.' },
+  molhado: { t: 'Board molhado', x: 'Cartas próximas ou do mesmo naipe: muitos projetos possíveis. Mãos feitas devem apostar para se proteger; projetos ganham valor.' },
+  implied: { t: 'Implied odds', x: 'Fichas que você espera ganhar depois de acertar o projeto. Podem justificar pagar um pouco acima das pot odds quando as pilhas são fundas.' },
+};
+function verConceitos(a) {
+  if (!cfg.aprender) return;
+  const v = a.v, fila = [];
+  if (v.rua === 'preflop') fila.push('posicao');
+  if (v.rua !== 'preflop' && v.pagar > 0) fila.push('potodds');
+  if (a.outs && a.outs.total >= 4) fila.push('outs');
+  if (v.rua === 'flop' && (v.euAgressorPre || (v.pagar > 0 && v.agressorPre >= 0 && !v.euAgressorPre))) fila.push('cbet');
+  if (a.outs && a.outs.efetivas >= 8 && v.podeCheck) fila.push('semiblefe');
+  if (v.rua !== 'preflop' && a.eq.eq > 0.85) fila.push('slowplay');
+  if (a.tex && v.rua === 'flop') fila.push(a.tex.molhado ? 'molhado' : 'seco');
+  if (a.outs && v.pagar > 0 && a.eq.eq < a.need && a.eq.eq + 0.1 >= a.need) fila.push('implied');
+  for (const k of fila) if (!conceitosVistos.has(k) && !ui.conceitosSessao.has(k) && !ui.filaConceitos.includes(k)) ui.filaConceitos.push(k);
+  mostrarConceito();
+}
+function mostrarConceito() {
+  const b = $('#balao');
+  if (!b.classList.contains('oculto') || !ui.filaConceitos.length) return;
+  const k = ui.filaConceitos.shift(), c = CONCEITOS[k];
+  ui.conceitosSessao.add(k);
+  b.innerHTML = `<h4>📘 ${c.t}</h4><div>${c.x}</div><div class="bts"><button data-r="nunca">Não mostrar de novo</button><button data-r="ok">Entendi</button></div>`;
+  b.classList.remove('oculto');
+  b.querySelector('[data-r="ok"]').onclick = () => { fecharBalao(); setTimeout(mostrarConceito, 300); };
+  b.querySelector('[data-r="nunca"]').onclick = () => {
+    conceitosVistos.add(k); gravar(CH.conceitos, [...conceitosVistos]);
+    fecharBalao(); setTimeout(mostrarConceito, 300);
+  };
+}
+function fecharBalao() { $('#balao').classList.add('oculto'); }
+
+// ---------- Avaliação das decisões ----------
+function registrarAprendizado(av) {
+  const r = apr.ruas[av.rua] || (apr.ruas[av.rua] = notasZero());
+  r[av.nota]++;
+  if (av.leak) apr.leaks[av.leak] = (apr.leaks[av.leak] || 0) + 1;
+  let s = apr.sessoes.find(x => x.id === G.estat.inicio);
+  if (!s) { s = { id: G.estat.inicio, data: Date.now(), total: 0, ...notasZero() }; apr.sessoes.push(s); }
+  s.total++; s[av.nota]++;
+  if (apr.sessoes.length > 40) apr.sessoes.splice(0, apr.sessoes.length - 40);
+  gravar(CH.apr, apr);
+}
+function renderAvaliacoes() {
+  const el = $('#avaliacoes');
+  const ds = G && G.mh && cfg.aprender && G.fase !== 'acabou' ? G.mh.decisoes : [];
+  const chave = ds.map(d => d.ev).join(',') + '|' + (G ? G.mao : '');
+  if (el.dataset.k === chave) return;
+  el.dataset.k = chave;
+  el.innerHTML = ds.map((d, k) => `<button class="aval ${d.nota}" data-k="${k}" title="${NOTA_TXT[d.nota]}: clique para ver a explicação">${RUA_NOME[d.rua]} ${NOTA_ICONE[d.nota]}</button>`).join('');
+}
+$('#avaliacoes').addEventListener('click', e => {
+  const b = e.target.closest('.aval');
+  if (b) abrirAvaliacao(G.mh.decisoes[Number(b.dataset.k)]);
+});
+function htmlAvaliacao(d) {
+  return `<p><span class="aval ${d.nota}">${NOTA_ICONE[d.nota]} ${NOTA_TXT[d.nota]}</span> · ${RUA_NOME[d.rua]}</p>` +
+    `<p>Sua jogada: <b>${d.sua}</b> · Recomendada: <b>${d.rec}</b></p>` +
+    `<p class="nota">Mão ${d.classe} · equidade ${pct(d.eq)}${d.need ? ` · precisava de ${pct(d.need)}` : ''}</p>` +
+    `<ul>${d.motivos.map(m => `<li>${m}</li>`).join('')}${d.extra.map(m => `<li>${m}</li>`).join('')}</ul>` +
+    (d.leak ? `<p class="meio-termo">Ponto a melhorar: <b>${LEAKS[d.leak].nome}</b> — ${LEAKS[d.leak].dica}</p>` : '');
+}
+function abrirAvaliacao(d) { abrirJanela('Avaliação da decisão', htmlAvaliacao(d)); }
+
+// =====================================================================
+//  12. JANELAS: REVISÃO, RANGES, ESTATÍSTICAS, EXERCÍCIOS, GLOSSÁRIO, MENU
+// =====================================================================
+let aoFecharJanela = null;
+function abrirJanela(titulo, html, aoFechar) {
+  $('#janelaTitulo').textContent = titulo;
+  $('#janelaCorpo').innerHTML = html;
+  $('#janelaCorpo').scrollTop = 0;
+  $('#janela').classList.remove('oculto');
+  aoFecharJanela = aoFechar || null;
+  ui.pausado = true;
+}
+function fecharJanela() {
+  if ($('#janela').classList.contains('oculto')) return;
+  $('#janela').classList.add('oculto');
+  $('#janelaCorpo').innerHTML = '';
+  ui.pausado = false;
+  const f = aoFecharJanela; aoFecharJanela = null;
+  if (f) f();
+}
+$('#janelaFechar').onclick = fecharJanela;
+$('#janela').addEventListener('click', e => { if (e.target.id === 'janela') fecharJanela(); });
+function toast(t, ms = 2600) {
+  const el = $('#toast');
+  el.textContent = t; el.classList.remove('oculto');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.add('oculto'), ms);
+}
+const toastCurto = t => toast(t, 1800);
+
+// ---------- Revisão da mão (replay) ----------
+const CORES_JOG = ['#ffd166', '#4ea1ff', '#f0883e', '#a3d65c', '#e5484d', '#c792ea', '#5ad1c8', '#ff8fab', '#b0b8c4'];
+function passosDaMao(mh) {
+  const n = mh.nomes.length;
+  const st = { fichas: mh.fichasIni.slice(), aposta: Array(n).fill(0), fold: mh.fora.slice(), mesa: [], pote: 0, rua: 'preflop', acao: Array(n).fill('') };
+  const passos = [];
+  const snap = extra => passos.push({ fichas: st.fichas.slice(), aposta: st.aposta.slice(), fold: st.fold.slice(),
+    mesa: st.mesa.slice(), pote: st.pote, rua: st.rua, acao: st.acao.slice(), ...extra });
+  let primeiro = true;
+  mh.eventos.forEach((e, k) => {
+    if (e.t === 'blind') { st.fichas[e.i] -= e.colocou; st.aposta[e.i] += e.colocou; st.pote += e.colocou; st.acao[e.i] = e.a; return; }
+    if (primeiro) { snap({ desc: `Cartas distribuídas. Dealer: ${mh.nomes[mh.dealer]}. Blinds ${fmt(mh.sb)}/${fmt(mh.bb)}.`, k: -1 }); primeiro = false; }
+    if (e.t === 'acao') {
+      st.fichas[e.i] -= e.colocou; st.aposta[e.i] += e.colocou; st.pote += e.colocou; st.acao[e.i] = e.texto;
+      if (e.a === 'fold') st.fold[e.i] = true;
+      snap({ desc: `${mh.nomes[e.i]}: ${e.texto}`, k, i: e.i });
+    } else if (e.t === 'devolve') {
+      st.fichas[e.i] += e.v; st.aposta[e.i] -= e.v; st.pote -= e.v;
+    } else if (e.t === 'rua') {
+      st.aposta.fill(0); st.mesa = e.mesa.slice(); st.rua = e.rua;
+      st.acao = st.acao.map((a, i) => (st.fold[i] ? a : ''));
+      snap({ desc: `${RUA_NOME[e.rua]}: ${e.mesa.map(cartaTxt).join(' ')} · pote ${fmt(st.pote)}`, k, rua: true });
+    }
+  });
+  if (primeiro) snap({ desc: 'Cartas distribuídas.', k: -1 });
+  const r = mh.resultado;
+  if (r) {
+    for (const i in r.ganhos) st.fichas[i] += r.ganhos[i];
+    st.aposta.fill(0);
+    st.mesa = mh.mesa.slice();
+    snap({ desc: (mh.linhasFim || r.linhas).join(' · '), k: 'fim', fim: true, rua: r.tipo === 'showdown' ? 'showdown' : st.rua });
+  }
+  return passos;
+}
+// Equidade de cada jogador em cada rua (com as cartas de todos reveladas)
+function equidadesPorRua(mh) {
+  const ruas = [{ rua: 'preflop', mesa: [] }];
+  for (const e of mh.eventos) if (e.t === 'rua') ruas.push({ rua: e.rua, mesa: e.mesa });
+  const foldAntes = rua => {
+    const f = new Set(mh.nomes.map((_, i) => i).filter(i => mh.fora[i]));
+    for (const e of mh.eventos) {
+      if (e.t === 'rua' && e.rua === rua) break;
+      if (e.t === 'acao' && e.a === 'fold') f.add(e.i);
+    }
+    return f;
+  };
+  return ruas.map(r => {
+    const f = r.rua === 'preflop' ? new Set(mh.nomes.map((_, i) => i).filter(i => mh.fora[i])) : foldAntes(r.rua);
+    const ids = mh.nomes.map((_, i) => i).filter(i => !f.has(i) && mh.cartas[i].length);
+    const eqs = ids.length > 1 ? equidadesConhecidas(ids.map(i => mh.cartas[i]), r.mesa) : ids.map(() => 1);
+    const mapa = {};
+    ids.forEach((i, k) => (mapa[i] = eqs[k]));
+    return { rua: r.rua, eq: mapa };
+  });
+}
+function graficoEquidade(mh, dados, ruaAtual) {
+  const W = 600, H = 210, l = 38, r = 14, t = 12, b = 26;
+  const nx = dados.length;
+  const x = k => (nx === 1 ? (l + W - r) / 2 : l + (k * (W - l - r)) / (nx - 1));
+  const y = v => t + (1 - v) * (H - t - b);
+  let s = `<svg class="grafico" viewBox="0 0 ${W} ${H}" role="img" aria-label="Equidade por rua">`;
+  const ka = dados.findIndex(d => d.rua === ruaAtual);
+  if (ka >= 0) s += `<rect x="${x(ka) - 26}" y="${t}" width="52" height="${H - t - b}" fill="rgba(242,193,78,.1)"/>`;
+  for (const g of [0, 0.25, 0.5, 0.75, 1]) {
+    s += `<line x1="${l}" x2="${W - r}" y1="${y(g)}" y2="${y(g)}" stroke="#22322a"/>` +
+      `<text x="${l - 6}" y="${y(g) + 4}" fill="#93a69a" font-size="11" text-anchor="end">${g * 100}%</text>`;
+  }
+  dados.forEach((d, k) => s += `<text x="${x(k)}" y="${H - 8}" fill="#93a69a" font-size="11" text-anchor="middle">${RUA_NOME[d.rua]}</text>`);
+  mh.nomes.forEach((nome, i) => {
+    const pts = dados.map((d, k) => (d.eq[i] != null ? [x(k), y(d.eq[i])] : null)).filter(Boolean);
+    if (!pts.length) return;
+    const cor = CORES_JOG[i % CORES_JOG.length];
+    s += `<polyline fill="none" stroke="${cor}" stroke-width="${i === 0 ? 3 : 2}" points="${pts.map(p => p.join(',')).join(' ')}"/>`;
+    pts.forEach(p => s += `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${cor}"/>`);
+  });
+  // Pontos de decisão do humano, coloridos pela avaliação
+  const corNota = { boa: '#2fbf71', aceitavel: '#a3d65c', questionavel: '#f0883e', erro: '#e5484d' };
+  mh.decisoes.forEach(d => {
+    const k = dados.findIndex(x2 => x2.rua === d.rua);
+    if (k < 0 || dados[k].eq[0] == null) return;
+    s += `<circle cx="${x(k)}" cy="${y(dados[k].eq[0])}" r="7" fill="${corNota[d.nota]}" stroke="#fff" stroke-width="1.5"><title>${RUA_NOME[d.rua]}: ${d.sua} (${NOTA_TXT[d.nota]})</title></circle>`;
+  });
+  return s + '</svg>';
+}
+function abrirRevisao(mh) {
+  if (!mh) return;
+  const passos = passosDaMao(mh), dados = equidadesPorRua(mh);
+  let atual = 0;
+  const pensamentos = Object.entries(mh.pensamentos || {});
+  const legenda = mh.nomes.map((n, i) => mh.cartas[i].length && !mh.fora[i]
+    ? `<span><i style="background:${CORES_JOG[i % CORES_JOG.length]}"></i>${esc(n)}</span>` : '').join('');
+  const html = `<div class="rev-ctrl"><button class="bt" id="revAnt">◀</button><input type="range" id="revSlider" min="0" max="${passos.length - 1}" value="0">` +
+    `<button class="bt" id="revProx">▶</button><span id="revN" class="nota"></span></div>` +
+    `<div class="rev-passo" id="revDesc"></div><div id="revMesa"></div>` +
+    `<h4 style="margin:12px 0 4px">Equidade de cada jogador por rua</h4>${''}<div id="revGraf"></div><div class="legenda">${legenda}` +
+    `<span>● pontos coloridos = suas decisões (verde boa → vermelho erro)</span></div>` +
+    `<h4 style="margin:12px 0 4px">O que os bots pensaram</h4>` +
+    (pensamentos.length ? pensamentos.map(([k, t]) => {
+      const e = mh.eventos[k];
+      return `<div class="nota" style="margin:3px 0"><b style="color:#e8f0ea">${esc(mh.nomes[e.i])}</b> ` +
+        `<span>(${PERFIS[mh.perfis[e.i]]?.nome || ''}, ${RUA_NOME[e.rua]}) ${esc(e.texto)}</span> — 💭 ${esc(t)}</div>`;
+    }).join('') : '<div class="nota">Nenhum bot agiu nesta mão.</div>');
+  abrirJanela(`Revisão da mão ${mh.n}`, html);
+  const mostrar = () => {
+    const p = passos[atual];
+    $('#revN').textContent = `${atual + 1}/${passos.length}`;
+    $('#revSlider').value = atual;
+    let desc = `<b>${esc(p.desc)}</b>`;
+    if (p.i != null && typeof p.k === 'number') {
+      const e = mh.eventos[p.k];
+      if (mh.pensamentos && mh.pensamentos[p.k]) desc += `<div class="nota">💭 ${PERFIS[mh.perfis[p.i]]?.nome || ''}: ${esc(mh.pensamentos[p.k])}</div>`;
+      if (p.i !== 0 && e.a !== 'fold') {
+        const f = estimarFaixas(mh.eventos.slice(0, p.k + 1), mh.nomes.length, mh.pos, mh.bb)[p.i];
+        desc += `<div class="nota">Leitura pela ação (faixa pública estimada): ${textoFaixa(resumoFaixa(f, p.mesa))}</div>`;
+      }
+      const d = mh.decisoes.find(x => x.ev === p.k);
+      if (d) desc += `<div style="margin-top:6px">${htmlAvaliacao(d)}</div>`;
+    }
+    $('#revDesc').innerHTML = desc;
+    const jog = mh.nomes.map((n, i) => {
+      if (mh.fora[i]) return '';
+      const agindo = p.i === i;
+      return `<div class="rev-jog ${agindo ? 'agindo' : ''} ${p.fold[i] ? 'saiu' : ''}"><b style="color:${CORES_JOG[i % CORES_JOG.length]}">${esc(n)}</b>` +
+        `${i === mh.dealer ? ' <span class="nota">(D)</span>' : ''} ${mh.cartas[i].length ? cartinhas(mh.cartas[i]) : ''}<br>` +
+        `<span class="nota">${mh.pos[i] || ''}${mh.perfis[i] ? ' · ' + PERFIS[mh.perfis[i]].nome : ''}</span><br>` +
+        `Fichas ${fmt(p.fichas[i])}${p.aposta[i] ? ` · aposta ${fmt(p.aposta[i])}` : ''}<br><span class="nota">${esc(p.acao[i] || '')}</span></div>`;
+    }).join('');
+    $('#revMesa').innerHTML = `<div style="margin-top:8px">Mesa: ${p.mesa.length ? cartinhas(p.mesa) : '<span class="nota">—</span>'} · Pote ${fmt(p.pote)}</div><div class="rev-mesa">${jog}</div>`;
+    $('#revGraf').innerHTML = graficoEquidade(mh, dados, p.rua);
+  };
+  $('#revAnt').onclick = () => { atual = Math.max(0, atual - 1); mostrar(); };
+  $('#revProx').onclick = () => { atual = Math.min(passos.length - 1, atual + 1); mostrar(); };
+  $('#revSlider').oninput = e => { atual = Number(e.target.value); mostrar(); };
+  mostrar();
+}
+
+// ---------- Tabela de ranges 13×13 ----------
+function corForca(p) {
+  return p <= 0.05 ? '#0b7a3b' : p <= 0.1 ? '#1f9d55' : p <= 0.2 ? '#4fae4f' : p <= 0.3 ? '#93b83f' : p <= 0.45 ? '#c9a531' : p <= 0.65 ? '#c9742b' : '#9b3b33';
+}
+function grade13(celula) {
+  let s = '<div class="grade13">';
+  for (let k = 0; k < 169; k++) s += celula(k);
+  return s + '</div>';
+}
+function abrirRanges(aba = 'maos') {
+  const h = G && G.jog[0], temMao = h && h.cartas.length && !h.fora && G.fase !== 'acabou';
+  const atual = temMao ? classeIdx(h.cartas[0], h.cartas[1]) : -1;
+  const posAtual = temMao && G.mh ? G.mh.pos[0] : 'CO';
+  const html = `<div class="abas"><button data-aba="maos">Mãos iniciais</button><button data-aba="oponentes">Ranges dos oponentes</button></div><div id="rangesCorpo"></div>`;
+  abrirJanela('Ranges', html);
+  const corpo = $('#rangesCorpo');
+  const maos = (pos) => {
+    const X = ABRIR[pos] || 0.2;
+    corpo.innerHTML = `<p>Faixa de abertura recomendada na posição <select id="rgPos">${Object.keys(ABRIR).map(p => `<option ${p === pos ? 'selected' : ''}>${p}</option>`).join('')}</select>: ` +
+      `<b>~${pct(X)}</b> das mãos (contorno branco), quando ninguém aumentou antes.${temMao ? ` Sua mão: <b>${classeInfo(atual).nome}</b> (top ${pct(PCT[atual])}, contorno dourado).` : ''}</p>` +
+      grade13(k => `<div style="background:${corForca(PCT[k])}" class="${PCT[k] <= X ? 'faixa' : ''} ${k === atual ? 'atual' : ''}" title="${classeInfo(k).nome}: top ${pct(PCT[k], 1)}">${classeInfo(k).nome.replace(/[so]$/, '')}</div>`) +
+      `<div class="legenda">${[[0.05, 'top 5%'], [0.1, '10%'], [0.2, '20%'], [0.3, '30%'], [0.45, '45%'], [0.65, '65%'], [1, 'resto']].map(([p, t]) => `<span><i style="background:${corForca(p)}"></i>${t}</span>`).join('')}</div>` +
+      `<p class="nota">Acima da diagonal: naipadas (s). Abaixo: de naipes diferentes (o). Diagonal: pares. A força segue a fórmula de Chen. Contra um aumento, jogue só uma fatia pequena do topo da faixa.</p>`;
+    $('#rgPos').onchange = e => maos(e.target.value);
+  };
+  const oponentes = () => {
+    if (!G || !G.mh || !emAposta()) { corpo.innerHTML = '<p class="nota">Disponível durante uma mão em andamento.</p>'; return; }
+    const v = visaoDe(G, 0), fx = faixasOponentes(v);
+    if (!v.oponentes.length) { corpo.innerHTML = '<p class="nota">Nenhum oponente na mão.</p>'; return; }
+    corpo.innerHTML = `<p>Faixas estimadas só pelas ações públicas de cada oponente nesta mão (aumentar estreita a faixa para mãos fortes; pagar, para mãos médias e projetos). ` +
+      `Intensidade = probabilidade relativa.</p><select id="rgOpp">${v.oponentes.map((q, k) => `<option value="${k}">${esc(G.jog[q.i].nome)}</option>`).join('')}</select><div id="rgOppCorpo" style="margin-top:8px"></div>`;
+    const mostrar = k => {
+      const r = resumoFaixa(fx[k], v.cartas.concat(v.mesa));
+      const e = temMao && !h.desistiu ? equidade(v.cartas, v.mesa, 1, 2000, [fx[k]]) : null;
+      $('#rgOppCorpo').innerHTML = `<p>${textoFaixa(r)}${e ? `<br>Sua equidade contra essa faixa (só contra ele): <b>${pct(e.eq)}</b>` : ''}</p>` +
+        grade13(c => `<div style="background:rgba(242,193,78,${(0.06 + r.media[c] * 0.94).toFixed(2)});color:${r.media[c] > 0.5 ? '#111' : '#fff'}" title="${classeInfo(c).nome}: peso ${pct(r.media[c])}">${classeInfo(c).nome.replace(/[so]$/, '')}</div>`);
+    };
+    $('#rgOpp').onchange = e => mostrar(Number(e.target.value));
+    mostrar(0);
+  };
+  const trocar = a => {
+    document.querySelectorAll('#janelaCorpo .abas button').forEach(b => b.classList.toggle('ativo', b.dataset.aba === a));
+    if (a === 'maos') maos(posAtual); else oponentes();
+  };
+  document.querySelectorAll('#janelaCorpo .abas button').forEach(b => b.onclick = () => trocar(b.dataset.aba));
+  trocar(aba);
+}
+
+// ---------- Estatísticas ----------
+function abrirEstatisticas(aba = 'partidas') {
+  abrirJanela('Estatísticas', `<div class="abas"><button data-aba="partidas">Partidas</button><button data-aba="aprendizado">Aprendizado</button></div><div id="estCorpo"></div>`);
+  const corpo = $('#estCorpo');
+  const partidas = () => {
+    const e = estat;
+    const c = [[e.maos, 'mãos jogadas'], [e.maos ? pct(e.ganhas / e.maos) : '—', `mãos ganhas (${e.ganhas})`], [fmt(e.maiorPote), 'maior pote ganho'],
+      [e.maos ? pct(e.vpip / e.maos) : '—', 'VPIP (entrou voluntariamente)'], [e.sd ? pct(e.sdGanhos / e.sd) : '—', `vitórias no showdown (${e.sd})`],
+      [e.partidas, 'partidas terminadas'], [e.vitorias, 'partidas vencidas'], [e.melhorColocacao ? e.melhorColocacao + 'º' : '—', 'melhor colocação']];
+    corpo.innerHTML = `<div class="estat-cartoes">${c.map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join('')}</div>` +
+      `<p class="nota">${termo('vpip', 'VPIP')} típico de um bom jogador: 18–28% numa mesa cheia.</p>` +
+      `<button class="bt" id="zerarEst">Zerar estatísticas</button>`;
+    $('#zerarEst').onclick = () => { if (confirm('Zerar as estatísticas de partidas?')) { estat = { ...ESTAT_PADRAO }; gravar(CH.estat, estat); partidas(); } };
+  };
+  const aprendizado = () => {
+    const linhas = ['preflop', 'flop', 'turn', 'river'].map(r => {
+      const x = apr.ruas[r] || notasZero(), t = x.boa + x.aceitavel + x.questionavel + x.erro;
+      return `<tr><td>${RUA_NOME[r]}</td><td class="num">${t}</td><td class="num">${t ? pct(x.boa / t) : '—'}</td><td class="num">${t ? pct(x.aceitavel / t) : '—'}</td><td class="num">${t ? pct(x.questionavel / t) : '—'}</td><td class="num">${t ? pct(x.erro / t) : '—'}</td></tr>`;
+    }).join('');
+    const leaks = Object.entries(apr.leaks).sort((a, b) => b[1] - a[1]);
+    const top = leaks.slice(0, 3);
+    const sess = apr.sessoes.filter(s => s.total > 0).slice(-20);
+    let graf = '<p class="nota">Jogue partidas com o Modo Aprendizado ligado para ver a evolução.</p>';
+    if (sess.length) {
+      const W = 560, H = 140, l = 34, r = 10, t = 10, b = 22;
+      const x = k => (sess.length === 1 ? (l + W - r) / 2 : l + (k * (W - l - r)) / (sess.length - 1));
+      const y = v => t + (1 - v) * (H - t - b);
+      const val = s => (s.boa + s.aceitavel) / s.total;
+      graf = `<svg class="grafico" viewBox="0 0 ${W} ${H}">` + [0, 0.5, 1].map(g => `<line x1="${l}" x2="${W - r}" y1="${y(g)}" y2="${y(g)}" stroke="#22322a"/><text x="${l - 5}" y="${y(g) + 4}" fill="#93a69a" font-size="11" text-anchor="end">${g * 100}%</text>`).join('') +
+        `<polyline fill="none" stroke="#2fbf71" stroke-width="2.5" points="${sess.map((s, k) => x(k) + ',' + y(val(s))).join(' ')}"/>` +
+        sess.map((s, k) => `<circle cx="${x(k)}" cy="${y(val(s))}" r="3.5" fill="#2fbf71"><title>${new Date(s.data).toLocaleDateString('pt-BR')}: ${pct(val(s))} de ${s.total} decisões</title></circle>`).join('') +
+        `<text x="${(l + W - r) / 2}" y="${H - 5}" fill="#93a69a" font-size="11" text-anchor="middle">partidas (mais recentes à direita)</text></svg>`;
+    }
+    corpo.innerHTML = `<h4>Os 3 principais pontos a melhorar</h4>` +
+      (top.length ? '<ol>' + top.map(([k, n]) => `<li><b>${LEAKS[k].nome}</b> (${n}×) — ${LEAKS[k].dica}</li>`).join('') + '</ol>' : '<p class="nota">Ainda não há decisões suficientes. Jogue com o Modo Aprendizado ligado.</p>') +
+      `<h4>Decisões por rua</h4><table class="tab"><tr><th>Rua</th><th class="num">Decisões</th><th class="num">Boas</th><th class="num">Aceitáveis</th><th class="num">Questionáveis</th><th class="num">Erros</th></tr>${linhas}</table>` +
+      `<h4>Evolução (% de decisões boas ou aceitáveis por partida)</h4>${graf}` +
+      (leaks.length > 3 ? `<h4>Outros leaks</h4><ul>${leaks.slice(3).map(([k, n]) => `<li>${LEAKS[k].nome} (${n}×)</li>`).join('')}</ul>` : '') +
+      `<h4>Exercícios</h4><p>Quiz: ${apr.quiz.certas}/${apr.quiz.total} certas · Treino de outs: ${apr.outs.certas}/${apr.outs.total} certas</p>` +
+      `<button class="bt" id="zerarApr">Zerar estatísticas de aprendizado</button>`;
+    $('#zerarApr').onclick = () => { if (confirm('Zerar as estatísticas de aprendizado?')) { apr = APR_PADRAO(); gravar(CH.apr, apr); aprendizado(); } };
+  };
+  const trocar = a => {
+    document.querySelectorAll('#janelaCorpo .abas button').forEach(b => b.classList.toggle('ativo', b.dataset.aba === a));
+    if (a === 'partidas') partidas(); else aprendizado();
+  };
+  document.querySelectorAll('#janelaCorpo .abas button').forEach(b => b.onclick = () => trocar(b.dataset.aba));
+  trocar(aba);
+}
+
+// ---------- Exercícios: Quiz e Treino de outs ----------
+const htmlCartas = (cs, cls = 'mesa') => cs.map(c => htmlCarta(c, cls)).join('');
+function sortearSituacao(querOuts) {
+  for (let t = 0; t < 400; t++) {
+    const d = embaralhar(), mao = [d.pop(), d.pop()], mesa = [d.pop(), d.pop(), d.pop()];
+    if (rnd() < 0.4) mesa.push(d.pop());
+    if (!querOuts) return { mao, mesa };
+    const o = contarOuts(mao, mesa);
+    // um projeto de verdade: trinca, sequência ou flush entre as melhoras
+    if (o && o.total >= 4 && o.total <= 15 && catDe(avaliar(mao.concat(mesa))) <= 2 && o.lista.some(g => g.cat >= 3 && g.n >= 2)) return { mao, mesa, o };
+  }
+  return null;
+}
+function abrirExercicios(aba = 'quiz') {
+  abrirJanela('Exercícios', `<div class="abas"><button data-aba="quiz">Quiz de decisões</button><button data-aba="outs">Treino de outs</button></div><div id="exCorpo"></div>`);
+  const corpo = $('#exCorpo');
+  const situacao = (s, extra) => `<div class="quiz-cartas"><div class="grupo">Sua mão<div>${htmlCartas(s.mao, 'grande')}</div></div>` +
+    `<div class="grupo">Mesa (${s.mesa.length === 3 ? 'flop' : 'turn'})<div>${htmlCartas(s.mesa)}</div></div></div>${extra || ''}`;
+  const quiz = () => {
+    const tipos = ['acao', 'acao', 'potodds', 'outs'];
+    const tipo = tipos[rndInt(tipos.length)];
+    const s = sortearSituacao(tipo === 'outs');
+    const nOpp = 1 + rndInt(tipo === 'acao' ? 3 : 2);
+    const antes = (5 + rndInt(30)) * 20;
+    const aposta = Math.max(20, Math.round((antes * [0.33, 0.5, 0.66, 0.75, 1][rndInt(5)]) / 10) * 10);
+    const pote = antes + aposta;
+    const need = aposta / (pote + aposta);
+    const ctx = `<p>${nOpp} oponente${nOpp > 1 ? 's' : ''} na mão. O pote tem <b>${fmt(pote)}</b> (já com a aposta) e você precisa pagar <b>${fmt(aposta)}</b>.</p>`;
+    let pergunta, respostas, explicar;
+    if (tipo === 'acao') {
+      const e = equidade(s.mao, s.mesa, nOpp, 4000);
+      const certa = e.eq >= need ? (e.eq >= 0.68 ? 'raise' : 'call') : 'fold';
+      pergunta = 'Qual a melhor ação?';
+      respostas = [['fold', 'Fold'], ['call', 'Call'], ['raise', 'Raise']];
+      explicar = r => {
+        const ok = r === certa || (r === 'call' && certa === 'raise' && e.eq < 0.8) || (r === 'raise' && certa === 'call' && e.eq >= 0.6);
+        return { ok, txt: `Equidade contra ${nOpp} mão(s) aleatória(s): <b>${pct(e.eq)}</b>. Pot odds: ${fmt(aposta)} ÷ (${fmt(pote)} + ${fmt(aposta)}) = <b>${pct(need)}</b>. ` +
+          (e.eq >= need ? 'A equidade cobre o preço: pagar é lucrativo' + (e.eq >= 0.68 ? ', e a mão é forte o bastante para aumentar por valor.' : '.') : 'A equidade não cobre o preço: desistir.') +
+          ` Melhor resposta: <b>${ROT_ACAO[certa]}</b>.` };
+      };
+    } else if (tipo === 'potodds') {
+      const certo = Math.round(need * 100);
+      const opcoes = [...new Set([certo, Math.round((aposta / pote) * 100), Math.round((aposta / (pote + 2 * aposta)) * 100), certo + 8, Math.max(1, certo - 7)])].slice(0, 4).sort((a, b) => a - b);
+      pergunta = 'Qual a equidade mínima para pagar?';
+      respostas = opcoes.map(o => [String(o), o + '%']);
+      explicar = r => ({ ok: Number(r) === certo, txt: `Pot odds = valor a pagar ÷ (pote + valor a pagar) = ${fmt(aposta)} ÷ ${fmt(pote + aposta)} = <b>${certo}%</b>.` });
+    } else {
+      const o = s.o;
+      pergunta = 'Quantos outs você tem?';
+      respostas = null;
+      explicar = r => ({ ok: Number(r) === o.total || Number(r) === o.limpas, txt: descOuts(o) });
+    }
+    corpo.innerHTML = situacao(s, ctx) + `<p><b>${pergunta}</b></p>` +
+      (respostas ? `<div class="quiz-resp">${respostas.map(([v, t]) => `<button class="bt" data-r="${v}">${t}</button>`).join('')}</div>`
+        : `<div class="quiz-resp"><input type="number" id="qOuts" min="0" max="30" style="width:90px"><button class="bt prim" id="qOk">Conferir</button></div>`) +
+      `<div id="qRes"></div><p class="nota">Placar: ${apr.quiz.certas}/${apr.quiz.total}</p>`;
+    const responder = r => {
+      const x = explicar(r);
+      apr.quiz.total++; if (x.ok) apr.quiz.certas++;
+      gravar(CH.apr, apr);
+      corpo.querySelectorAll('.quiz-resp button, .quiz-resp input').forEach(b => (b.disabled = true));
+      $('#qRes').innerHTML = `<div class="coach"><b class="${x.ok ? 'ok' : 'ruim'}">${x.ok ? '✓ Certo!' : '✗ Não foi dessa vez.'}</b> ${x.txt}</div><p><button class="bt prim" id="qProx">Próxima ▶</button></p>`;
+      $('#qProx').onclick = quiz;
+    };
+    corpo.querySelectorAll('.quiz-resp button[data-r]').forEach(b => b.onclick = () => responder(b.dataset.r));
+    if (!respostas) { $('#qOk').onclick = () => responder($('#qOuts').value); $('#qOuts').onkeydown = e => { if (e.key === 'Enter') responder($('#qOuts').value); }; $('#qOuts').focus(); }
+  };
+  const outs = () => {
+    const s = sortearSituacao(true);
+    corpo.innerHTML = situacao(s) + `<p><b>Conte os outs:</b> cartas que melhoram a sua mão para uma categoria maior (par do topo, dois pares com a sua carta, trinca, sequência, flush…).</p>` +
+      `<div class="quiz-resp"><input type="number" id="oResp" min="0" max="30" style="width:90px"><button class="bt prim" id="oOk">Conferir</button></div><div id="oRes"></div>` +
+      `<p class="nota">Acertos: ${apr.outs.certas}/${apr.outs.total}</p>`;
+    const conferir = () => {
+      const r = Number($('#oResp').value), ok = r === s.o.total || r === s.o.limpas;
+      apr.outs.total++; if (ok) apr.outs.certas++;
+      gravar(CH.apr, apr);
+      $('#oOk').disabled = $('#oResp').disabled = true;
+      $('#oRes').innerHTML = `<div class="coach"><b class="${ok ? 'ok' : 'ruim'}">${ok ? '✓ Certo!' : `✗ São ${s.o.total} outs.`}</b> ${descOuts(s.o)}</div><p><button class="bt prim" id="oProx">Próximo ▶</button></p>`;
+      $('#oProx').onclick = outs;
+    };
+    $('#oOk').onclick = conferir;
+    $('#oResp').onkeydown = e => { if (e.key === 'Enter') conferir(); };
+    $('#oResp').focus();
+  };
+  const trocar = a => {
+    document.querySelectorAll('#janelaCorpo .abas button').forEach(b => b.classList.toggle('ativo', b.dataset.aba === a));
+    if (a === 'quiz') quiz(); else outs();
+  };
+  document.querySelectorAll('#janelaCorpo .abas button').forEach(b => b.onclick = () => trocar(b.dataset.aba));
+  trocar(aba);
+}
+function descOuts(o) {
+  return `<ul>${o.lista.map(g => `<li>${g.n} para ${CAT_NOME[g.cat].toLowerCase()}: ${g.desc} ${cartinhas(g.cartas)}${g.sujas ? ` (${g.sujas} suja${g.sujas > 1 ? 's' : ''})` : ''}</li>`).join('')}</ul>` +
+    `Total: <b>${o.total}</b> outs${o.sujas ? ` (${o.limpas} limpos)` : ''}. Próxima carta: ${pct(o.pProx, 1)} (regra do 2: ~${o.regra2}%)` +
+    (o.naoVistas === 47 ? `; até o river: ${pct(o.pRiver, 1)} (regra do 4: ~${o.regra4}%).` : '.');
+}
+
+// ---------- Glossário ----------
+const GLOSSARIO = [
+  ['allin', 'All-in', 'Apostar todas as fichas. Quem está all-in não age mais na mão e só disputa os potes para os quais contribuiu.'],
+  ['bb', 'Big blind (BB)', 'Aposta obrigatória maior, postada pelo segundo jogador à esquerda do botão. Tem a "opção": pode aumentar mesmo que todos só paguem.'],
+  ['blefe', 'Blefe', 'Apostar ou aumentar com uma mão fraca para fazer o adversário desistir de uma mão melhor.'],
+  ['board', 'Board (mesa)', 'As cartas comunitárias: flop (3), turn (1) e river (1).'],
+  ['botao', 'Botão (dealer, BTN)', 'Posição do dealer; age por último depois do flop, por isso é a melhor posição.'],
+  ['cbet', 'C-bet (continuation bet)', 'Aposta no flop feita por quem aumentou antes do flop, mantendo a iniciativa.'],
+  ['call', 'Call (pagar)', 'Igualar a maior aposta da rodada.'],
+  ['check', 'Check (passar)', 'Não apostar quando não há aposta a pagar.'],
+  ['equidade', 'Equidade', 'A fatia do pote que é sua, em média, se as cartas forem até o fim agora: chance de vencer mais a parte dos empates.'],
+  ['ev', 'EV (valor esperado)', 'Quanto uma decisão ganha ou perde em média, se repetida muitas vezes. +EV = lucrativa; −EV = perde no longo prazo.'],
+  ['flop', 'Flop', 'As três primeiras cartas comunitárias, viradas juntas.'],
+  ['fold', 'Fold (desistir)', 'Abandonar a mão, perdendo o que já apostou nela.'],
+  ['heads', 'Heads-up', 'Mão ou partida com só dois jogadores. O dealer é o small blind e age primeiro antes do flop.'],
+  ['implied', 'Implied odds', 'As fichas que você espera ganhar nas próximas ruas se acertar o projeto. Podem justificar pagar um pouco acima das pot odds.'],
+  ['kicker', 'Kicker', 'Carta que não faz parte da combinação principal mas desempata mãos iguais (ex.: A-K contra A-Q com par de ases).'],
+  ['limp', 'Limp', 'Só pagar o big blind antes do flop, em vez de aumentar.'],
+  ['molhado', 'Board molhado', 'Board com muitas combinações de projeto (cartas próximas ou do mesmo naipe).'],
+  ['montecarlo', 'Monte Carlo', 'Estimativa por simulação: o jogo sorteia milhares de vezes as cartas desconhecidas e conta quantas vezes você vence.'],
+  ['nuts', 'Nuts', 'A melhor mão possível naquele board.'],
+  ['outs', 'Outs', 'Cartas ainda no baralho que melhoram a sua mão para uma provavelmente vencedora.'],
+  ['outsujo', 'Out sujo', 'Out que completa a sua mão mas pode completar uma maior para o adversário (ex.: carta da sequência que traz a terceira do naipe).'],
+  ['posicao', 'Posição', 'Ordem em que você age. Agir por último ("em posição") dá informação; as primeiras posições (UTG) pedem mãos mais fortes. Siglas: UTG, MP, HJ (hijack), CO (cutoff), BTN, SB, BB.'],
+  ['potodds', 'Pot odds', 'Relação entre o que você paga e o pote. Equidade mínima para pagar = valor a pagar ÷ (pote + valor a pagar).'],
+  ['raise', 'Raise (aumentar)', 'Subir a aposta. No no-limit, o aumento mínimo é o tamanho do último aumento; o máximo, todas as fichas.'],
+  ['range', 'Range (faixa)', 'O conjunto de mãos que um jogador pode ter numa situação, deduzido das ações dele.'],
+  ['regra24', 'Regra do 2 e 4', 'Atalho mental: outs × 2 ≈ % de acertar na próxima carta; no flop, outs × 4 ≈ % de acertar até o river.'],
+  ['reverse', 'Reverse implied odds', 'O risco de, mesmo melhorando, perder um pote grande para uma mão ainda melhor (kicker fraco, flush baixo).'],
+  ['river', 'River', 'A quinta e última carta comunitária.'],
+  ['sb', 'Small blind (SB)', 'Aposta obrigatória menor, postada à esquerda do botão (no heads-up, pelo próprio botão).'],
+  ['seco', 'Board seco', 'Board com poucos projetos possíveis (cartas desconectadas e de naipes diferentes).'],
+  ['semiblefe', 'Semi-blefe', 'Apostar com um projeto: ganha se o adversário desistir e ainda pode acertar.'],
+  ['showdown', 'Showdown', 'Quando as cartas são mostradas no fim para decidir quem leva o pote.'],
+  ['sidepot', 'Side pot (pote lateral)', 'Pote separado criado quando alguém está all-in com menos fichas: só disputa quem contribuiu para ele.'],
+  ['slowplay', 'Slowplay', 'Jogar passivamente uma mão muito forte para induzir o adversário a apostar.'],
+  ['split', 'Split pot', 'Divisão do pote entre mãos empatadas. Fichas ímpares vão para o primeiro vencedor à esquerda do dealer.'],
+  ['tag', 'Tight / loose, passivo / agressivo', 'Estilos de jogo: tight joga poucas mãos, loose joga muitas; agressivo aposta e aumenta, passivo paga e passa.'],
+  ['turn', 'Turn', 'A quarta carta comunitária.'],
+  ['vpip', 'VPIP', 'Porcentagem de mãos em que você colocou fichas voluntariamente antes do flop (pagar ou aumentar; os blinds não contam).'],
+];
+function abrirGlossario(alvo) {
+  const html = `<dl class="glossario">${GLOSSARIO.map(([k, t, d]) => `<dt id="g-${k}" class="${k === alvo ? 'alvo' : ''}">${t}</dt><dd>${d}</dd>`).join('')}</dl>`;
+  abrirJanela('Glossário', html);
+  if (alvo) { const el = document.getElementById('g-' + alvo); if (el) el.scrollIntoView({ block: 'center' }); }
+}
+
+// ---------- Menu da partida ----------
+function abrirMenu() {
+  const html = `<div class="botoes-tela" style="margin-top:0"><button class="bt prim" data-m="continuar">▶ Continuar</button>` +
+    `<button class="bt" data-m="estat">📈 Estatísticas</button><button class="bt" data-m="ex">🎯 Exercícios</button>` +
+    `<button class="bt" data-m="revisar" ${G && G.ultimaMao ? '' : 'disabled'}>🔍 Revisar última mão</button></div>` +
+    `<div class="grade-cfg">` +
+    `<div class="cfg"><label>Partida</label><label class="chk"><input type="checkbox" data-c="rapido" ${cfg.rapido ? 'checked' : ''}> Velocidade rápida</label>` +
+    `<label class="chk"><input type="checkbox" data-c="forca" ${cfg.forca ? 'checked' : ''}> Mostrar força da mão e equidade</label>` +
+    `<label class="chk"><input type="checkbox" data-c="som" ${cfg.som ? 'checked' : ''}> Som</label></div>` +
+    `<div class="cfg"><label>Modo Aprendizado</label><label class="chk"><input type="checkbox" data-c="aprender" ${cfg.aprender ? 'checked' : ''}> Ativado</label>` +
+    `<select data-c="nivel">${['Iniciante', 'Intermediário', 'Avançado'].map((n, k) => `<option value="${k}" ${cfg.nivel === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>` +
+    `<div class="botoes-tela"><button class="bt" data-m="inicio">Tela inicial (a partida fica salva)</button><button class="bt" data-m="abandonar">Abandonar partida</button><button class="bt" data-m="jogos">◀ Jogos</button></div>`;
+  abrirJanela('Menu', html);
+  const corpo = $('#janelaCorpo');
+  corpo.querySelectorAll('[data-c]').forEach(el => el.onchange = () => {
+    const k = el.dataset.c;
+    cfg[k] = el.type === 'checkbox' ? el.checked : Number(el.value);
+    salvarCfg(); sincronizarCfgTela(); atualizarSom();
+    if ((k === 'aprender' || k === 'nivel' || k === 'forca') && G && emAposta()) {
+      ui.analise = null;
+      if (vezHumano()) prepararVezHumano(ui.laco); else analisarSeguindo(ui.laco);
+    }
+    render();
+    requestAnimationFrame(posicionar);
+  });
+  corpo.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+    const m = b.dataset.m;
+    if (m === 'continuar') fecharJanela();
+    else if (m === 'estat') { fecharJanela(); abrirEstatisticas(); }
+    else if (m === 'ex') { fecharJanela(); abrirExercicios(); }
+    else if (m === 'revisar') { fecharJanela(); abrirRevisao(G.ultimaMao); }
+    else if (m === 'inicio') { fecharJanela(); irInicio(); }
+    else if (m === 'abandonar') { if (confirm('Abandonar a partida? Ela não poderá ser retomada.')) { fecharJanela(); apagar(CH.partida); G = null; irInicio(); } }
+    else if (m === 'jogos') voltarAosJogos();
+  });
+}
+
+// =====================================================================
+//  13. TELAS, TECLADO E INICIALIZAÇÃO
+// =====================================================================
+let saindo = false;
+function voltarAosJogos() { saindo = true; salvar(); location.href = '../'; }
+function irInicio() {
+  ui.laco++;
+  ui.esperaHumano = null;
+  if (ui.proxima) ui.proxima = null;
+  if (G && G.fase !== 'acabou') salvar();
+  $('#telaFim').classList.add('oculto');
+  $('#telaInicio').classList.remove('oculto');
+  $('#btRetomar').classList.toggle('oculto', !ler(CH.partida, null));
+  fecharBalao();
+}
+function sincronizarCfgTela() {
+  $('#cfgBots').value = cfg.bots; $('#cfgBotsTxt').textContent = cfg.bots;
+  $('#cfgFichas').value = String(cfg.fichas); $('#cfgAumento').value = String(cfg.aumento); $('#cfgDif').value = String(cfg.dif);
+  $('#cfgRapido').checked = cfg.rapido; $('#cfgForca').checked = cfg.forca; $('#cfgSom').checked = cfg.som;
+  $('#cfgAprender').checked = cfg.aprender; $('#cfgNivel').value = String(cfg.nivel);
+  $('#cfgNivel').disabled = !cfg.aprender;
+}
+function lerCfgTela() {
+  cfg.bots = Number($('#cfgBots').value); cfg.fichas = Number($('#cfgFichas').value);
+  cfg.aumento = Number($('#cfgAumento').value); cfg.dif = Number($('#cfgDif').value);
+  cfg.rapido = $('#cfgRapido').checked; cfg.forca = $('#cfgForca').checked; cfg.som = $('#cfgSom').checked;
+  cfg.aprender = $('#cfgAprender').checked; cfg.nivel = Number($('#cfgNivel').value);
+  salvarCfg(); sincronizarCfgTela(); atualizarSom();
+}
+document.querySelectorAll('#telaInicio input, #telaInicio select').forEach(el => el.addEventListener('input', lerCfgTela));
+function atualizarSom() { $('#btSom').textContent = cfg.som ? '🔊' : '🔇'; }
+$('#btSom').onclick = () => { cfg.som = !cfg.som; salvarCfg(); atualizarSom(); sincronizarCfgTela(); Som.iniciar(); };
+
+function entrarNaMesa() {
+  $('#telaInicio').classList.add('oculto');
+  $('#telaFim').classList.add('oculto');
+  ui.visiveis = G.jog.map(p => p.cartas.length); ui.mesaVis = G.mesa.length; ui.revelar = new Set();
+  ui.destaque = new Set(); ui.vencedores = new Set(); ui.potesFixos = null; ui.fichasExib = null; ui.analise = null;
+  ui.esperaHumano = null; ui.pausado = false;
+  $('#resultado').classList.add('oculto');
+  msgMesa('');
+  // Retomando no meio de um all-in: as cartas de quem está na mão já estavam viradas
+  if (emAposta() && vivos(G).length > 1 && podemAgir(G).length <= 1) vivos(G).forEach(p => ui.revelar.add(p.i));
+  montarMesa();
+  renderLog();
+  setTimeout(() => { posicionar(); jogar(); }, 0);   // setTimeout: rAF não roda em aba de fundo
+}
+$('#btNova').onclick = () => {
+  Som.iniciar(); lerCfgTela();
+  G = novaPartida({ bots: cfg.bots, fichas: cfg.fichas, aumento: cfg.aumento, dif: cfg.dif });
+  apagar(CH.partida);
+  entrarNaMesa();
+};
+$('#btRetomar').onclick = () => {
+  Som.iniciar();
+  const s = ler(CH.partida, null);
+  if (!s || !s.jog) { toast('Não há partida salva.'); $('#btRetomar').classList.add('oculto'); return; }
+  G = s;
+  entrarNaMesa();
+};
+$('#btExercicios').onclick = () => abrirExercicios();
+$('#btEstat').onclick = () => abrirEstatisticas();
+$('#btGloss').onclick = () => abrirGlossario();
+$('#btGloss2').onclick = () => abrirGlossario();
+$('#btRanges').onclick = () => abrirRanges('maos');
+$('#btMenu').onclick = () => abrirMenu();
+$('#btJogos').onclick = voltarAosJogos;
+$('#btJogos2').onclick = voltarAosJogos;
+$('#btFimNova').onclick = () => { $('#telaFim').classList.add('oculto'); $('#btNova').click(); };
+$('#btFimInicio').onclick = () => irInicio();
+$('#btFimRevisar').onclick = () => G && abrirRevisao(G.ultimaMao);
+
+// Atalhos de teclado
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'escape') {
+    if (!$('#janela').classList.contains('oculto')) fecharJanela();
+    else if (G && $('#telaInicio').classList.contains('oculto') && $('#telaFim').classList.contains('oculto')) abrirMenu();
+    return;
+  }
+  const alvo = e.target;
+  if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'SELECT' || alvo.tagName === 'TEXTAREA')) return;
+  if (!$('#janela').classList.contains('oculto') || !$('#telaInicio').classList.contains('oculto')) return;
+  if (k === 'm') { $('#btSom').click(); return; }
+  if (k === 'l') { alternarLog(); return; }
+  if ((k === 'enter' || k === ' ') && ui.proxima) { e.preventDefault(); ui.proxima(); return; }
+  if (!vezHumano()) return;
+  const L = legais(G);
+  if (k === 'f') btFold.click();
+  else if (k === 'c') btCall.click();
+  else if (k === 'r' && L.podeAumentar) btRaise.click();
+  else if (k === 'a') humanoAge({ tipo: L.podeAumentar ? 'allin' : (L.pagar ? 'call' : 'check') });
+  else if (k === 'd' && cfg.aprender) btDica.click();
+  else return;
+  e.preventDefault();
+});
+
+// Tela cheia no celular: pedida no toque (pointerup) dos botões das telas de menu
+function pedirTelaCheia() {
+  if (saindo || document.fullscreenElement || document.webkitFullscreenElement) return;
+  const el = document.documentElement;
+  try {
+    const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen && el.webkitRequestFullscreen();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) { /* não suportado */ }
+}
+document.addEventListener('pointerup', e => {
+  Som.iniciar();
+  if (e.pointerType === 'touch' && e.target.closest('.tela button, #janela button, #resultado button')) pedirTelaCheia();
+});
+document.addEventListener('fullscreenchange', () => requestAnimationFrame(posicionar));
+document.addEventListener('webkitfullscreenchange', () => requestAnimationFrame(posicionar));
+window.addEventListener('resize', () => requestAnimationFrame(posicionar));
+// A área da mesa também muda quando os controles ganham ou perdem linhas
+if (window.ResizeObserver) new ResizeObserver(() => posicionar()).observe(area);
+window.addEventListener('pagehide', () => { if (G && G.fase !== 'acabou') salvar(); });
+
+// Inicialização
+sincronizarCfgTela();
+atualizarSom();
+alternarLog(iface.log && innerWidth > 760);
+$('#btRetomar').classList.toggle('oculto', !ler(CH.partida, null));
+$('#cfgAprender').addEventListener('change', () => { $('#cfgNivel').disabled = !$('#cfgAprender').checked; });
+
+// =====================================================================
+//  14. AUTOTESTES — rode runTests() no console do navegador
+// =====================================================================
+function runTests() {
+  const res = [];
+  const ok = (teste, cond, info = '') => res.push({ teste, ok: !!cond, info: String(info) });
+  const av = s => avaliar(cartas(s));
+  const cmp = (a, b) => Math.sign(av(a) - av(b));
+  const jogo = (bots, fichas = 1000) => novaPartida({ bots, fichas, aumento: 0, dif: 1 });
+  const naoAgido = G => G.vez;   // índice de quem tem a vez
+
+  // ---------- Avaliador ----------
+  ok('Royal flush vence straight flush até o Rei', cmp('Ah Kh Qh Jh Th 2c 3d', '9h Kh Qh Jh Th 2c 3d') === 1);
+  ok('Nome: Royal Flush', nomeMao(av('Ah Kh Qh Jh Th 2c 3d')) === 'Royal Flush');
+  ok('Straight flush vence quadra', cmp('5d 6d 7d 8d 9d', 'Ac Ad Ah As Kd') === 1);
+  ok('Quadra na mesa: o kicker decide', cmp('Ac Ad Ah As Kd 2c 3c', 'Ac Ad Ah As Qd 2c 3c') === 1);
+  ok('Full house: a trinca maior vence', cmp('Kc Kd Kh 2s 2d', 'Qc Qd Qh As Ad') === 1);
+  ok('Duas trincas: full house da maior com a menor', nomeMao(av('Kc Kd Kh Qs Qd Qc 2h')) === 'Full House, Reis com Damas');
+  ok('Nome: "Full House, Reis com Setes"', nomeMao(av('Kc Kd Kh 7s 7d 2c 3h')) === 'Full House, Reis com Setes');
+  ok('Flush vence sequência', cmp('2h 5h 8h Jh Kh', '9c Td Jh Qs Kd') === 1);
+  ok('Flush: a 5ª carta desempata', cmp('Ah Kh 9h 7h 4h', 'Ah Kh 9h 7h 3h') === 1);
+  ok('Seis cartas do naipe: usa as 5 maiores', av('Ah Kh 9h 7h 4h 2h 3c') === av('Ah Kh 9h 7h 4h'));
+  ok('Wheel A-2-3-4-5 é sequência até o Cinco', nomeMao(av('Ac 2d 3h 4s 5c 9d Kh')) === 'Sequência até o Cinco');
+  ok('Sequência até o 6 vence a wheel', cmp('2d 3h 4s 5c 6d', 'Ac 2d 3h 4s 5c') === 1);
+  ok('Straight flush na wheel (A-5 do mesmo naipe)', nomeMao(av('Ah 2h 3h 4h 5h Kc Qd')) === 'Straight Flush até o Cinco');
+  ok('Sem "volta": Q-K-A-2-3 não é sequência', catDe(av('Qc Kd Ah 2s 3c')) === 0);
+  ok('Sequência maior entre 7 cartas', nomeMao(av('4c 5d 6h 7s 8c 9d 2h')) === 'Sequência até o Nove');
+  ok('Trinca: os kickers desempatam', cmp('7c 7d 7h Ks 9d', '7c 7d 7h Ks 8d') === 1);
+  ok('Dois pares: o kicker decide', cmp('Ac Ad Kh Ks Qd', 'Ac Ad Kh Ks Jd') === 1);
+  ok('Três pares: os dois maiores + melhor kicker', av('Ac Ad Kh Ks Qd Qc 2h') === av('Ac Ad Kh Ks Qd'));
+  ok('Par: o terceiro kicker decide', cmp('9c 9d Ah Kh 7s', '9c 9d Ah Kh 6s') === 1);
+  ok('Par maior vence par menor com kickers melhores', cmp('3c 3d 4h 5s 7c', '2c 2d Ah Ks Qc') === 1);
+  ok('Carta alta: compara as cinco', cmp('Ac Qd 9h 7s 4c', 'Ac Qd 9h 7s 3c') === 1);
+  ok('Board joga: empate (split)', av('2c 3d As Kh Qd Jc Th') === av('4c 5d As Kh Qd Jc Th'));
+  ok('Sequência de uma carta vence sequência da mesa', cmp('Ac 2d 9s Kh Qd Jc Th', '4c 5d 9s Kh Qd Jc Th') === 1);
+  {
+    let erro = '';
+    for (let t = 0; t < 2000 && !erro; t++) {
+      const d = embaralhar().slice(0, 7);
+      if (melhorMao(d).pont !== avaliar(d)) erro = d.map(cartaTxt).join(' ');
+    }
+    ok('Avaliador de 7 cartas = melhor das 21 combinações (2000 mãos)', !erro, erro);
+  }
+
+  // ---------- Potes, split e side pots ----------
+  {
+    const d = dividir(101, [3, 1], 0, 4);
+    ok('Split: ficha ímpar ao primeiro à esquerda do dealer', d[1] === 51 && d[3] === 50, JSON.stringify(d));
+    const d2 = dividir(100, [1, 3, 0], 2, 4);   // ordem a partir do dealer 2: 3, 0, 1
+    ok('Split em 3 com sobra de 1 ficha', d2[3] === 34 && d2[0] === 33 && d2[1] === 33, JSON.stringify(d2));
+  }
+  const fazJog = specs => specs.map((s, i) => ({ ...novoJogador(i, 'J' + i, false, s.fichas || 0, 'tag'), total: s.total, desistiu: !!s.fold, allin: !!s.allin, cartas: s.cartas ? cartas(s.cartas) : [] }));
+  {
+    const jog = fazJog([{ total: 100, allin: true }, { total: 300, allin: true }, { total: 600, allin: true }, { total: 600 }, { total: 50, fold: true }]);
+    const p = calcularPotes(jog);
+    ok('Side pots com 3 all-ins: valores', p.length === 3 && p[0].valor === 450 && p[1].valor === 600 && p[2].valor === 600, JSON.stringify(p));
+    ok('Side pots: elegíveis de cada pote', p[0].eleg.join() === '0,1,2,3' && p[1].eleg.join() === '1,2,3' && p[2].eleg.join() === '2,3');
+    ok('Side pots: dinheiro de quem desistiu fica no pote principal', p.reduce((s, x) => s + x.valor, 0) === 1650);
+  }
+  {
+    // A (all-in 100) tem a melhor mão, B (300) a segunda, C (600) a terceira, D (600) a pior
+    const jog = fazJog([
+      { total: 100, allin: true, cartas: 'Ac Ad' }, { total: 300, allin: true, cartas: 'Kc Kd' },
+      { total: 600, allin: true, cartas: 'Qc Qd' }, { total: 600, cartas: '4h 5s' }, { total: 50, fold: true, cartas: '8s 8h' }]);
+    const G = { jog, mesa: cartas('2c 7d 9h Js 3c'), dealer: 0 };
+    const r = resolverShowdown(G);
+    ok('Showdown com 3 all-ins: cada pote ao melhor elegível', jog[0].fichas === 450 && jog[1].fichas === 600 && jog[2].fichas === 600 && jog[3].fichas === 0,
+      jog.map(p => p.fichas).join(','));
+    ok('Showdown: nome da mão vencedora', r.potes[0].nome === 'Par de Ases', r.potes[0].nome);
+  }
+  {
+    // Empate no pote lateral: B e C dividem; A (curto) vence o principal
+    const jog = fazJog([
+      { total: 50, allin: true, cartas: 'Ac Ad' }, { total: 201, allin: true, cartas: 'Kc 2d' }, { total: 201, cartas: 'Kh 2s' }]);
+    const G = { jog, mesa: cartas('Ks 7d 9h Jc 4c'), dealer: 0 };
+    resolverShowdown(G);
+    ok('Split no pote lateral com ficha ímpar', jog[0].fichas === 150 && jog[1].fichas === 151 && jog[2].fichas === 151, jog.map(p => p.fichas).join(','));
+  }
+
+  // ---------- Ordem de ação, blinds e apostas ----------
+  {
+    const G = jogo(1);
+    iniciarMao(G, { dealer: 0 });
+    ok('Heads-up: o dealer posta o small blind', G.sbI === 0 && G.bbI === 1 && G.jog[0].aposta === 10 && G.jog[1].aposta === 20);
+    ok('Heads-up: o dealer age primeiro no pré-flop', G.vez === 0);
+    agir(G, { tipo: 'call' });
+    ok('Heads-up: o BB tem a opção depois do call', G.vez === 1 && legais(G).podeCheck && legais(G).podeAumentar);
+    agir(G, { tipo: 'check' });
+    ok('Rodada termina quando todos igualaram e agiram', G.vez === -1);
+    fecharRua(G); abrirRua(G);
+    ok('Heads-up: o BB age primeiro depois do flop', G.vez === 1 && G.mesa.length === 3);
+    G.fase = 'fim';
+    iniciarMao(G);
+    ok('Heads-up: o botão gira e o novo dealer é o SB', G.dealer === 1 && G.sbI === 1 && G.bbI === 0 && G.vez === 1);
+  }
+  {
+    const G = jogo(3);
+    iniciarMao(G, { dealer: 0 });   // SB 1, BB 2, UTG 3
+    ok('4 jogadores: UTG (à esquerda do BB) age primeiro', G.sbI === 1 && G.bbI === 2 && G.vez === 3);
+    agir(G, { tipo: 'call' }); agir(G, { tipo: 'call' }); agir(G, { tipo: 'call' });
+    ok('Opção do big blind: todos pagaram e o BB ainda age', G.vez === 2 && legais(G).podeCheck && legais(G).podeAumentar);
+    agir(G, { tipo: 'raise', para: 60 });
+    ok('Raise do BB reabre a ação para os demais', G.vez === 3 && legais(G).podeAumentar);
+  }
+  {
+    const G = jogo(3);
+    iniciarMao(G, { dealer: 0 });
+    agir(G, { tipo: 'raise', para: 60 });   // UTG: aumento de 40
+    ok('Raise mínimo = último aumento (próximo mínimo: 100)', legais(G).minPara === 100, legais(G).minPara);
+    agir(G, { tipo: 'raise', para: 30 });   // abaixo do mínimo: vira o mínimo
+    ok('Raise abaixo do mínimo é ajustado para o mínimo', G.maiorAposta === 100 && G.minRaise === 40, G.maiorAposta + '/' + G.minRaise);
+    agir(G, { tipo: 'raise', para: 250 });  // aumento de 150
+    ok('Depois de um aumento de 150, o mínimo é 400', legais(G).minPara === 400, legais(G).minPara);
+  }
+  {
+    // All-in curto NÃO reabre: BTN aumenta para 100, SB vai all-in com 150 (aumento de 50 < 80), BB paga
+    const G = jogo(2);
+    G.jog[1].fichas = 150;
+    iniciarMao(G, { dealer: 0 });   // 3 jogadores: BTN 0 age primeiro
+    agir(G, { tipo: 'raise', para: 100 });
+    agir(G, { tipo: 'allin' });
+    ok('All-in curto sobe a aposta mas mantém o raise mínimo', G.maiorAposta === 150 && G.minRaise === 80, G.maiorAposta + '/' + G.minRaise);
+    agir(G, { tipo: 'call' });
+    ok('All-in curto não reabre a ação para quem já agiu', G.vez === 0 && !legais(G).podeAumentar && legais(G).pagar === 50);
+    agir(G, { tipo: 'raise', para: 500 });
+    ok('Raise proibido vira call', G.jog[0].aposta === 150 && G.vez === -1);
+  }
+  {
+    // All-in completo reabre: SB vai all-in com 300 (aumento de 200 ≥ 80)
+    const G = jogo(2);
+    G.jog[1].fichas = 300;
+    iniciarMao(G, { dealer: 0 });
+    agir(G, { tipo: 'raise', para: 100 });
+    agir(G, { tipo: 'allin' });
+    agir(G, { tipo: 'call' });
+    ok('All-in de raise completo reabre a ação', G.vez === 0 && legais(G).podeAumentar);
+  }
+  {
+    // Dois all-ins curtos que somados dão um raise completo reabrem (regra do TDA)
+    const G = jogo(3);
+    G.jog[0].fichas = 150; G.jog[1].fichas = 200;
+    iniciarMao(G, { dealer: 0 });   // UTG 3, BTN 0, SB 1, BB 2
+    agir(G, { tipo: 'raise', para: 100 });   // UTG
+    agir(G, { tipo: 'allin' });              // BTN 150 (curto)
+    agir(G, { tipo: 'allin' });              // SB 200 (curto)
+    agir(G, { tipo: 'call' });               // BB paga
+    ok('All-ins curtos acumulados reabrem quando somam um raise completo', G.vez === 3 && legais(G).podeAumentar && legais(G).minPara === 280, legais(G).minPara);
+  }
+  {
+    const G = jogo(1);
+    G.jog[1].fichas = 300;
+    iniciarMao(G, { dealer: 0 });
+    agir(G, { tipo: 'allin' });   // dealer: all-in 1000
+    agir(G, { tipo: 'call' });    // BB paga com 300 (all-in)
+    const dev = fecharRua(G);
+    ok('Aposta não paga volta para quem apostou', dev && dev.i === 0 && dev.v === 700 && G.jog[0].fichas === 700 && !G.jog[0].allin, JSON.stringify(dev));
+    ok('Todos all-in: ninguém mais age (board automático)', proximaVez(G, G.dealer) === -1 && podemAgir(G).length <= 1);
+  }
+  {
+    const G = jogo(2);
+    iniciarMao(G, { dealer: 0 });   // BTN 0, SB 1, BB 2
+    agir(G, { tipo: 'fold' }); agir(G, { tipo: 'fold' });
+    ok('Todos desistem: a rodada acaba', G.vez === -1 && vivos(G).length === 1);
+    fecharRua(G);
+    const r = ganharSemShowdown(G);
+    ok('O último leva o pote sem showdown (os 10 não pagos do BB voltam)', r.i === 2 && r.valor === 20 && G.jog[2].fichas === 1010, JSON.stringify(r));
+  }
+
+  // ---------- Outs e pot odds ----------
+  {
+    const o = contarOuts(cartas('Ah 5h'), cartas('Kh 9h 2c'));
+    const f = o.lista.find(g => g.cat === 5);
+    ok('Outs: projeto de flush tem 9 outs', f && f.n === 9 && f.desc.includes('♥'), f && f.desc);
+    const o2 = contarOuts(cartas('8c 9d'), cartas('Tc Jh 2s'));
+    ok('Outs: sequência aberta (OESD) tem 8 outs', o2.total === 8 && o2.lista[0].cat === 4, o2.total);
+    const o3 = contarOuts(cartas('8c 9d'), cartas('Th Jh 2h'));
+    ok('Outs sujos: sequência com 3 do naipe na mesa', o3.sujas === 2 && o3.total === 8, `${o3.total}/${o3.sujas}`);
+  }
+  {
+    const need = 50 / (150 + 50);
+    ok('Pot odds: pagar 50 num pote de 150 exige 25%', Math.abs(need - 0.25) < 1e-9);
+  }
+
+  // ---------- Simulação: conservação de fichas em 300 mãos com ações aleatórias ----------
+  {
+    let erro = '', G = jogo(5, 500), total = 3000, maos = 0;
+    for (let h = 0; h < 300 && !erro; h++) {
+      if (G.jog.filter(p => !p.fora).length < 2) G = jogo(2 + rndInt(7), 300 + rndInt(5) * 100), total = G.jog.length * G.jog[0].fichas;
+      if (G.mao > 0 && G.mao % 7 === 0) { G.sb *= 2; G.bb *= 2; }
+      iniciarMao(G); maos++;
+      for (let guard = 0; guard < 600; guard++) {
+        if (vivos(G).length === 1) { fecharRua(G); ganharSemShowdown(G); break; }
+        if (G.vez >= 0) {
+          const L = legais(G), r = rnd();
+          let a;
+          if (r < 0.15) a = { tipo: 'fold' };
+          else if (r < 0.55 || !L.podeAumentar) a = { tipo: L.podeCheck ? 'check' : 'call' };
+          else if (r < 0.85) a = { tipo: 'raise', para: L.minPara + rndInt(Math.max(1, L.maxPara - L.minPara + 1)) };
+          else a = { tipo: 'allin' };
+          agir(G, a);
+          const soma = G.jog.reduce((s, p) => s + p.fichas + p.total, 0);
+          if (soma !== total) { erro = `mão ${G.mao}: soma ${soma} ≠ ${total}`; break; }
+          continue;
+        }
+        fecharRua(G);
+        if (vivos(G).length === 1) { ganharSemShowdown(G); break; }
+        if (G.fase === 'river') { const pot = potTotal(G), pts = calcularPotes(G.jog).reduce((s, x) => s + x.valor, 0); if (pot !== pts) erro = `potes ${pts} ≠ ${pot}`; resolverShowdown(G); break; }
+        abrirRua(G);
+      }
+      G.fase = 'fim';
+      eliminar(G);
+      const soma = G.jog.reduce((s, p) => s + p.fichas, 0);
+      if (!erro && (soma !== total || G.jog.some(p => p.fichas < 0))) erro = `fim da mão ${G.mao}: soma ${soma} ≠ ${total}`;
+    }
+    ok(`Simulação de ${maos} mãos aleatórias: fichas conservadas, side pots fecham`, !erro, erro);
+  }
+  {
+    // A IA só recebe a visão pública: nenhuma carta fechada dos outros
+    const G = jogo(3);
+    iniciarMao(G, { dealer: 0 });
+    const v = visaoDe(G, G.vez), txt = JSON.stringify(v);
+    const alheias = G.jog.filter(p => p.i !== G.vez).flatMap(p => p.cartas);
+    ok('Visão da IA não contém cartas dos outros', !('cartas' in (v.oponentes[0] || {})) && !txt.includes('"mh"') && Object.keys(v).every(k => k !== 'jog') && alheias.length === 6);
+  }
+  void naoAgido;
+
+  const falhas = res.filter(r => !r.ok);
+  console.table(res.map(r => ({ '': r.ok ? '✓' : '✗', teste: r.teste, info: r.ok ? '' : r.info })));
+  console.log(`%c${res.length - falhas.length}/${res.length} testes passaram`, `font-weight:bold;color:${falhas.length ? '#e5484d' : '#2fbf71'}`);
+  return { total: res.length, passaram: res.length - falhas.length, falhas };
+}
+</script>
+</body>
+</html>
