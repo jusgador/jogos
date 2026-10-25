@@ -105,8 +105,9 @@ function loadSave() {
 }
 function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
 const upOwned = id => save.up[id] || 0;
-// nível que vale na fase em andamento (o Profissional limita os upgrades)
-const upLvl = id => Math.min(upOwned(id), G ? G.diff.upCap : 99);
+// nível que vale na fase em andamento (o Profissional corta a evolução pela metade)
+const upLvl = id => G ? Math.floor(upOwned(id) * G.diff.evo) : upOwned(id);
+const wpnMax = () => Math.round(6 * G.diff.evo); // nível máximo da arma na fase
 
 /* =====================================================================
    3. TABELAS DE DADOS (edite à vontade)
@@ -135,20 +136,21 @@ const upDesc = (u, lvl) => Array.isArray(u.desc) ? u.desc[Math.min(lvl, u.desc.l
 // inv: invencibilidade após levar dano; hit: dano de cada acerto; lead: quanto os inimigos miram à frente do avião;
 // lives: vidas por partida; cont: continues por fase; req: o que a fase exige além do chefe
 // ('' nada, 'meta' as metas, 'reféns' todos os reféns e a meta de alvos, 'tudo' todos os alvos e reféns);
-// lifeRescue: refém pode dar vida extra; upCap: nível máximo de upgrade que vale na fase; reward: moedas e pontos
+// lifeRescue: refém pode dar vida extra; evo: fração da evolução que vale na fase (upgrades da loja e nível
+// máximo da arma; 0,5 corta tudo pela metade); reward: moedas e pontos
 const DIFFS = {
   easy:   { label: 'Fácil',   color: '#2bb24c', hp: 1,   fire: 1,   bullet: 1,    gap: 1,    tgt: 1,    bossHp: 1,   bossRate: 1,   drop: 1,    inv: 1,
-            hit: 1, lead: 0,    lives: 3, cont: Infinity, req: '',      lifeRescue: true,  upCap: 9, reward: 1,
+            hit: 1, lead: 0,    lives: 3, cont: Infinity, req: '',      lifeRescue: true,  evo: 1, reward: 1,
             rule: 'Basta vencer o chefe: metas valem estrelas', desc: 'Para aprender • continues à vontade' },
   normal: { label: 'Normal',  color: '#e08a1e', hp: 1.5, fire: 1.8, bullet: 1.15, gap: 0.8,  tgt: 1.1,  bossHp: 1.4, bossRate: 1.4, drop: 0.7,  inv: 0.7,
-            hit: 1, lead: 0.3,  lives: 3, cont: 2,        req: 'meta',  lifeRescue: true,  upCap: 9, reward: 1.3,
+            hit: 1, lead: 0.3,  lives: 3, cont: 2,        req: 'meta',  lifeRescue: true,  evo: 1, reward: 1.3,
             rule: 'Metas de alvos e resgates obrigatórias', desc: '2 continues por fase • moedas e pontos ×1,3' },
   hard:   { label: 'Difícil', color: '#c0392b', hp: 2,   fire: 2.5, bullet: 1.3,  gap: 0.66, tgt: 1.2,  bossHp: 1.8, bossRate: 1.8, drop: 0.5,  inv: 0.55,
-            hit: 1, lead: 0.6,  lives: 2, cont: 1,        req: 'reféns', lifeRescue: false, upCap: 9, reward: 1.7,
+            hit: 1, lead: 0.6,  lives: 2, cont: 1,        req: 'reféns', lifeRescue: false, evo: 1, reward: 1.7,
             rule: 'Resgate TODOS os reféns e cumpra a meta de alvos', desc: '2 vidas • 1 continue • reféns não dão vida • ×1,7' },
   pro:    { label: 'Profissional', short: 'PRO', color: '#8e44ad', hp: 2.4, fire: 2.8, bullet: 1.42, gap: 0.56, tgt: 1.25, bossHp: 2, bossRate: 2.3, drop: 0.35, inv: 0.45,
-            hit: 2, lead: 0.9,  lives: 2, cont: 0,        req: 'tudo',  lifeRescue: false, upCap: 2, reward: 2.5,
-            rule: 'TODOS os alvos e TODOS os reféns, sem continue', desc: 'Dano dobrado • tiros miram à frente • upgrades até NV 2 • ×2,5' },
+            hit: 2, lead: 0.9,  lives: 2, cont: 0,        req: 'tudo',  lifeRescue: false, evo: 0.5, reward: 2.5,
+            rule: 'TODOS os alvos e TODOS os reféns, sem continue', desc: 'Dano dobrado • tiros miram à frente • upgrades e arma pela metade • ×2,5' },
 };
 const DIFF_KEYS = Object.keys(DIFFS);
 
@@ -2379,7 +2381,7 @@ function spawnPickup(kind, x, y) {
 function rollPower() {
   const w = {}, p = G.player;
   for (const k in POWERUPS) w[k] = POWERUPS[k].w;
-  if (p.weapon >= 6) w.P = 4;
+  if (p.weapon >= wpnMax()) w.P = 4;
   if (p.hp >= p.maxHp) w.H = 6;
   return pickW(w);
 }
@@ -2389,7 +2391,7 @@ function dropLoot(x, y, coins, chance) {
   for (let i = 0; i < n % 5; i++) spawnPickup('coin', x, y);
   G.pDrop++;
   if (Math.random() < chance * G.diff.drop) { const k = rollPower(); if (k === 'P') G.pDrop = 0; spawnPickup(k, x, y); }
-  else if (G.pDrop >= 20 && G.player.weapon < 6) { G.pDrop = 0; spawnPickup('P', x, y); } // garantia: evolução fácil
+  else if (G.pDrop >= 20 && G.player.weapon < wpnMax()) { G.pDrop = 0; spawnPickup('P', x, y); } // garantia: evolução fácil
 }
 function updatePickups(dt) {
   const p = G.player, mag = G.coinRain || p.magT > 0 ? 2000 : 70 + 40 * upLvl('magnet');
@@ -2422,7 +2424,7 @@ function collect(k) {
   SFX.power();
   switch (k.kind) {
     case 'P':
-      if (p.weapon < 6) { p.weapon++; floater(p.x, p.y - 44, 'ARMA NV ' + p.weapon + (p.weapon === 6 ? ' MÁX!' : '!'), '#ff8a8a', 18); }
+      if (p.weapon < wpnMax()) { p.weapon++; floater(p.x, p.y - 44, 'ARMA NV ' + p.weapon + (p.weapon === wpnMax() ? ' MÁX!' : '!'), '#ff8a8a', 18); }
       else { G.score += 1000; save.coins += 5; G.stats.coins += 5; floater(p.x, p.y - 44, 'ARMA MÁX! +1000', '#ff8a8a', 16); }
       break;
     case 'S': p.shield = Math.min(p.maxShield + 1, p.shield + 2); floater(p.x, p.y - 44, 'ESCUDO!', '#7fd4ff', 18); break;
@@ -2503,7 +2505,7 @@ function killTarget(t) {
   G.shake = Math.max(G.shake, 10);
   G.score += t.d.score; floater(t.x, t.y - 30, '+' + fmt(t.d.score) + ' ' + t.d.name.toUpperCase() + '!', '#ffcf5a', 18);
   dropLoot(t.x, t.y, t.d.coins, 0);
-  spawnPickup(G.player.weapon < 4 ? 'P' : rollPower(), t.x, t.y);
+  spawnPickup(G.player.weapon < Math.min(4, wpnMax()) ? 'P' : rollPower(), t.x, t.y);
   if (!G.goalT && G.stats.targets >= G.st.goal.t) { G.goalT = true; G.cmsg = { text: 'META DE ALVOS CUMPRIDA!', t: 2.5 }; SFX.power(); }
 }
 function addDecal(x, y, r) { G.decals.push({ x, y, r, rot: rand(0, TAU) }); if (G.decals.length > 40) G.decals.shift(); }
@@ -2942,7 +2944,7 @@ function drawHUD() {
   ctx.font = `bold 17px ${FONT}`; const cw = ctx.measureText(fmt(save.coins)).width;
   txt(fmt(save.coins), W - 94, 20, 17, '#ffe066', 'right'); ICON.coin(W - 104 - cw, 20, 7.5);
   txt('ARMA', W - 150, 50, 12, '#ffb3b3', 'left');
-  for (let i = 0; i < 6; i++) RR(ctx, W - 112 + i * 11, 45, 8, 10, 2, i < p.weapon ? '#ff5a5a' : 'rgba(255,255,255,0.18)', 'rgba(0,0,0,0.5)', 1);
+  for (let i = 0; i < 6; i++) RR(ctx, W - 112 + i * 11, 45, 8, 10, 2, i < p.weapon ? '#ff5a5a' : i < wpnMax() ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.5)', 1);
   // metas
   const chip = (x, done, draw, label) => {
     RR(ctx, x, 70, 74, 22, 11, done ? 'rgba(40,140,70,0.75)' : 'rgba(5,12,30,0.6)', done ? '#7dffb0' : 'rgba(255,255,255,0.25)', 1.5);
