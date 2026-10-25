@@ -503,6 +503,8 @@ const CORES_BOLAS = {
   snooker: { vermelha: '#b5121b', 2: '#f3c51a', 3: '#137a3c', 4: '#6a3b1d', 5: '#1a4fb0', 6: '#ec8fb4', 7: '#121212' },
   // Carambola: branca, amarela e vermelha, sem números
   carambola: { branca: '#f4efe1', amarela: '#f3c623', vermelha: '#c8151d' },
+  // Carioquinha: quatro amarelas (1 a 4) e quatro azuis (5 a 8), sem números
+  carioquinha: { amarela: '#f2c40a', azul: '#1c47a8' },
 };
 
 // Níveis de ajuda. Valem para qualquer modo; no treino, o nível escolhe a mira.
@@ -555,6 +557,27 @@ const MODOS = {
         nome: 'Tocar primeiro a bola errada', padrao: 'retirar',
         opcoes: [{ id: 'retirar', nome: 'Adversário tira uma bola dele' }, { id: 'mao', nome: 'Bola na mão' }],
         texto: 'Punição para quem toca primeiro numa bola que não é do seu grupo (ou em nenhuma). Branca na caçapa sempre dá bola na mão.',
+      },
+    },
+  },
+  carioquinha: {
+    nome: 'Carioquinha', resumo: 'Quatro amarelas contra quatro azuis, com a branca no centro: vence quem matar primeiro as suas.',
+    min: 2, max: 2, duplas: true, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'carioquinha', etapa: 7,
+    variantes: {
+      arrumacao: {
+        nome: 'Arrumação', padrao: 'intercalada',
+        opcoes: [{ id: 'intercalada', nome: 'Duas em cada tabela, intercaladas' }, { id: 'cabeceiras', nome: 'Cada cor numa cabeceira' }, { id: 'laterais', nome: 'Cada cor numa lateral' }],
+        texto: 'Onde ficam as bolas no começo. Intercaladas: duas em cada tabela, uma de cada cor. Nas outras, as quatro de uma cor ficam junto a uma tabela, e as quatro da outra, junto à tabela oposta.',
+      },
+      falta: {
+        nome: 'Penalidade da falta', padrao: 'duas',
+        opcoes: [{ id: 'duas', nome: 'Duas chances' }, { id: 'vez', nome: 'Só perde a vez' }],
+        texto: 'O que o adversário ganha com a falta: duas chances para matar a próxima bola dele (se errar a primeira, joga de novo), ou só a vez.',
+      },
+      ultima: {
+        nome: 'Última bola do adversário', padrao: 'vence',
+        opcoes: [{ id: 'vence', nome: 'Ele vence' }, { id: 'volta', nome: 'Ela volta à mesa' }],
+        texto: 'Se você encaçapa a última bola do adversário, ele fica sem bolas e vence, ou ela volta à mesa e ele ainda precisa matá-la.',
       },
     },
   },
@@ -1485,9 +1508,14 @@ const Rack = (() => {
     }
     b.x = x0; b.y = 0;
   }
-  // Descrição de uma bola de qualquer jogo: 'pool', 'brasileira' (1 vermelha … 7 preta) ou 'carambola'
-  // (0 branca, 1 amarela, 2 vermelha, sem números)
+  // Descrição de uma bola de qualquer jogo: 'pool', 'brasileira' (1 vermelha … 7 preta), 'carambola'
+  // (0 branca, 1 amarela, 2 vermelha, sem números) ou 'carioquinha' (1–4 amarelas, 5–8 azuis, sem números)
   function desc(conjunto, num) {
+    if (conjunto === 'carioquinha') {
+      if (num === 0) return descPool(0);
+      const c = CORES_BOLAS.carioquinha;
+      return { num, tipo: 'lisa', cor: num <= 4 ? c.amarela : c.azul, numerada: false };
+    }
     if (conjunto === 'brasileira') return num === 0 ? descPool(0) : { num, tipo: 'lisa', cor: CORES_BOLAS.brasileira[num], numerada: true };
     if (conjunto === 'snooker') {
       if (num === 0) return descPool(0);
@@ -1577,8 +1605,47 @@ const Rack = (() => {
     for (const k of ordem) if (livre(mc[k][0], mc[k][1])) { b.x = mc[k][0]; b.y = mc[k][1]; return; }
     for (let x = mc[v][0]; x < geo.hx - geo.R; x += geo.R * 0.5) if (livre(x, 0)) { b.x = x; b.y = 0; return; }
   }
+  // Carioquinha: as oito bolas junto às tabelas, com uns 4 cm de folga. 'intercalada': duas em cada tabela,
+  // alternando as cores na volta da mesa; 'cabeceiras' / 'laterais': as amarelas junto a uma tabela e as azuis junto à oposta
+  function marcasCarioquinha(geo, arrumacao) {
+    const xx = geo.hx - 2.5 * geo.R, yy = geo.hy - 2.5 * geo.R, m = {};
+    if (arrumacao === 'cabeceiras') [-0.6, -0.2, 0.2, 0.6].forEach((f, i) => { m[1 + i] = [-xx, f * geo.hy]; m[5 + i] = [xx, f * geo.hy]; });
+    else if (arrumacao === 'laterais') [-0.7, -0.3, 0.3, 0.7].forEach((f, i) => { m[1 + i] = [f * geo.hx, -yy]; m[5 + i] = [f * geo.hx, yy]; });
+    else {
+      // A partir da tabela de cima, à esquerda, no sentido horário: amarela, azul, amarela, azul…
+      const volta = [[-geo.hx / 2, -yy], [geo.hx / 2, -yy], [xx, -geo.hy / 2], [xx, geo.hy / 2],
+                     [geo.hx / 2, yy], [-geo.hx / 2, yy], [-xx, geo.hy / 2], [-xx, -geo.hy / 2]];
+      volta.forEach((p, i) => { m[(i % 2 ? 5 : 1) + (i >> 1)] = p; });
+    }
+    return m;
+  }
+  // Branca no centro da mesa
+  function arrumarCarioquinha(sim, arrumacao, semente) {
+    const rnd = U.rng(semente), mc = marcasCarioquinha(sim.geo, arrumacao);
+    const bolas = [Fisica.criarBola(0, desc('carioquinha', 0))];
+    for (let n = 1; n <= 8; n++) { const b = Fisica.criarBola(n, desc('carioquinha', n)); b.x = mc[n][0]; b.y = mc[n][1]; bolas.push(b); }
+    for (const b of bolas) b.q = orientar(rnd);
+    bolas[0].x = 0; bolas[0].y = 0;
+    sim.bolas = bolas; sim.contatos.clear(); sim.conjunto = 'carioquinha';
+  }
+  // Bola da Carioquinha de volta à mesa, junto à tabela comprida da caçapa k onde ela caiu: perto do canto,
+  // ou a um lado da caçapa do meio; no lugar livre mais perto disso
+  function recolocarCarioquinha(sim, num, k) {
+    const b = sim.bolas.find(x => x.num === num && x.tipo !== 'branca');
+    if (!b) return;
+    const geo = sim.geo, c = geo.cacapas[k] || geo.cacapas[0];
+    Object.assign(b, { estado: 'mesa', prof: 0, vz: 0, cacapa: -1, qd: null, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0, movendo: false });
+    const x0 = c.tipo === 'canto' ? Math.sign(c.x) * geo.hx * 0.6 : (num % 2 ? 1 : -1) * geo.hx * 0.3;
+    const y0 = Math.sign(c.y) * (geo.hy - 2.5 * geo.R);
+    for (let raio = 0; raio < geo.hx; raio += geo.R * 0.5) {
+      for (let a = 0; a < Math.PI * 2; a += raio ? geo.R * 0.5 / raio : 7) {
+        const x = x0 + Math.cos(a) * raio, y = y0 + Math.sin(a) * raio;
+        if (Fisica.posicaoValida(sim, b, x, y)) { b.x = x; b.y = y; return; }
+      }
+    }
+  }
   return { descPool, desc, orientar, arrumarPool, recolocar, marcasBrasileira, arrumarBrasileira, recolocarBrasileira, arrumarCarambola,
-           arrumarSnooker, recolocarSnooker };
+           arrumarSnooker, recolocarSnooker, marcasCarioquinha, arrumarCarioquinha, recolocarCarioquinha };
 })();
 
 // Utilitários comuns às regras. "E" é o estado da partida (Partida.criar): lados, vez, m (estado
@@ -1940,6 +2007,101 @@ const REGRAS = {
       return r;
     },
     pontuacaoHUD(E, i) { return { linha: `${E.lados[i].pontos} pontos`, bolas: [] }; },
+  },
+
+  // ---------------- CARIOQUINHA ----------------
+  // E.m.cores: a cor de cada lado ('amarelas' | 'azuis'), dada pela primeira bola que a branca toca;
+  // E.m.caiu: caçapa onde caiu cada bola (a própria que cai com a branca volta junto àquela tabela)
+  carioquinha: {
+    id: 'carioquinha',
+    CORES: { amarelas: { uma: 'amarela', bolas: [1, 2, 3, 4] }, azuis: { uma: 'azul', bolas: [5, 6, 7, 8] } },
+    textoRegras: [
+      'Dois jogadores, ou duas duplas que se alternam. São quatro bolas amarelas, quatro azuis e a branca, que começa no centro da mesa.',
+      'A primeira bola que a branca toca dá a cor de quem tacou; o adversário fica com a outra. Vence quem matar (encaçapar) primeiro as suas quatro bolas.',
+      'Quem mata bola da sua cor continua jogando. É falta pôr a branca na caçapa, encaçapar bola do adversário ou não tocar em nenhuma bola: a vez passa, e o adversário ganha duas chances para matar a próxima bola dele.',
+      'A branca que cai volta ao centro. Bola sua que cai junto com ela volta à mesa, na lateral mais perto da caçapa onde caiu; a do adversário fica fora e conta para ele.',
+    ],
+    diagramas: [
+      { titulo: 'Arrumação', conjunto: 'carioquinha',
+        bolas: [{ num: 0, x: 0, y: 0 }, { num: 1, x: -0.5, y: -0.4 }, { num: 5, x: 0.5, y: -0.4 }, { num: 2, x: 0.9, y: -0.25 }, { num: 6, x: 0.9, y: 0.25 },
+                { num: 3, x: 0.5, y: 0.4 }, { num: 7, x: -0.5, y: 0.4 }, { num: 4, x: -0.9, y: 0.25 }, { num: 8, x: -0.9, y: -0.25 }],
+        legenda: 'A branca no centro; duas bolas junto a cada tabela, com as cores intercaladas.' },
+      { titulo: 'A cor de cada um', conjunto: 'carioquinha',
+        bolas: [{ num: 0, x: -0.1, y: 0.05 }, { num: 1, x: 0.4, y: -0.3 }, { num: 5, x: 0.55, y: 0.3 }],
+        linhas: [{ pts: [[-0.1, 0.05], [0.32, -0.25]], tracejada: true, seta: true }], aneis: [[0.4, -0.3]],
+        legenda: 'A branca tocou primeiro numa amarela: quem tacou fica com as amarelas.' },
+    ],
+    montar(sim, E) {
+      Rack.arrumarCarioquinha(sim, E.variantes.arrumacao, (Math.random() * 1e9) | 0);
+      E.m = { cores: null, caiu: {} };
+      E.bolaNaMaoInicial = null;
+    },
+    corDe(n) { return n <= 4 ? 'amarelas' : 'azuis'; },
+    cor(E, i) { return E.m.cores ? E.m.cores[i] : null; },
+    bolaDaVez(E) { return this.cor(E, E.vez) || 'qualquer uma (ela dá a sua cor)'; },
+    precisaCantar() { return false; },
+    podeRetirar() { return false; },
+    depoisDeRetirar() { return null; },
+    recolocarBola(E, num) { Rack.recolocarCarioquinha(E.sim, num, E.m.caiu[num]); },
+    validarJogada(reg, E) {
+      const sim = E.sim, v = E.variantes, eu = E.vez, outro = Partida.proximo(E), r = RU.resultado();
+      const nomeEu = E.lados[eu].nome, nomeOutro = E.lados[outro].nome;
+      const enc = reg.encacapadas.filter(x => x.num !== 0);
+      for (const x of enc) E.m.caiu[x.num] = x.cacapa;
+      // A cor: a primeira bola tocada por quem tacou
+      if (!E.m.cores && reg.primeiraBola !== null) {
+        const meu = this.corDe(RU.num(sim, reg.primeiraBola)), dele = meu === 'amarelas' ? 'azuis' : 'amarelas';
+        E.m.cores = E.lados.map((_, i) => i === eu ? meu : dele);
+        r.mensagemCurta = `${nomeEu} fica com as ${meu}; ${nomeOutro}, com as ${dele}.`;
+        r.mensagemDica = `A branca tocou primeiro numa ${this.CORES[meu].uma}. ` + r.mensagemCurta;
+      }
+      const g = this.cor(E, eu), og = g === 'amarelas' ? 'azuis' : 'amarelas';
+      const minhas = enc.filter(x => this.corDe(x.num) === g).map(x => x.num), dele = enc.filter(x => this.corDe(x.num) !== g).map(x => x.num);
+      const fora = RU.brancaFora(reg);
+      let falta = null;
+      if (reg.tempoEsgotado) falta = 'O tempo da tacada acabou.';
+      else if (fora) falta = reg.brancaCaiu ? 'A branca caiu na caçapa.' : 'A branca saiu da mesa.';
+      else if (reg.primeiraBola === null) falta = 'A branca não tocou em nenhuma bola.';
+      else if (dele.length) falta = dele.length > 1 ? `Você encaçapou ${dele.length} bolas ${og} do adversário: elas ficam fora e contam para ele.`
+                                                    : `Você encaçapou uma bola ${this.CORES[og].uma} do adversário: ela fica fora e conta para ele.`;
+      if (fora) { r.recolocar.push(...minhas); r.branca = 'centro'; }
+      // Quem ficou sem bolas na mesa (contando as que voltam)
+      const naMesa = RU.naMesa(sim).concat(r.recolocar), resta = c => naMesa.filter(n => this.corDe(n) === c).length;
+      if (g && !resta(g)) {
+        const antes = r.mensagemDica;
+        RU.fim(r, eu, `Acabaram as ${g}: ${nomeEu} venceu!`);
+        if (antes) r.mensagemDica = antes + ' ' + r.mensagemDica;
+        return r;
+      }
+      if (g && !resta(og)) {
+        if (v.ultima === 'vence') {
+          const antes = (falta ? falta + ' ' : '') + r.mensagemDica;
+          RU.fim(r, outro, `Caiu a última bola ${this.CORES[og].uma}: ${nomeOutro} ficou sem bolas e venceu!`);
+          r.mensagemDica = (antes.trim() + ' ' + r.mensagemDica).trim();
+          return r;
+        }
+        r.recolocar.push(dele[dele.length - 1]);
+        falta = dele.length > 1 ? `Você encaçapou ${dele.length} bolas ${og} do adversário: a última volta à mesa, e as outras ficam fora e contam para ele.`
+                                : `Você encaçapou a última bola ${this.CORES[og].uma} do adversário: ela volta à mesa.`;
+      }
+      if (falta) {
+        if (v.falta === 'duas') r.penalidade = 'duas';
+        let conseq = v.falta === 'duas' ? `${nomeOutro} ganha duas chances.` : `${nomeOutro} fica com a vez.`;
+        if (fora && minhas.length) conseq += minhas.length > 1 ? ' As suas bolas que caíram junto voltam à mesa.' : ' A sua bola que caiu junto volta à mesa.';
+        if (fora) conseq += ' A branca volta ao centro.';
+        return RU.falta(r, falta, conseq);
+      }
+      // Continua quem matou bola da sua cor; as duas chances eram para matar uma bola
+      r.continuaJogando = minhas.length > 0;
+      if (r.continuaJogando) E.lados[eu].extras = 0;
+      return r;
+    },
+    pontuacaoHUD(E, i) {
+      const g = this.cor(E, i);
+      if (!g) return { linha: 'cor a definir', bolas: [] };
+      const naMesa = RU.naMesa(E.sim);
+      return { linha: g, bolas: this.CORES[g].bolas.map(n => ({ num: n, fora: !naMesa.includes(n) })) };
+    },
   },
 
   // ---------------- MATA-MATA ----------------
@@ -2756,6 +2918,15 @@ const IA = (() => {
         if (!g) return 0;
         const dele = g === 'par' ? 'impar' : 'par';
         return -n.filter(x => R.tem(E, g, x)).length * 12 + n.filter(x => R.tem(E, dele, x)).length * 3;
+      },
+    },
+    // Tocar primeiro numa bola do adversário não é falta, mas só as próprias valem como alvo
+    carioquinha: {
+      alvos(E) { const g = REGRAS.carioquinha.cor(E, E.vez); return g ? RU.naMesa(E.sim).filter(x => REGRAS.carioquinha.corDe(x) === g) : null; },
+      progresso(E, i) {
+        const R = REGRAS.carioquinha, g = R.cor(E, i), n = RU.naMesa(E.sim);
+        if (!g) return 0;
+        return -n.filter(x => R.corDe(x) === g).length * 12 + n.filter(x => R.corDe(x) !== g).length * 6;
       },
     },
     contagem: {
@@ -5302,7 +5473,10 @@ const Jogo = {
     if (res.penalidade === 'duas') p.lados[p.vez].extras = 1;
     if (res.penalidade === 'retirar') p.pendente = { tipo: 'retirar', lado: p.vez };
     jogo.bolaNaMao = res.bolaNaMao;
-    if (Entrada.branca().estado !== 'mesa') { if (!jogo.bolaNaMao) jogo.bolaNaMao = 'atras'; Jogo.reporBranca(jogo.bolaNaMao); }
+    if (Entrada.branca().estado !== 'mesa') {
+      if (res.branca === 'centro') Jogo.reporBranca('centro');
+      else { if (!jogo.bolaNaMao) jogo.bolaNaMao = 'atras'; Jogo.reporBranca(jogo.bolaNaMao); }
+    }
     p.relogio = Partida.tempoTacada(p);
     jogo.podeDesfazerLado = !reg.tempoEsgotado && lado.membros.some(m => m.humano) && !jogo.tacadaIA ? eu : null;
     jogo.tacadaIA = false;
@@ -5332,12 +5506,12 @@ const Jogo = {
     else if (dicas === 'falta' && res.falta) balao('Falta', res.mensagemDica);
     else if (res.mensagemCurta) aviso(res.mensagemCurta, 2.8);
   },
-  // Branca de volta à mesa: no ponto de cima, ou no lugar livre mais perto dele, dentro da área
+  // Branca de volta à mesa: no ponto de cima (no centro, com 'centro'), ou no lugar livre mais perto dele, dentro da área
   reporBranca(area) {
     const sim = jogo.sim, br = Entrada.branca(), geo = sim.geo;
     br.estado = 'mesa'; br.prof = 0; br.cacapa = -1; br.qd = null; br.giz = null;
     const xs = -geo.hx + geo.mesa.linhaSaida, rD = geo.mesa.raioMeiaLua || geo.W * 0.164;
-    const cx = area === 'meiaLua' ? xs - rD * 0.5 : area === 'atras' ? Math.min(-geo.hx / 2, xs - 2 * geo.R) : -geo.hx / 2;
+    const cx = area === 'meiaLua' ? xs - rD * 0.5 : area === 'atras' ? Math.min(-geo.hx / 2, xs - 2 * geo.R) : area === 'centro' ? 0 : -geo.hx / 2;
     for (let raio = 0; raio < geo.hx; raio += geo.R) {
       for (let a = 0; a < Math.PI * 2; a += raio ? geo.R / raio : 7) {
         const x = cx + Math.cos(a) * raio, y = Math.sin(a) * raio;
