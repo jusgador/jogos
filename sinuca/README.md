@@ -8,6 +8,7 @@ Abra pelo servidor de teste da raiz (ver o README de lá), em `http://localhost:
 
 - **Jogar:** escolha o modo, os jogadores (cada lugar é um humano ou um dos 8 adversários do computador, à vontade misturados, até nas duplas), o nível, a mesa, a cor do feltro e as variantes. Os humanos jogam no mesmo aparelho, passando a vez. Os modos:
   - **Bola 8** e **Par × Ímpar**: 2 jogadores ou duas duplas.
+  - **Carioquinha**: 2 jogadores ou duas duplas, com quatro bolas amarelas, quatro azuis e a branca no centro.
   - **Contagem de pontos ("61")**: 2 a 4 jogadores.
   - **Mata-mata**: 2 a 6 jogadores, com bolas secretas sorteadas.
   - **Três jogadores**: grupos 1–5, 6–10 e 11–15.
@@ -24,7 +25,7 @@ Abra pelo servidor de teste da raiz (ver o README de lá), em `http://localhost:
 
 ### Partidas
 
-- **Variantes:** cada modo tem as suas (cantar caçapa e penalidade da falta na Bola 8; papel da 8 e punição da bola errada no Par × Ímpar; ordem das bolas e penalidade da branca na Contagem), explicadas no preparo e no "Como jogar".
+- **Variantes:** cada modo tem as suas (cantar caçapa e penalidade da falta na Bola 8; papel da 8 e punição da bola errada no Par × Ímpar; arrumação, penalidade da falta e última bola do adversário na Carioquinha; ordem das bolas e penalidade da branca na Contagem), explicadas no preparo e no "Como jogar".
 - **Regra da casa:** no preparo, dê um nome à combinação de variantes e salve; ela aparece na lista "Regra da casa" daquele modo.
 - **Níveis:** Aprendiz (mira longa com o caminho da branca, cada falta explicada num balão, desfazer à vontade, sem relógio); Clube (saída da bola-alvo, balão só nas faltas, um desfazer por jogador, 60 s por tacada); Profissional (só a linha até o contato, throw, sem dicas nem desfazer, 45 s por tacada, ajustável nas configurações). O desfazer só volta a própria última tacada, antes de o próximo jogador mexer na mesa.
 - **Placar:** um cartão por jogador ou dupla, com avatar, grupo e bolas que faltam (ou pontos), sequência (x2, x3) e o relógio da tacada. Embaixo, de quem é a vez, a bola da vez, a caçapa cantada, a bola na mão e o efeito.
@@ -122,10 +123,11 @@ Com `#teste` no endereço (`http://localhost:8765/sinuca/#teste`), o console gan
 
 ## Motor de regras
 
-Cada modo é um objeto em `REGRAS`, com a mesma interface: `montar(sim, estado)`, `bolaDaVez(estado)`, `validarJogada(registro, estado)` → `{ falta, continuaJogando, pontos, bolaNaMao, recolocar, eliminados, fimDePartida, vencedor, mensagemDica, mensagemCurta, penalidade }`, `textoRegras`, `diagramas` e `pontuacaoHUD(estado, lado)`. Os modos podem ter ainda `acoes`/`executarAcao` (botões), `bloqueio` (impede a tacada até uma escolha), `bolaDoJogador` (carambola), `recolocarBola` (marcas da sinuca brasileira), `minhasBolas` e `revelar` (bolas secretas). O gerenciador `Partida` cuida dos lados (um jogador ou uma dupla, que revezam), da vez, das eliminações e das fotografias para desfazer. Detalhes de regra que esta versão decidiu:
+Cada modo é um objeto em `REGRAS`, com a mesma interface: `montar(sim, estado)`, `bolaDaVez(estado)`, `validarJogada(registro, estado)` → `{ falta, continuaJogando, pontos, bolaNaMao, recolocar, eliminados, fimDePartida, vencedor, mensagemDica, mensagemCurta, penalidade }`, `textoRegras`, `diagramas` e `pontuacaoHUD(estado, lado)`. Os modos podem ter ainda `acoes`/`executarAcao` (botões), `bloqueio` (impede a tacada até uma escolha), `bolaDoJogador` (carambola), `recolocarBola` (marcas da sinuca brasileira, tabela da Carioquinha), `minhasBolas` e `revelar` (bolas secretas). O gerenciador `Partida` cuida dos lados (um jogador ou uma dupla, que revezam), da vez, das eliminações e das fotografias para desfazer. Detalhes de regra que esta versão decidiu:
 
 - Bola 8: a 8 que cai na abertura volta à marca, e a partida segue. Com a mesa aberta, tocar primeiro na 8 é falta.
 - Par × Ímpar: bola de um jogador encaçapada pelo outro conta para o dono; bolas do faltoso que caem numa tacada com falta voltam à mesa.
+- Carioquinha: é o jogo que a Wikipédia chama de Mata-mata ("sinuca duas cores"), com amarelas e azuis no lugar de amarelas e vermelhas; as amarelas são as bolas 1 a 4 e as azuis, 5 a 8, sem números. A primeira bola que a branca toca dá a cor de quem tacou. Tocar primeiro numa bola do adversário não é falta; encaçapá-la é, e ela fica fora, contando para ele. Branca na caçapa volta ao centro (sem bola na mão), e a bola de quem tacou que caiu junto volta para perto da tabela comprida da caçapa onde caiu. As duas chances acabam quando o jogador mata uma bola.
 - Contagem: se a mesa acabar antes de alguém chegar a 61, vence quem tem mais pontos. Na variante "pontos para o próximo", ele ganha o valor da menor bola da mesa.
 - Mata-mata: as bolas que sobram no sorteio não são de ninguém, mas derrubá-las dá a vez de novo. Vidas: quando todas as bolas de um jogador caem, ele perde uma vida e as bolas dele voltam à mesa. As mensagens não dizem de quem era a bola, só quem saiu ou perdeu uma vida. Não tocar em nada só passa a vez.
 - Três jogadores: o primeiro a encaçapar na caçapa cantada (fora da abertura) escolhe o grupo; os outros dois ficam com os grupos que sobram, na ordem da vez.
@@ -143,6 +145,8 @@ Cada modo é um objeto em `REGRAS`, com a mesma interface: `montar(sim, estado)`
 5. **Inteligência artificial** (pronta): IA em todos os modos, multijogador e bolas secretas incluídos; os 8 adversários com avatar, modo favorito e frases; "pensando…"; botão Dica do Aprendiz; partidas mistas de humanos e computador.
 6. **Campeonato e progresso** (pronta): os 6 campeonatos, com chave em séries ou mesas do Mata-mata; simulação entre os adversários do computador; troféu em canvas; estatísticas por jogador; progresso salvo para continuar depois.
 7. **Snooker, desafios e celular** (pronta): Snooker internacional com bola livre e variantes de 15, 10 ou 6 vermelhas (também na final do Grand Slam); 11 desafios de tacada com estrelas; pausa ao perder o foco, qualidade de desenho adaptativa, placar no retrato e botões de toque com 44 px ou mais.
+
+Depois das etapas entrou a **Carioquinha**, com três arrumações e IA.
 
 ### Bugs conhecidos
 
