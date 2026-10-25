@@ -6,7 +6,7 @@ Sinuca e bilhar de bar em visão de cima, num único arquivo HTML ([index.html](
 
 Abra pelo servidor de teste da raiz (ver o README de lá), em `http://localhost:8765/sinuca/`.
 
-- **Jogar:** escolha o modo, os jogadores, o nível, a mesa, a cor do feltro e as variantes. Todos jogam no mesmo aparelho, passando a vez. Os modos:
+- **Jogar:** escolha o modo, os jogadores (cada lugar é um humano ou um dos 8 adversários do computador, à vontade misturados, até nas duplas), o nível, a mesa, a cor do feltro e as variantes. Os humanos jogam no mesmo aparelho, passando a vez. Os modos:
   - **Bola 8** e **Par × Ímpar**: 2 jogadores ou duas duplas.
   - **Contagem de pontos ("61")**: 2 a 4 jogadores.
   - **Mata-mata**: 2 a 6 jogadores, com bolas secretas sorteadas.
@@ -27,6 +27,22 @@ Abra pelo servidor de teste da raiz (ver o README de lá), em `http://localhost:
 - **Passa-e-joga:** a troca de vez aparece num aviso. Nas configurações dá para ligar a tela "Passe o aparelho" em toda troca; no Mata-mata ela aparece sempre.
 - **Bolas secretas (Mata-mata):** antes da partida, cada jogador recebe o aparelho, toca em "Ver minhas bolas" e passa adiante. Na partida, a tela da vez e o botão 👁 Minhas bolas mostram só as bolas de quem está na vez. O placar diz quem está vivo e quantas bolas tem, nunca quais; no fim, a tela revela de quem era cada bola.
 - **Botões do modo:** aparecem embaixo do placar quando o modo pede uma escolha: o grupo (Três jogadores), o push out e depois "Jogar daqui" ou "Devolver a vez" (Bola 9).
+- **Dica (💡, só no Aprendiz):** o computador procura uma boa jogada para quem está na vez, deixa a mira, o efeito e a força prontos (e a branca no lugar, com bola na mão), destaca a bola e a caçapa e explica a jogada num balão.
+
+### Adversários do computador
+
+| Apelido | Cidade | Mira | Força | Efeito | Estilo | Favorito |
+|---|---|---|---|---|---|---|
+| Tião Cotovelo | Juiz de Fora (MG) | 42 | 48 | 20 | ataca | Contagem |
+| Dona Cidinha da Caçapa | Campinas (SP) | 55 | 58 | 35 | equilibrada | Par × Ímpar |
+| Baiano Tacada Seca | Salvador (BA) | 62 | 70 | 42 | ataca muito | Bola 8 |
+| Seu Lauro Giz Azul | Porto Alegre (RS) | 70 | 68 | 58 | defende | Sinuca brasileira |
+| Marquinho do Bico | Belém (PA) | 75 | 74 | 68 | ataca | Mata-mata |
+| Lucinha Três Tabelas | Curitiba (PR) | 80 | 84 | 86 | equilibrada | Carambola |
+| Mestre Tonhão | Recife (PE) | 86 | 82 | 76 | equilibrado | Sinuca brasileira |
+| Doutora Efeito | Rio de Janeiro (RJ) | 93 | 92 | 95 | equilibrada | Bola 9 |
+
+Cada um tem avatar desenhado em canvas, frases de vitória e de derrota (na tela de fim) e joga um pouco melhor no modo favorito. Na vez do computador, o placar mostra "pensando…" de 0,6 a 1,5 s, o taco balança e a mira gira devagar até o ângulo escolhido.
 
 ## Controles
 
@@ -52,11 +68,22 @@ Ao fim de cada tacada, a física entrega ao motor de regras o registro da jogada
 
 ## Dados salvos
 
-No `localStorage`, com o prefixo `sinuca-`: `sinuca-config` (bolas, nível e mesa do treino, feltro, rastro, vibração, som e volumes, tempo do Profissional, tela entre as vezes), `sinuca-preparo` (o último preparo de cada modo: nomes, nível, mesa, feltro, variantes) e `sinuca-regras-casa` (as regras da casa salvas).
+No `localStorage`, com o prefixo `sinuca-`: `sinuca-config` (bolas, nível e mesa do treino, feltro, rastro, vibração, som e volumes, tempo do Profissional, tela entre as vezes), `sinuca-preparo` (o último preparo de cada modo: jogadores humanos ou adversários, nomes, nível, mesa, feltro, variantes) e `sinuca-regras-casa` (as regras da casa salvas).
+
+## Inteligência artificial
+
+O planejador (seção 5 do código) trabalha em fatias de ~4 ms por quadro:
+
+1. **Candidatas.** Para cada bola que o modo deixa tocar primeiro e cada caçapa, a mira pela bola fantasma, com caminho livre até a bola e da bola até a caçapa, e três efeitos (centro, siga, puxeta) em duas forças. Também jogadas de defesa (tocar devagar, cheio ou fino, as bolas mais perto) e, sem bola à vista, tacadas de tabela. Na carambola, cortes de 7 espessuras em cada bola; no três tabelas, uma busca larga de 288 direções.
+2. **Simulação.** Cada candidata roda na física de verdade, numa cópia da mesa, sem desenhar.
+3. **Nota.** O motor de regras julga o resultado; a nota soma vitória ou derrota, faltas, pontos, eliminações (pesando quem está mais perto de vencer), o avanço no próprio grupo, a facilidade da próxima tacada (para si, se continua, ou para o adversário, se a vez passa) e, nas tacadas de ataque, a chance de acerto calculada pelo erro do perfil. Na sinuca brasileira, errar a livre numa bola maior custa os pontos dela, e a IA só arrisca quando compensa.
+4. **Erro humano.** A tacada escolhida sai com ruído de mira, de força e de efeito conforme os atributos (mira de 0,03° no 100 a 0,44° no 45).
+
+Com bola na mão, a IA testa lugares para a branca atrás das melhores tacadas diretas. No Mata-mata ela só conhece as próprias bolas: o estado em que simula não tem os donos das outras. Também escolhe o grupo (Três jogadores), a bola que tira da mesa na penalidade e se joga ou devolve depois de um push out.
 
 ## Testes
 
-Com `#teste` no endereço (`http://localhost:8765/sinuca/#teste`), o console ganha `__sinuca`, com a física, o jogo e o som, para simular tacadas sem desenhar.
+Com `#teste` no endereço (`http://localhost:8765/sinuca/#teste`), o console ganha `__sinuca`, com a física, o jogo, a IA e o som, para simular tacadas e partidas inteiras sem desenhar (`IA.planejarJa`).
 
 ## Motor de regras
 
@@ -76,13 +103,15 @@ Cada modo é um objeto em `REGRAS`, com a mesma interface: `montar(sim, estado)`
 2. **Efeito, som e polimento** (pronta): seletor de efeito no computador e no celular, puxeta, siga, lateral, curva leve, miscue, throw no Profissional, som sintetizado com volumes, taco que recua e se desloca com o efeito, marca de giz.
 3. **Regras e modos de bar** (pronta): motor de regras para 2 a 6 jogadores, duplas, variantes e regra da casa; Bola 8, Par × Ímpar e Contagem de pontos no passa-e-joga; níveis com balões, desfazer e relógio; telas de modo, preparo, como jogar, configurações e fim; placar completo.
 4. **Modos brasileiros, multijogador e mesas** (pronta): Mata-mata com sorteio secreto e tela de privacidade, Três jogadores, Sinuca brasileira tradicional e de bar, Bola 9 com push out, Carambola livre e três tabelas; mesas de bar, oficial e de carambola, com escolha de mesa e de feltro por partida.
-5. Inteligência artificial e os 8 adversários.
+5. **Inteligência artificial** (pronta): IA em todos os modos, multijogador e bolas secretas incluídos; os 8 adversários com avatar, modo favorito e frases; "pensando…"; botão Dica do Aprendiz; partidas mistas de humanos e computador.
 6. Campeonatos, estatísticas e progresso salvo.
 7. Snooker, desafios de tacada e revisão para celular.
 
 ### Pendências conhecidas
 
-- O botão "Dica" do Aprendiz depende da IA (etapa 5).
+- A IA nunca declara push out na Bola 9 (mas decide bem quando o adversário declara).
+- No três tabelas a IA acerta pouco, como gente: as soluções são estreitas e o erro de mira as estraga.
+- Numa partida só de computadores, cada tacada leva o tempo de pensar mais o das bolas rolando.
 - A linha de saída, a meia-lua e as marcas da sinuca brasileira aparecem na mesa de bar também na Bola 8 (como nas mesas de bar de verdade).
 - Na carambola não há regra de abertura (tocar primeiro a vermelha); a primeira tacada vale como qualquer outra.
 - Quem abre a partida é o jogador 1; em "Jogar de novo", abre o seguinte.

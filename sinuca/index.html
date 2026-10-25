@@ -143,7 +143,8 @@
   .seq { color: #7cf2a6; font-weight: bold; margin-left: 4px; }
   .rel { font: bold 14px ui-monospace, Consolas, monospace; color: var(--latao-claro); margin-left: 2px; }
   .rel.alerta { color: #ff7a6a; }
-  #vezinfo { font-size: 13px; padding: 3px 12px; color: var(--texto); white-space: nowrap; }
+  #vezinfo { font-size: 13px; padding: 3px 12px; color: var(--texto); white-space: nowrap; max-width: calc(100vw - 330px);
+    overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
   #placar { transform-origin: top center; }
   #hud.compacto #placar { top: calc(1px + var(--seguro-topo)); }
   #hud.compacto .mini { width: 13px; height: 13px; font-size: 7px; }
@@ -156,6 +157,13 @@
   #vez-bolas .mini { width: 34px; height: 34px; font-size: 15px; }
   #vez-bolas .vidas { color: #ff7a6a; font-size: 20px; margin-left: 6px; }
   #fim-revela .op .bolas { display: flex; gap: 3px; }
+
+  img.av { object-fit: cover; }
+  .op.adv { justify-content: flex-start; gap: 10px; font-size: 13px; color: var(--fraco); margin-top: -2px; }
+  .op.adv img.av { width: 40px; height: 40px; }
+  .fala { display: flex; align-items: center; gap: 10px; text-align: left; margin: 8px 0; font-style: italic; }
+  .fala img.av { width: 44px; height: 44px; }
+  .fala small { font-style: normal; color: var(--fraco); }
 
   /* Balão de dica */
   #balao { position: fixed; left: 50%; bottom: calc(14px + var(--seguro-baixo)); transform: translate(-50%, 12px);
@@ -178,6 +186,7 @@
     <button class="bh" id="b-mover" title="Mover bolas (M)" aria-label="Mover bolas">✥</button>
     <button class="bh" id="b-arrumar" title="Arrumar as bolas (R)" aria-label="Arrumar as bolas">△</button>
     <button class="bh" id="b-som" title="Som" aria-label="Som">🔊</button>
+    <button class="bh" id="b-dica" title="Dica" aria-label="Dica" hidden>💡</button>
   </div>
   <div id="hud-info" class="placa"><div id="info-1"></div><div id="info-2"></div><div id="bandeja"></div></div>
   <div id="placar" hidden><div id="lados"></div><div id="vezinfo" class="placa"></div><div id="acoes"></div></div>
@@ -201,7 +210,7 @@
         <button class="bt fraco" data-acao="config">Configurações</button>
       </div>
       <button class="bt fraco" data-acao="jogos">Jogos</button>
-      <p class="nota">Em construção: todos jogam no mesmo aparelho. Os adversários do computador, o campeonato, o snooker e os desafios chegam nas próximas versões.</p>
+      <p class="nota">Em construção: o campeonato, o snooker e os desafios chegam nas próximas versões.</p>
     </div>
   </section>
 
@@ -285,6 +294,7 @@
       <p class="sub" id="fim-motivo"></p>
       <table id="fim-tabela"></table>
       <div id="fim-revela"></div>
+      <div id="fim-falas"></div>
       <div class="linha">
         <button class="bt fraco" data-acao="menu">Menu principal</button>
         <button class="bt" data-acao="de-novo">Jogar de novo</button>
@@ -578,8 +588,43 @@ const MODOS = {
 // Cores dos avatares dos jogadores, na ordem
 const CORES_JOGADORES = ['#b8342a', '#2a62a8', '#c79a1a', '#6d3a93', '#2c8250', '#c0641f'];
 
-// Adversários da IA (etapa 5): { nome, apelido, cidade, cores, precisao, forca, efeito, agressividade, favorito, frases }
-const ADVERSARIOS = [];
+// Adversários do computador. Atributos de 0 a 100: precisao (mira), forca (controle de força),
+// efeito (uso e controle do efeito), agressividade (100 ataca sempre; 0 prefere defender).
+// cores: [fundo do avatar, detalhe]. favorito: modo em que joga um pouco melhor.
+const ADVERSARIOS = [
+  { id: 'tiao', nome: 'Sebastião Ferreira', apelido: 'Tião Cotovelo', cidade: 'Juiz de Fora (MG)', cores: ['#8a5a2b', '#f2d6a2'],
+    precisao: 42, forca: 48, efeito: 20, agressividade: 75, favorito: 'contagem',
+    frases: { vitoria: ['Foi no cotovelo, mas foi!', 'Sorte? Que sorte, rapaz, é técnica.'],
+              derrota: ['Esse taco tá torto, só pode.', 'Amanhã eu volto, pode me esperar.'] } },
+  { id: 'cidinha', nome: 'Aparecida Moraes', apelido: 'Dona Cidinha da Caçapa', cidade: 'Campinas (SP)', cores: ['#a8326e', '#ffd1e6'],
+    precisao: 55, forca: 58, efeito: 35, agressividade: 40, favorito: 'parImpar',
+    frases: { vitoria: ['Na minha mesa, quem manda sou eu, meu filho.', 'Volta sempre, que eu gosto de ganhar.'],
+              derrota: ['Deixei você ganhar, viu? Não conta pra ninguém.', 'Hoje a caçapa não quis conversa comigo.'] } },
+  { id: 'baiano', nome: 'Raimundo Nonato', apelido: 'Baiano Tacada Seca', cidade: 'Salvador (BA)', cores: ['#c46a12', '#fff0b8'],
+    precisao: 62, forca: 70, efeito: 42, agressividade: 88, favorito: 'bola8',
+    frases: { vitoria: ['Tacada seca, conversa curta!', 'Ô meu rei, aqui é na pancada.'],
+              derrota: ['Bati forte demais, foi só isso.', 'Ganhou essa, mas o bar é meu amanhã.'] } },
+  { id: 'lauro', nome: 'Lauro Becker', apelido: 'Seu Lauro Giz Azul', cidade: 'Porto Alegre (RS)', cores: ['#2b5d9e', '#cfe3ff'],
+    precisao: 70, forca: 68, efeito: 58, agressividade: 28, favorito: 'brasileira',
+    frases: { vitoria: ['Paciência, tchê. A mesa sempre devolve.', 'Defesa ganha jogo, guri.'],
+              derrota: ['Bem jogado. Passa o giz que eu quero a revanche.', 'Fiquei sem defesa dessa vez.'] } },
+  { id: 'marquinho', nome: 'Marcos Rodrigues', apelido: 'Marquinho do Bico', cidade: 'Belém (PA)', cores: ['#1f7a4d', '#c8f5dc'],
+    precisao: 75, forca: 74, efeito: 68, agressividade: 72, favorito: 'mataMata',
+    frases: { vitoria: ['Matei, e nem senti!', 'No bico da caçapa, como eu gosto.'],
+              derrota: ['Morri na praia, égua!', 'Essa bola tinha meu nome e fugiu.'] } },
+  { id: 'lucinha', nome: 'Lúcia Kowalski', apelido: 'Lucinha Três Tabelas', cidade: 'Curitiba (PR)', cores: ['#5b3a99', '#e4d6ff'],
+    precisao: 80, forca: 84, efeito: 86, agressividade: 50, favorito: 'carambola',
+    frases: { vitoria: ['Uma, duas, três tabelas e boa noite.', 'Geometria não falha.'],
+              derrota: ['Errei o ângulo por um diamante.', 'Parabéns. Agora vamos de três tabelas.'] } },
+  { id: 'tonhao', nome: 'Antônio Cavalcanti', apelido: 'Mestre Tonhão', cidade: 'Recife (PE)', cores: ['#7a1c1c', '#ffd2c2'],
+    precisao: 86, forca: 82, efeito: 76, agressividade: 62, favorito: 'brasileira',
+    frases: { vitoria: ['Trinta anos de mesa, visse?', 'A preta é minha amiga de infância.'],
+              derrota: ['Tu jogou bonito. Respeito.', 'Até o mestre perde uma, de vez em quando.'] } },
+  { id: 'helena', nome: 'Helena Vasconcelos', apelido: 'Doutora Efeito', cidade: 'Rio de Janeiro (RJ)', cores: ['#0f5c6e', '#c6f1f7'],
+    precisao: 93, forca: 92, efeito: 95, agressividade: 66, favorito: 'bola9',
+    frases: { vitoria: ['Diagnóstico: puxeta com um toque de lateral.', 'Receita: treine mais o efeito.'],
+              derrota: ['Interessante. Vou estudar essa tacada.', 'Até a doutora erra a dose às vezes.'] } },
+];
 // Campeonatos (etapa 6): { id, nome, modos por fase, mesa, nivel dos adversários }
 const CAMPEONATOS = [];
 // Desafios de tacada (etapa 7): { nome, bolas, objetivo, zona, estrelas }
@@ -772,7 +817,7 @@ const Fisica = (() => {
   function clonar(sim) {
     const s = criarSim(sim.geo);
     s.bolas = sim.bolas.map(b => Object.assign({}, b, { q: b.q.slice(), rgb: b.rgb, cv: null, qd: null }));
-    s.contatos = new Map(sim.contatos); s.t = sim.t; s.throw = sim.throw;
+    s.contatos = new Map(sim.contatos); s.t = sim.t; s.throw = sim.throw; s.conjunto = sim.conjunto;
     return s;
   }
 
@@ -1815,7 +1860,7 @@ const REGRAS = {
         .filter(i => (r.revividos || []).includes(i) || (!E.lados[i].eliminado && !r.eliminados.includes(i)));
       if (vivos.length === 1) {
         const antes = r.mensagemDica;
-        RU.fim(r, vivos[0], `${E.lados[vivos[0]].nome} é o último vivo e venceu!`);
+        RU.fim(r, vivos[0], `${E.lados[vivos[0]].nome} sobreviveu a todos e venceu!`);
         if (antes) r.mensagemDica = antes + ' ' + r.mensagemDica;
       }
       return r;
@@ -1904,7 +1949,7 @@ const REGRAS = {
       if (r.eliminados.includes(eu)) r.continuaJogando = false;
       if (msgs.length) { r.mensagemCurta = (r.mensagemCurta ? r.mensagemCurta + ' ' : '') + msgs.join(' '); r.mensagemDica += (r.mensagemDica ? ' ' : '') + msgs.join(' '); }
       const vivos = E.lados.map((l, i) => i).filter(i => !E.lados[i].eliminado && !r.eliminados.includes(i));
-      if (vivos.length === 1) return RU.fim(r, vivos[0], `${E.lados[vivos[0]].nome} é o último com bolas na mesa e venceu!`);
+      if (vivos.length === 1) return RU.fim(r, vivos[0], `${E.lados[vivos[0]].nome} ficou com bolas na mesa até o fim e venceu!`);
       return r;
     },
     pontuacaoHUD(E, i) {
@@ -2184,7 +2229,9 @@ const Partida = {
   // P: { modo, quantos, duplas, nomes, nivel, variantes, inicio }
   criar(P, sim) {
     const n = P.duplas ? 4 : P.quantos;
-    const jog = P.nomes.slice(0, n).map((nome, i) => {
+    const jog = Array.from({ length: n }, (_, i) => (P.nomes || [])[i]).map((nome, i) => {
+      const adv = ADVERSARIOS.find(a => a.id === (P.tipos || [])[i]);
+      if (adv) return { nome: adv.apelido, humano: false, adv: adv.id, cor: adv.cores[0], iniciais: Partida.iniciais(adv.apelido) };
       const nm = (nome || '').trim() || `Jogador ${i + 1}`;
       return { nome: nm, humano: true, cor: CORES_JOGADORES[i % CORES_JOGADORES.length], iniciais: Partida.iniciais(nm) };
     });
@@ -2211,6 +2258,8 @@ const Partida = {
     return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : (p[0] || '').slice(1, 2))).toUpperCase();
   },
   jogador(p) { const l = p.lados[p.vez]; return l.membros[l.membro]; },
+  // Lado com pelo menos um humano
+  temHumano(l) { return l.membros.some(m => m.humano); },
   // Próximo lado ainda vivo depois de "de"
   proximo(p, de = p.vez) {
     const n = p.lados.length;
@@ -2237,10 +2286,367 @@ const Partida = {
 };
 
 // =====================================================================
-// 5. IA (etapa 5): gera tacadas candidatas, simula com Fisica.clonar + simularAteParar,
-//    pontua pelo motor de regras e aplica o erro humano de cada adversário.
+// 5. IA: gera tacadas candidatas, simula cada uma numa cópia da mesa (Fisica.clonar), pontua o
+//    resultado pelo motor de regras e aplica o erro humano de cada adversário. Fatiada por quadro.
 // =====================================================================
-const IA = {};
+const IA = (() => {
+  // Número aleatório com distribuição normal (Box-Muller)
+  function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  // Função erro (Abramowitz e Stegun), para a chance de acerto
+  function erf(x) {
+    const s = Math.sign(x); x = Math.abs(x);
+    const t = 1 / (1 + 0.3275911 * x);
+    return s * (1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x));
+  }
+
+  // Erro humano de cada perfil: desvio-padrão da mira (rad), da força (relativo) e do efeito (fração do raio)
+  function sigmas(perfil) {
+    const mira = 0.03 + Math.pow((100 - perfil.precisao) / 100, 1.5) * 1.0;
+    return { mira: mira * Math.PI / 180, forca: 0.01 + (100 - perfil.forca) / 100 * 0.12, efeito: (100 - perfil.efeito) / 100 * 0.15 };
+  }
+  // Perfil de um adversário na partida: o modo favorito vale um pouco mais de precisão
+  function perfil(adv, modo) {
+    const bonus = adv.favorito === modo ? 6 : 0;
+    return { precisao: Math.min(100, adv.precisao + bonus), forca: adv.forca, efeito: adv.efeito, agressividade: adv.agressividade };
+  }
+  // Perfil usado no botão Dica: um bom jogador, sem pressa
+  const PERFIL_DICA = { precisao: 75, forca: 75, efeito: 60, agressividade: 55 };
+
+  // O que a IA sabe de cada modo: bolas que pode tocar primeiro (null = qualquer uma), quanto o lado
+  // está avançando (maior é melhor), ameaça de cada adversário (multijogador) e custo de errar
+  const menor = E => { const n = RU.naMesa(E.sim); return n.length ? Math.min(...n) : null; };
+  const MODO = {
+    bola8: {
+      alvos(E) {
+        if (E.abertura) return null;
+        const g = REGRAS.bola8.grupo(E, E.vez), n = RU.naMesa(E.sim);
+        if (!g) return n.filter(x => x !== 8);
+        return REGRAS.bola8.limpo(E, E.vez, n) ? [8] : n.filter(x => GRUPOS8[g].tem(x));
+      },
+      progresso(E, i) {
+        const R8 = REGRAS.bola8, g = R8.grupo(E, i), n = RU.naMesa(E.sim);
+        if (!g) return 0;
+        const dele = g === 'lisas' ? 'listradas' : 'lisas';
+        return -n.filter(x => GRUPOS8[g].tem(x)).length * 12 + n.filter(x => GRUPOS8[dele].tem(x)).length * 3;
+      },
+    },
+    parImpar: {
+      alvos(E) {
+        const R = REGRAS.parImpar, g = R.grupo(E, E.vez), n = RU.naMesa(E.sim), final8 = E.variantes.bola8 === 'final';
+        if (!g) return final8 && !E.abertura ? n.filter(x => x !== 8) : null;
+        return final8 && R.limpo(E, E.vez, n) ? [8] : n.filter(x => R.tem(E, g, x));
+      },
+      progresso(E, i) {
+        const R = REGRAS.parImpar, g = R.grupo(E, i), n = RU.naMesa(E.sim);
+        if (!g) return 0;
+        const dele = g === 'par' ? 'impar' : 'par';
+        return -n.filter(x => R.tem(E, g, x)).length * 12 + n.filter(x => R.tem(E, dele, x)).length * 3;
+      },
+    },
+    contagem: {
+      alvos(E) { return E.variantes.ordem === 'vez' ? [menor(E)] : null; },
+      ameaca(E, i) { return 1 + E.lados[i].pontos / 30; },
+    },
+    mataMata: {
+      alvos(E) { return E.variantes.ordem === 'numerica' ? [menor(E)] : null; },
+      // Só conhece as próprias bolas (o estado de trabalho já vem sem as dos outros)
+      progresso(E, i) {
+        const n = RU.naMesa(E.sim), minhas = Object.keys(E.m.donos).map(Number).filter(x => E.m.donos[x] === i);
+        const vivas = minhas.filter(x => n.includes(x)).length;
+        return vivas * 14 - (n.length - vivas) * 4;
+      },
+      // Quem tem mais bolas na mesa (contagem pública) está mais perto de ser o último vivo
+      ameaca(E, i, contagem) { return 1 + (contagem ? contagem[i] : 1) * 0.4 + (E.m.vidas ? E.m.vidas[i] - 1 : 0) * 0.5; },
+    },
+    tresJog: {
+      alvos(E) {
+        const R = REGRAS.tresJog;
+        if (!E.m.grupos) return null;
+        const g = R.GR[R.grupo(E, E.vez)];
+        return RU.naMesa(E.sim).filter(x => !g.bolas.includes(x));
+      },
+      progresso(E, i) {
+        const R = REGRAS.tresJog;
+        if (!E.m.grupos) return 0;
+        const n = RU.naMesa(E.sim), meu = R.GR[R.grupo(E, i)].bolas;
+        return n.filter(x => meu.includes(x)).length * 10 - n.filter(x => !meu.includes(x)).length * 6;
+      },
+      ameaca(E, i) {
+        const R = REGRAS.tresJog;
+        if (!E.m.grupos) return 1;
+        const n = RU.naMesa(E.sim);
+        return 1 + R.GR[R.grupo(E, i)].bolas.filter(x => n.includes(x)).length * 0.3;
+      },
+    },
+    brasileira: {
+      alvos(E) { return E.m.livre ? null : [menor(E)]; },
+      // Errar a livre numa bola maior dá os pontos dela ao adversário
+      custoErro(E, c) { const m = menor(E); return E.m.livre && !REGRAS.brasileira.bar(E) && c.alvo > m ? c.alvo * 4 : 0; },
+    },
+    bola9: { alvos(E) { return [menor(E)]; } },
+    carambola: {},
+  };
+
+  // Estado de trabalho para simular: cópia dos dados da partida, com a mesa simulada.
+  // Nas bolas secretas, a IA só conhece as próprias.
+  function contexto(p, lado, perf, bolaNaMao) {
+    const sim = p.sim, regras = p.regras;
+    const idBranca = regras.bolaDoJogador ? regras.bolaDoJogador(p) : sim.bolas.find(b => b.tipo === 'branca').id;
+    const dados = Partida.dados(p);
+    let contagem = null;
+    if (p.m.donos) {
+      const d = {}, n = RU.naMesa(sim);
+      contagem = p.lados.map((l, i) => Object.keys(p.m.donos).filter(x => p.m.donos[x] === i && n.includes(+x)).length);
+      for (const x in p.m.donos) if (p.m.donos[x] === lado) d[x] = lado;
+      dados.m.donos = d;
+    }
+    const ctx = {
+      p, lado, perfil: perf, sig: sigmas(perf), idBranca, dados, contagem, bolaNaMao,
+      base: Fisica.clonar(sim), throw: sim.throw, M: MODO[p.modo] || {},
+      pesoDefesa: 0.6 + 0.8 * (1 - perf.agressividade / 100),
+    };
+    ctx.base.ouvinte = null;
+    const E0 = sandbox(ctx, ctx.base);
+    ctx.E0 = E0;
+    ctx.progAntes = ctx.M.progresso ? ctx.M.progresso(E0, lado) : 0;
+    return ctx;
+  }
+  function sandbox(ctx, sim) {
+    return Object.assign({}, ctx.p, structuredClone(ctx.dados), { sim, antes: RU.naMesa(sim), cantada: null });
+  }
+
+  // Tacadas diretas possíveis: para cada bola que pode ser tocada e cada caçapa, a mira pela bola fantasma,
+  // com o caminho livre, a chance de acerto (pelo erro do perfil) e a força para a bola chegar com folga.
+  function tiros(sim, idBranca, alvos, sig) {
+    const geo = sim.geo, R = geo.R, br = sim.bolas.find(b => b.id === idBranca), lista = [];
+    if (!br || br.estado !== 'mesa') return lista;
+    for (const b of sim.bolas) {
+      if (b.estado !== 'mesa' || b.id === idBranca || (alvos && !alvos.includes(b.num))) continue;
+      for (let k = 0; k < geo.cacapas.length; k++) {
+        const c = geo.cacapas[k];
+        let ux = c.x - b.x, uy = c.y - b.y;
+        const d2 = Math.hypot(ux, uy); ux /= d2; uy /= d2;
+        const gx = b.x - ux * 2 * R, gy = b.y - uy * 2 * R;
+        let vx = gx - br.x, vy = gy - br.y;
+        const d1 = Math.hypot(vx, vy);
+        if (d1 < R) continue;
+        vx /= d1; vy /= d1;
+        const cosc = vx * ux + vy * uy;
+        if (cosc < 0.22) continue;                                   // corte de mais de ~77°
+        const h1 = Fisica.lancarRaio(sim, br.x, br.y, vx, vy, idBranca);
+        if (!h1 || h1.tipo !== 'bola' || h1.bola !== b || Math.abs(h1.t - d1) > R * 0.4) continue;
+        const h2 = Fisica.lancarRaio(sim, b.x, b.y, ux, uy, [b.id, idBranca]);
+        if (!h2 || !(h2.tipo === 'cacapa' && h2.cacapa === k || h2.tipo === 'tabela' && h2.t > d2 - c.r - 2 * R)) continue;
+        // Folga da caçapa: menor quando a bola chega de lado na boca
+        const cosA = Math.abs(ux * c.ax + uy * c.ay);
+        const tol = c.r * 0.55 * (c.tipo === 'canto' ? 0.45 + 0.55 * cosA : Math.pow(cosA, 1.5));
+        const sigObj = Math.hypot(d1 * sig.mira / (2 * R * Math.max(0.2, cosc)), 0.004);
+        const p = Math.max(0, erf(Math.atan2(tol, d2) / (Math.SQRT2 * sigObj)));
+        // Força: a bola-alvo chega à caçapa com sobra; a branca precisa de mais no corte
+        const vObj = Math.sqrt(2 * geo.atritoRol * FISICA.g * (d2 + 250)) * 1.25 + 200;
+        const vBr = vObj / Math.max(0.3, cosc) * 1.1 + Math.sqrt(2 * geo.atritoRol * FISICA.g * d1);
+        const forca = U.clamp(Math.pow(vBr / FISICA.velocidadeMaxima, 1 / FISICA.curvaForca), 0.08, 1);
+        lista.push({ ang: Math.atan2(vy, vx), alvo: b.num, cacapa: k, p, forca, cosc, d1, d2 });
+      }
+    }
+    return lista.sort((a, b) => b.p - a.p);
+  }
+  // Facilidade da próxima tacada para um lado (0 a 1): a melhor chance direta
+  function facilidade(ctx, E, sim, lado) {
+    if (!sim.geo.cacapas.length) return 0.4;
+    const p = ctx.p, regras = p.regras, Ev = Object.assign({}, E, { vez: lado, sim });
+    const id = regras.bolaDoJogador ? regras.bolaDoJogador(Ev) : sim.bolas.find(b => b.tipo === 'branca').id;
+    const br = sim.bolas.find(b => b.id === id);
+    if (!br || br.estado !== 'mesa') return 0.85;
+    const t = tiros(sim, id, ctx.M.alvos ? ctx.M.alvos(Ev) : null, ctx.sig);
+    return t.length ? t[0].p : 0;
+  }
+
+  // Simula uma candidata e dá a nota do resultado, pelo motor de regras
+  function avaliar(ctx, c, pos) {
+    const regras = ctx.p.regras, eu = ctx.lado, M = ctx.M;
+    const sim = Fisica.clonar(ctx.base);
+    sim.throw = ctx.throw; sim.ouvinte = null;
+    const br = sim.bolas.find(b => b.id === ctx.idBranca);
+    if (pos) { br.x = pos.x; br.y = pos.y; br.estado = 'mesa'; }
+    const antes = RU.naMesa(sim);
+    Fisica.tacar(sim, br.id, c.ang, c.forca, c.efeito, null);
+    Fisica.simularAteParar(sim, 15);
+    Fisica.parar(sim);
+    const reg = Fisica.fecharRegistro(sim);
+    const E = sandbox(ctx, sim);
+    E.antes = antes;
+    E.cantada = c.cacapa != null ? c.cacapa : 0;
+    const pontosAntes = E.lados.map(l => l.pontos);
+    const res = regras.validarJogada(reg, E);
+    for (const n of res.recolocar) { if (regras.recolocarBola) regras.recolocarBola(E, n); else Rack.recolocar(sim, n); }
+    if (res.fimDePartida) return { v: res.vencedor === eu ? 1000 : -1000, res };
+    let v = 0;
+    if (res.falta) v -= 55;
+    E.lados.forEach((l, i) => { v += (l.pontos - pontosAntes[i]) * (i === eu ? 4 : -4); });
+    for (const i of res.eliminados) v += i === eu ? -500 : 90 * (M.ameaca ? M.ameaca(ctx.E0, i, ctx.contagem) : 1);
+    if (M.progresso) v += M.progresso(E, eu) - ctx.progAntes;
+    if (res.continuaJogando) v += 40 + 30 * facilidade(ctx, E, sim, eu);
+    else {
+      const prox = Partida.proximo(E);
+      v -= (res.falta && res.bolaNaMao ? 28 : 25 * facilidade(ctx, E, sim, prox)) * ctx.pesoDefesa;
+    }
+    return { v, res };
+  }
+
+  // Lugar para a branca (bola na mão): perto da linha de cada tacada direta boa, dentro da área
+  function lugaresBranca(ctx, area) {
+    const sim = ctx.base, geo = sim.geo, R = geo.R, br = sim.bolas.find(b => b.id === ctx.idBranca);
+    const alvos = ctx.M.alvos ? ctx.M.alvos(ctx.E0) : null, lugares = [];
+    const tenta = (x, y) => { if (Fisica.posicaoValida(sim, br, x, y, area)) lugares.push({ x, y }); };
+    for (const b of sim.bolas) {
+      if (b.estado !== 'mesa' || b.id === br.id || (alvos && !alvos.includes(b.num))) continue;
+      for (const c of geo.cacapas) {
+        let ux = c.x - b.x, uy = c.y - b.y; const d = Math.hypot(ux, uy); ux /= d; uy /= d;
+        for (const dist of [300, 550]) for (const giro of [0, 0.35, -0.35]) {
+          const a = Math.atan2(uy, ux) + Math.PI + giro;
+          tenta(b.x - ux * 2 * R + Math.cos(a) * dist, b.y - uy * 2 * R + Math.sin(a) * dist);
+        }
+      }
+    }
+    const xs = -geo.hx + geo.mesa.linhaSaida;
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 4; j++) tenta(-geo.hx + R + (geo.L - 2 * R) * (i + 0.5) / 6, -geo.hy + R + (geo.W - 2 * R) * (j + 0.5) / 4);
+    if (area !== 'mesa') tenta(xs - geo.R * 3, 0);
+    return lugares;
+  }
+
+  // Planejamento em etapas (gerador): cada "yield" devolve o controle, para gastar no máximo ~4 ms por quadro
+  function* planejar(ctx) {
+    const sim0 = ctx.base, geo = sim0.geo, R = geo.R, perf = ctx.perfil, p = ctx.p;
+    const br0 = sim0.bolas.find(b => b.id === ctx.idBranca);
+    const alvos = ctx.M.alvos ? ctx.M.alvos(ctx.E0) : null;
+    // Abertura com triângulo: tacada forte no ápice
+    if (p.abertura && sim0.conjunto === 'pool') {
+      let alvo = null, dm = Infinity;
+      for (const b of sim0.bolas) if (b.estado === 'mesa' && b.id !== br0.id) { const d = Math.hypot(b.x - br0.x, b.y - br0.y); if (d < dm) { dm = d; alvo = b; } }
+      return { ang: Math.atan2(alvo.y - br0.y, alvo.x - br0.x), forca: 0.82 + 0.18 * perf.agressividade / 100, efeito: { x: 0, y: 0.05 }, tipo: 'abertura', alvo: alvo.num };
+    }
+    // Bola na mão: escolhe onde pôr a branca
+    let pos = null;
+    if (ctx.bolaNaMao) {
+      let melhor = -1;
+      const lugares = lugaresBranca(ctx, ctx.bolaNaMao);
+      for (let i = 0; i < lugares.length; i++) {
+        const l = lugares[i], x0 = br0.x, y0 = br0.y, e0 = br0.estado;
+        br0.x = l.x; br0.y = l.y; br0.estado = 'mesa';
+        const t = tiros(sim0, br0.id, alvos, ctx.sig);
+        const nota = t.length ? t[0].p : 0;
+        br0.x = x0; br0.y = y0; br0.estado = e0;
+        if (nota > melhor) { melhor = nota; pos = l; }
+        if (i % 6 === 5) yield;
+      }
+      if (pos) { br0.x = pos.x; br0.y = pos.y; br0.estado = 'mesa'; }
+    }
+    // Candidatas
+    const cands = [];
+    const efeitos = perf.efeito >= 40 ? [{ x: 0, y: 0 }, { x: 0, y: 0.32 }, { x: 0, y: -0.38 }] : [{ x: 0, y: 0 }, { x: 0, y: 0.25 }];
+    if (geo.cacapas.length) {
+      for (const t of tiros(sim0, br0.id, alvos, ctx.sig).slice(0, 8))
+        for (const k of [1, 1.4]) for (const ef of efeitos)
+          cands.push({ ang: t.ang, forca: U.clamp(t.forca * k, 0.08, 1), efeito: ef, alvo: t.alvo, cacapa: t.cacapa, p: t.p, tipo: 'ataque' });
+      yield;
+      // Defesa: tocar devagar, cheio ou fino, nas bolas que podem ser tocadas, as mais perto primeiro
+      const perto = sim0.bolas.filter(b => b.estado === 'mesa' && b.id !== br0.id && (!alvos || alvos.includes(b.num)))
+        .sort((a, b) => Math.hypot(a.x - br0.x, a.y - br0.y) - Math.hypot(b.x - br0.x, b.y - br0.y)).slice(0, 4);
+      let visivel = false;
+      for (const b of perto) {
+        const d = Math.hypot(b.x - br0.x, b.y - br0.y), a0 = Math.atan2(b.y - br0.y, b.x - br0.x);
+        const h = Fisica.lancarRaio(sim0, br0.x, br0.y, Math.cos(a0), Math.sin(a0), br0.id);
+        if (h && h.tipo === 'bola' && h.bola === b) visivel = true;
+        for (const f of [-0.75, 0, 0.75]) for (const forca of [0.2, 0.32]) {
+          cands.push({ ang: a0 + Math.asin(U.clamp(f * 2 * R / d, -0.95, 0.95)), forca, efeito: { x: 0, y: -0.2 }, alvo: b.num, p: 0.9, tipo: 'defesa' });
+        }
+      }
+      // Sem bola à vista: tacadas de tabela em várias direções
+      if (!visivel) for (let k = 0; k < 24; k++) cands.push({ ang: k * Math.PI / 12, forca: 0.5, efeito: { x: 0, y: 0 }, p: 0.5, tipo: 'tabela' });
+    } else {
+      // Carambola: bater em cada bola com cortes diferentes, para a sua bola seguir para a outra
+      const outras = sim0.bolas.filter(b => b.id !== br0.id);
+      for (const b of outras) {
+        const d = Math.hypot(b.x - br0.x, b.y - br0.y), a0 = Math.atan2(b.y - br0.y, b.x - br0.x);
+        for (const f of [-0.8, -0.55, -0.3, 0, 0.3, 0.55, 0.8]) for (const forca of [0.42, 0.62])
+          cands.push({ ang: a0 + Math.asin(U.clamp(f * 2 * R / d, -0.95, 0.95)), forca, efeito: { x: 0, y: 0.2 }, alvo: b.num, p: 0.45 + perf.precisao / 250, tipo: 'carambola' });
+      }
+      // Três tabelas: poucas direções dão ponto (cerca de 1 em 100), então a busca é larga
+      if (p.variantes.estilo === 'tres')
+        for (let k = 0; k < 72; k++) for (const forca of [0.6, 0.85]) for (const lado of [-0.3, 0.3])
+          cands.push({ ang: k * Math.PI / 36, forca, efeito: { x: lado, y: 0.2 }, p: 0.3 + perf.precisao / 300, tipo: 'carambola' });
+    }
+    // Avalia cada candidata simulando
+    let melhor = null;
+    for (const c of cands) {
+      const { v } = avaliar(ctx, c, pos);
+      const custo = ctx.M.custoErro ? ctx.M.custoErro(ctx.E0, c) : 0;
+      const erro = c.tipo === 'ataque' ? -(18 + 30 * (1 - perf.agressividade / 100)) - custo : -10;
+      c.v = v;
+      c.ev = c.p * v + (1 - c.p) * erro;
+      if (!melhor || c.ev > melhor.ev) melhor = c;
+      yield;
+    }
+    if (!melhor) melhor = { ang: 0, forca: 0.4, efeito: { x: 0, y: 0 }, tipo: 'tabela', p: 0 };
+    return Object.assign({}, melhor, { pos });
+  }
+
+  // Tarefa de planejamento: trabalhar(tarefa, ms) avança até acabar ou gastar ms
+  function iniciar(p, lado, perf, bolaNaMao) {
+    const ctx = contexto(p, lado, perf, bolaNaMao);
+    return { ctx, it: planejar(ctx), pronto: false, plano: null };
+  }
+  function trabalhar(t, ms) {
+    const fim = performance.now() + ms;
+    while (!t.pronto && performance.now() < fim) {
+      const r = t.it.next();
+      if (r.done) { t.pronto = true; t.plano = r.value; }
+    }
+    return t.pronto;
+  }
+  // Planejamento de uma vez só (testes)
+  function planejarJa(p, lado, perf, bolaNaMao) { const t = iniciar(p, lado, perf, bolaNaMao); while (!trabalhar(t, 1000)); return t.plano; }
+
+  // Erro humano na execução
+  function errar(plano, perf) {
+    const s = sigmas(perf), M = FISICA.efeitoMaximo;
+    let ex = plano.efeito.x + gauss() * s.efeito, ey = plano.efeito.y + gauss() * s.efeito;
+    const r = Math.hypot(ex, ey);
+    if (r > M) { ex *= M / r; ey *= M / r; }
+    return { ang: plano.ang + gauss() * s.mira, forca: U.clamp(plano.forca * (1 + gauss() * s.forca), 0.03, 1), efeito: { x: ex, y: ey } };
+  }
+
+  // Decisões que não são tacada
+  // Penalidade "tira uma bola dele": a bola própria mais longe de qualquer caçapa
+  function escolherRetirada(p, lado) {
+    const geo = p.sim.geo;
+    let melhor = null, dm = -1;
+    for (const b of p.sim.bolas) {
+      if (b.estado !== 'mesa' || b.tipo === 'branca' || !p.regras.podeRetirar(p, b.num, lado)) continue;
+      const d = Math.min(...geo.cacapas.map(c => Math.hypot(b.x - c.x, b.y - c.y)));
+      if (d > dm) { dm = d; melhor = b; }
+    }
+    return melhor;
+  }
+  // Botões do modo: grupo com mais bolas na mesa (Três jogadores); jogar ou devolver depois do push out (Bola 9)
+  function escolherAcao(p, lado, perf) {
+    const acoes = p.regras.acoes ? p.regras.acoes(p) : [];
+    if (p.modo === 'tresJog') {
+      const n = RU.naMesa(p.sim);
+      let melhor = acoes[0], max = -1;
+      for (const a of acoes) { const q = REGRAS.tresJog.GR[a.id].bolas.filter(x => n.includes(x)).length + Math.random() * 0.5; if (q > max) { max = q; melhor = a; } }
+      return melhor && melhor.id;
+    }
+    if (p.modo === 'bola9' && p.m.escolha) {
+      const ctx = contexto(p, lado, perf, null), t = tiros(ctx.base, ctx.idBranca, MODO.bola9.alvos(ctx.E0), ctx.sig);
+      return t.length && t[0].p >= 0.45 ? 'jogar' : 'devolver';
+    }
+    return null;
+  }
+
+  return { perfil, PERFIL_DICA, iniciar, trabalhar, planejarJa, errar, escolherRetirada, escolherAcao, tiros, sigmas };
+})();
 
 // =====================================================================
 // 6. RENDERIZAÇÃO: texturas, mesa, bolas, taco, mira, controles
@@ -2978,11 +3384,34 @@ const Render = (() => {
     for (const b of bolas) { c.beginPath(); c.arc(b.x, b.y, R * 1.45, 0, Math.PI * 2); c.stroke(); }
   }
 
+  // Avatar de um adversário: círculo nas cores dele, aro de latão, iniciais e uma bolinha de sinuca
+  const avatares = {};
+  function avatar(adv, px) {
+    const chave = adv.id + px;
+    if (avatares[chave]) return avatares[chave];
+    const cv = document.createElement('canvas'); cv.width = cv.height = px;
+    const c = cv.getContext('2d'), r = px / 2;
+    let g = c.createRadialGradient(r * 0.7, r * 0.6, r * 0.1, r, r, r);
+    g.addColorStop(0, U.tom(adv.cores[0], 0.35)); g.addColorStop(0.7, adv.cores[0]); g.addColorStop(1, U.tom(adv.cores[0], -0.45));
+    c.beginPath(); c.arc(r, r, r - 1, 0, Math.PI * 2); c.fillStyle = g; c.fill();
+    c.lineWidth = px * 0.06; c.strokeStyle = '#c9a24a'; c.stroke();
+    c.beginPath(); c.arc(r, r, r * 0.8, 0, Math.PI * 2); c.lineWidth = px * 0.02; c.strokeStyle = adv.cores[1]; c.globalAlpha = 0.5; c.stroke(); c.globalAlpha = 1;
+    const ini = Partida.iniciais(adv.apelido);
+    c.fillStyle = adv.cores[1]; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = `bold ${Math.round(px * 0.36)}px Georgia, serif`;
+    c.fillText(ini, r, r * 0.95);
+    // bolinha do modo favorito, no canto
+    const bx = px * 0.78, by = px * 0.78, br = px * 0.13, d = Rack.descPool({ bola8: 8, bola9: 9, contagem: 15, parImpar: 2, mataMata: 11, brasileira: 7, carambola: 3 }[adv.favorito] || 1);
+    c.beginPath(); c.arc(bx, by, br, 0, Math.PI * 2); c.fillStyle = d.tipo === 'listrada' ? '#f4efe1' : d.cor; c.fill();
+    c.lineWidth = 1; c.strokeStyle = 'rgba(0,0,0,0.5)'; c.stroke();
+    return (avatares[chave] = cv.toDataURL());
+  }
+
   function definirFeltro(hex) { feltroRGB = U.rgb(hex); }
   function invalidarBolas(sim) { for (const b of sim.bolas) b.qd = null; r.tamSprite = 0; }
 
   return { r, vista, telaParaMesa, mesaParaTela, dirTela, construirCena, desenharBolas, desenharTaco, desenharMira,
-           desenharBarra, desenharAnel, desenharEfeito, diagrama, desenharCacapasCantar, desenharAneis, gravarRastros, desenharRastros, definirFeltro, invalidarBolas };
+           desenharBarra, desenharAnel, desenharEfeito, diagrama, avatar, desenharCacapasCantar, desenharAneis, gravarRastros, desenharRastros, definirFeltro, invalidarBolas };
 })();
 
 // =====================================================================
@@ -3187,6 +3616,10 @@ const jogo = {
   regrasVer: null,         // { modo, variantes, ativas } da tela "Como jogar"
   podeDesfazerLado: null,  // lado que pode desfazer a própria última tacada
   fila: null,              // sorteio das bolas secretas: lados que ainda vão ver as suas
+  ia: null,                // vez do computador em andamento: { t0, espera, tarefa }
+  tacadaIA: false,         // a tacada em andamento foi do computador
+  dicaTarefa: null,        // botão Dica: planejamento em andamento
+  dica: null,              // dica na tela: { alvo, cacapa, ate }
   fase: 'mirando',         // 'mirando' | 'tacando' | 'rolando'
   pausado: false,          // menu de pausa aberto
   geo: null, sim: null, partida: null,
@@ -3231,7 +3664,7 @@ const Entrada = (() => {
     const id = p && p.regras.bolaDoJogador ? p.regras.bolaDoJogador(p) : null;
     return id != null ? s.bolas.find(b => b.id === id) : s.bolas.find(b => b.tipo === 'branca');
   };
-  const podeInteragir = () => jogo.tela === 'partida' && !jogo.pausado && jogo.fase === 'mirando' && !precisaGirar() && !jogo.partida.fim;
+  const podeInteragir = () => jogo.tela === 'partida' && !jogo.pausado && jogo.fase === 'mirando' && !precisaGirar() && !jogo.partida.fim && !Jogo.vezDaIA();
 
   function dentro(r, x, y, folga = 0) { return x >= r.x - folga && x <= r.x + r.w + folga && y >= r.y - folga && y <= r.y + r.h + folga; }
   // Bola sob o ponteiro que pode ser arrastada agora
@@ -3661,19 +4094,32 @@ const Telas = {
       Telas.montarPreparo();
     });
     const n = P.duplas ? 4 : P.quantos;
+    const usados = new Set(P.tipos.slice(0, n).filter(t => t !== 'humano'));
+    const nivelAdv = a => { const m = (a.precisao + a.forca + a.efeito) / 3; return m < 55 ? 'fácil' : m < 72 ? 'médio' : m < 85 ? 'difícil' : 'craque'; };
     for (let i = 0; i < n; i++) {
-      const d = document.createElement('div'); d.className = 'op';
       const rot = P.duplas ? `Dupla ${i % 2 ? 'B' : 'A'}, ${i < 2 ? '1º' : '2º'}` : `Jogador ${i + 1}`;
-      d.innerHTML = `<label for="nome-${i}"></label><input type="text" id="nome-${i}" maxlength="14" autocomplete="off">`;
-      d.querySelector('label').textContent = rot;
-      const inp = d.querySelector('input');
-      inp.value = P.nomes[i] || '';
-      inp.placeholder = `Jogador ${i + 1}`;
-      inp.addEventListener('input', () => { P.nomes[i] = inp.value; });
-      box.appendChild(d);
+      const ops = [{ id: 'humano', nome: 'Humano' }].concat(ADVERSARIOS.map(a => ({ id: a.id, nome: `${a.apelido} (${nivelAdv(a)})`, desligado: usados.has(a.id) && P.tipos[i] !== a.id })));
+      Campo.sel(box, rot, ops, P.tipos[i], v => { P.tipos[i] = v; Telas.montarPreparo(); });
+      if (P.tipos[i] === 'humano') {
+        const d = document.createElement('div'); d.className = 'op';
+        d.innerHTML = `<label for="nome-${i}">Nome</label><input type="text" id="nome-${i}" maxlength="14" autocomplete="off">`;
+        const inp = d.querySelector('input');
+        inp.value = P.nomes[i] || '';
+        inp.placeholder = `Jogador ${i + 1}`;
+        inp.addEventListener('input', () => { P.nomes[i] = inp.value; });
+        box.appendChild(d);
+      } else {
+        const a = ADVERSARIOS.find(x => x.id === P.tipos[i]);
+        const d = document.createElement('div'); d.className = 'op adv';
+        d.innerHTML = `<img class="av" alt=""><span></span>`;
+        d.querySelector('img').src = Render.avatar(a, 72);
+        d.querySelector('span').textContent = `${a.nome}, de ${a.cidade}. Gosta de ${MODOS[a.favorito].nome}. ` +
+          `Mira ${a.precisao}, força ${a.forca}, efeito ${a.efeito}; ${a.agressividade >= 60 ? 'ataca muito' : a.agressividade <= 35 ? 'joga na defesa' : 'equilibrado'}.`;
+        box.appendChild(d);
+      }
     }
     Campo.texto(box, (P.duplas ? 'As duplas se alternam: A, B, A, B; dentro da dupla, os dois revezam. ' : '') +
-                     'Todos jogam neste aparelho, passando a vez. Adversários do computador chegam numa próxima versão.');
+                     'Os humanos jogam neste aparelho, passando a vez; os adversários do computador jogam sozinhos.');
     Campo.secao(box, 'Nível');
     const nv = NIVEIS[P.nivel];
     Campo.sel(box, 'Nível', Object.entries(NIVEIS).map(([id, x]) => ({ id, nome: x.nome })), P.nivel,
@@ -3788,6 +4234,14 @@ const Telas = {
     const p = jogo.partida, f = p.fim, v = p.lados[f.vencedor];
     el('fim-titulo').textContent = v.membros.length > 1 ? `Vitória de ${v.nome}!` : `${v.nome} venceu!`;
     el('fim-motivo').textContent = f.motivo;
+    const falas = [];
+    p.lados.forEach((l, i) => l.membros.forEach(m => {
+      const adv = m.adv && ADVERSARIOS.find(a => a.id === m.adv);
+      if (!adv) return;
+      const lista = adv.frases[i === f.vencedor ? 'vitoria' : 'derrota'];
+      falas.push(`<p class="fala"><img class="av" alt="" src="${Render.avatar(adv, 60)}"><span>“${escapar(lista[(Math.random() * lista.length) | 0])}”<br><small>${escapar(adv.apelido)}</small></span></p>`);
+    }));
+    el('fim-falas').innerHTML = falas.join('');
     const pts = p.modo === 'contagem';
     let html = `<tr><th>Jogador</th>${pts ? '<th>Pontos</th>' : ''}<th>Bolas</th><th>Faltas</th><th>Tacadas</th></tr>`;
     const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -3823,7 +4277,9 @@ function acao(a) {
       jogo.fila.shift();
       if (jogo.fila.length) { Telas.montarVez(); return; }
       jogo.fila = null;
-      Telas.montarVez();
+      // Depois do sorteio: a tela da vez só se o primeiro a jogar é humano e há mais de um humano
+      const p = jogo.partida;
+      if (Partida.jogador(p).humano && p.lados.filter(Partida.temHumano).length > 1) Telas.montarVez(); else Telas.fechar();
       return;
     }
     Telas.fechar();
@@ -3880,6 +4336,8 @@ function atualizarHUD() {
   el('b-desfazer').hidden = partida && NIVEIS[jogo.partida.nivel].desfazer === 0;
   el('b-desfazer').disabled = !Jogo.podeDesfazer();
   hudTexto('b-som', jogo.config.som ? '🔊' : '🔇');
+  el('b-dica').hidden = !(partida && NIVEIS[jogo.partida.nivel].botaoDica && !jogo.partida.fim && Partida.jogador(jogo.partida).humano);
+  el('b-dica').disabled = jogo.fase !== 'mirando' || !!jogo.dicaTarefa;
   el('b-mover').classList.toggle('ativo', jogo.mover);
   if (partida) hudPartida(); else hudTreino();
 }
@@ -3910,7 +4368,11 @@ function hudPartida() {
   let html = '';
   p.lados.forEach((l, i) => {
     const vez = i === p.vez && !p.fim, info = p.regras.pontuacaoHUD(p, i);
-    const avs = l.membros.map((m, k) => `<span class="av" style="background:${m.cor}${vez && l.membros.length > 1 && k !== l.membro ? ';opacity:.45' : ''}">${escapar(m.iniciais)}</span>`).join('');
+    const avs = l.membros.map((m, k) => {
+      const apag = vez && l.membros.length > 1 && k !== l.membro ? ' style="opacity:.45"' : '';
+      if (m.adv) return `<img class="av" alt="" src="${Render.avatar(ADVERSARIOS.find(a => a.id === m.adv), 60)}"${apag}>`;
+      return `<span class="av" style="background:${m.cor}${apag ? ';opacity:.45' : ''}">${escapar(m.iniciais)}</span>`;
+    }).join('');
     const seq = l.sequencia >= 2 ? `<span class="seq">x${l.sequencia}</span>` : '';
     const rel = vez && p.relogio > 0 && Partida.tempoTacada(p) > 0
       ? `<span class="rel${p.relogio <= 10 ? ' alerta' : ''}">${Math.floor(Math.ceil(p.relogio) / 60)}:${String(Math.ceil(p.relogio) % 60).padStart(2, '0')}</span>` : '';
@@ -3922,19 +4384,19 @@ function hudPartida() {
   if (hudHtml('lados', html)) ajustarPlacar();
   let vez = '';
   if (!p.fim) {
-    const j = Partida.jogador(p), bv = p.regras.bolaDaVez(p), partes = [`Vez de ${escapar(j.nome)}`];
+    const j = Partida.jogador(p), bv = p.regras.bolaDaVez(p), partes = [`Vez de ${escapar(j.nome)}` + (jogo.ia ? ' · pensando…' : '')];
     if (bv) partes.push(bv.includes(':') ? escapar(bv) : `bola da vez: ${escapar(bv)}`);
     if (p.pendente) partes.push('toque numa bola sua para tirá-la da mesa');
     else if (Partida.precisaCantar(p)) partes.push(p.cantada == null ? 'cante a caçapa (toque nela)' : 'caçapa: ' + jogo.geo.cacapas[p.cantada].nome);
     if (jogo.bolaNaMao && jogo.fase === 'mirando')
       partes.push(jogo.bolaNaMao === 'atras' ? 'bola na mão, atrás da linha' : jogo.bolaNaMao === 'meiaLua' ? 'bola na mão, na meia-lua' : 'bola na mão');
     if (p.lados[p.vez].extras > 0) partes.push('duas tacadas');
-    partes.push('efeito: ' + textoEfeito());
+    if (j.humano) partes.push('efeito: ' + textoEfeito());
     vez = partes.join(' · ');
   }
   hudHtml('vezinfo', vez);
   // Botões do modo
-  const acoes = !p.fim && jogo.fase === 'mirando' && p.regras.acoes ? p.regras.acoes(p) : [];
+  const acoes = !p.fim && jogo.fase === 'mirando' && p.regras.acoes && Partida.jogador(p).humano ? p.regras.acoes(p) : [];
   hudHtml('acoes', acoes.map(a => `<button class="bt-acao${a.ativo ? ' ativo' : ''}" data-id="${a.id}" type="button">${escapar(a.rotulo)}</button>`).join(''));
   el('vezinfo').hidden = !vez;
 }
@@ -3968,6 +4430,10 @@ const Jogo = {
       duplas: M.duplas && !!salvo.duplas,
       nivel: NIVEIS[salvo.nivel] ? salvo.nivel : 'aprendiz',
       regraCasa: Salvar.regrasCasa().some(r => r.modo === modo && r.nome === salvo.regraCasa) ? salvo.regraCasa : '',
+      tipos: Array.from({ length: 6 }, (_, i) => {
+        const t = Array.isArray(salvo.tipos) ? salvo.tipos[i] : (i === 1 ? ADVERSARIOS[0].id : 'humano');
+        return t === 'humano' || ADVERSARIOS.some(a => a.id === t) ? t : 'humano';
+      }),
       mesa: M.mesas.includes(salvo.mesa) ? salvo.mesa : M.mesaPadrao,
       feltro: FELTROS[salvo.feltro] && M.mesas.includes(salvo.mesa) ? salvo.feltro : MESAS[M.mesas.includes(salvo.mesa) ? salvo.mesa : M.mesaPadrao].feltro,
       inicio: 0,
@@ -3983,6 +4449,7 @@ const Jogo = {
   comecar() {
     jogo.tela = 'partida'; jogo.fase = 'mirando';
     jogo.desfazer = []; jogo.ultima = null; jogo.mover = false; jogo.podeDesfazerLado = null;
+    jogo.ia = null; jogo.dicaTarefa = null; jogo.dica = null; jogo.tacadaIA = false;
     jogo.mira.ang = 0; jogo.taco.alfa = 0; jogo.miraCache = null; jogo.painelEfeito = false; jogo.efeito = { x: 0, y: 0 };
     jogo.bolaNaMao = jogo.partida.bolaNaMaoInicial;
     jogo.partida.relogio = Partida.tempoTacada(jogo.partida);
@@ -4000,7 +4467,7 @@ const Jogo = {
   },
   iniciarPartida(P) {
     const salvo = Salvar.ler('preparo', {});
-    salvo[P.modo] = { nomes: P.nomes, quantos: P.quantos, duplas: P.duplas, nivel: P.nivel, variantes: P.variantes, regraCasa: P.regraCasa, mesa: P.mesa, feltro: P.feltro };
+    salvo[P.modo] = { nomes: P.nomes, quantos: P.quantos, duplas: P.duplas, nivel: P.nivel, variantes: P.variantes, regraCasa: P.regraCasa, mesa: P.mesa, feltro: P.feltro, tipos: P.tipos };
     Salvar.gravar('preparo', salvo);
     const M = MODOS[P.modo];
     Jogo.novaMesa(P.mesa, P.nivel);
@@ -4008,15 +4475,17 @@ const Jogo = {
     jogo.partida.regras.montar(jogo.sim, jogo.partida);
     Jogo.comecar();
     // Bolas secretas: antes de tudo, cada jogador vê as suas, um de cada vez
-    if (jogo.partida.sorteio) { jogo.fila = jogo.partida.lados.map((l, i) => i); Telas.abrir('t-vez'); }
+    const humanos = jogo.partida.lados.map((l, i) => i).filter(i => Partida.temHumano(jogo.partida.lados[i]));
+    if (jogo.partida.sorteio && humanos.length) { jogo.fila = humanos; Telas.abrir('t-vez'); }
     else Jogo.anunciarVez(true);
   },
   // Troca de vez: tela "Passe o aparelho" (bolas secretas ou se pedido) ou um aviso
   anunciarVez(inicio) {
     const p = jogo.partida, j = Partida.jogador(p);
-    if (p.M.secretas || jogo.config.telaVez === 'sempre') Telas.abrir('t-vez');
+    const humanos = p.lados.filter(l => !l.eliminado && Partida.temHumano(l)).length;
+    if (j.humano && humanos > 1 && (p.M.secretas || jogo.config.telaVez === 'sempre')) Telas.abrir('t-vez');
     else aviso(inicio ? `${j.nome} abre a partida` : `Vez de ${j.nome}`, 1.8);
-    if (inicio && nivelAtual() === 'aprendiz') {
+    if (inicio && nivelAtual() === 'aprendiz' && j.humano) {
       const area = p.bolaNaMaoInicial === 'meiaLua' ? 'com a branca na meia-lua' : p.bolaNaMaoInicial === 'atras' ? 'com a branca atrás da linha de saída' : 'a partida';
       balao('Abertura', `${j.nome} abre ${area}` + (p.bolaNaMaoInicial ? ': arraste a branca se quiser, e taque.' : '.'), 7);
     }
@@ -4024,6 +4493,7 @@ const Jogo = {
   irParaMenu() {
     jogo.tela = 'menu'; jogo.pilha = []; jogo.subtela = 't-menu';
     Entrada.soltarTudo(); fecharBalao();
+    jogo.ia = null; jogo.dicaTarefa = null; jogo.dica = null;
     Jogo.cenaDoMenu();
     Telas.atualizar();
   },
@@ -4128,7 +4598,7 @@ const Jogo = {
     if (res.fimDePartida) {
       p.fim = { vencedor: res.vencedor, motivo: res.mensagemCurta };
       jogo.desfazer = []; jogo.podeDesfazerLado = null;
-      Som.jingle('vitoria');
+      Som.jingle(Partida.temHumano(p.lados[res.vencedor]) || !p.lados.some(Partida.temHumano) ? 'vitoria' : 'derrota');
       setTimeout(() => { if (jogo.partida === p && jogo.tela === 'partida') { jogo.pilha = []; jogo.subtela = null; Telas.abrir('t-fim'); } }, 1600);
       return;
     }
@@ -4142,7 +4612,8 @@ const Jogo = {
     jogo.bolaNaMao = res.bolaNaMao;
     if (Entrada.branca().estado !== 'mesa') { if (!jogo.bolaNaMao) jogo.bolaNaMao = 'atras'; Jogo.reporBranca(jogo.bolaNaMao); }
     p.relogio = Partida.tempoTacada(p);
-    if (!reg.tempoEsgotado) jogo.podeDesfazerLado = eu;
+    jogo.podeDesfazerLado = !reg.tempoEsgotado && lado.membros.some(m => m.humano) && !jogo.tacadaIA ? eu : null;
+    jogo.tacadaIA = false;
     if (trocou) Jogo.anunciarVez(false);
   },
   // Mensagens conforme o nível: Aprendiz explica tudo; Clube explica as faltas; Profissional só diz a consequência
@@ -4165,6 +4636,74 @@ const Jogo = {
         if (Fisica.posicaoValida(sim, br, x, y, area)) { br.x = x; br.y = y; return; }
       }
     }
+  },
+  // É a vez do computador agora?
+  vezDaIA() {
+    const p = jogo.partida;
+    return emPartida() && !p.fim && jogo.fase === 'mirando' && !jogo.pausado && !Partida.jogador(p).humano;
+  },
+  // Turno do computador: decisões fora da tacada, depois "pensando…" (0,6 a 1,5 s, com o planejamento
+  // fatiado em ~4 ms por quadro), a mira indo devagar para o ângulo escolhido, e a tacada com erro humano
+  turnoIA(dt) {
+    const p = jogo.partida, j = Partida.jogador(p), adv = ADVERSARIOS.find(a => a.id === j.adv);
+    const perf = IA.perfil(adv, p.modo), agora = performance.now();
+    if (!jogo.ia) {
+      jogo.ia = { t0: agora, espera: 600 + Math.random() * 900, tarefa: null, decisao: false };
+      return;
+    }
+    const ia = jogo.ia;
+    if (agora - ia.t0 < 350) return;
+    // Penalidade e botões do modo, antes da tacada
+    if (p.pendente) { if (agora - ia.t0 > 700) { const b = IA.escolherRetirada(p, p.pendente.lado); if (b) Jogo.retirar(b); else p.pendente = null; jogo.ia = null; } return; }
+    const bl = p.regras.bloqueio && p.regras.bloqueio(p);
+    if (bl) { if (agora - ia.t0 > 800) { const id = IA.escolherAcao(p, p.vez, perf); jogo.ia = null; if (id) Jogo.acaoRegra(id); } return; }
+    if (!ia.tarefa) ia.tarefa = IA.iniciar(p, p.vez, perf, jogo.bolaNaMao);
+    if (!ia.tarefa.pronto) IA.trabalhar(ia.tarefa, 4);
+    const plano = ia.tarefa.plano;
+    if (plano) {
+      // A branca vai para o lugar escolhido; a mira gira até o ângulo
+      if (plano.pos && !ia.posto) { const br = Entrada.branca(); br.x = plano.pos.x; br.y = plano.pos.y; br.estado = 'mesa'; br.qd = null; ia.posto = true; jogo.miraCache = null; }
+      const d = U.angDif(plano.ang - jogo.mira.ang), passo = Math.min(Math.abs(d), dt * 2.2);
+      jogo.mira.ang = U.angDif(jogo.mira.ang + Math.sign(d) * passo);
+      jogo.efeito = { x: plano.efeito.x, y: plano.efeito.y };
+      if (Math.abs(d) < 0.002 && agora - ia.t0 >= ia.espera) {
+        if (Partida.precisaCantar(p)) p.cantada = plano.cacapa != null ? plano.cacapa : 0;
+        const exec = IA.errar(plano, perf);
+        jogo.mira.ang = exec.ang; jogo.efeito = exec.efeito; jogo.forcaBarra = exec.forca;
+        jogo.ia = null;
+        jogo.tacadaIA = true;
+        Jogo.darTacada(exec.forca);
+      }
+    } else jogo.mira.ang = U.angDif(jogo.mira.ang + Math.sin(agora / 400) * dt * 0.15);
+  },
+  // Botão Dica (Aprendiz): a IA procura uma boa jogada para o humano da vez e deixa a mira pronta
+  pedirDica() {
+    const p = jogo.partida;
+    if (!emPartida() || p.fim || jogo.fase !== 'mirando' || Jogo.vezDaIA() || !NIVEIS[p.nivel].botaoDica || jogo.dicaTarefa) return;
+    if (p.pendente || (p.regras.bloqueio && p.regras.bloqueio(p))) { aviso('Antes, resolva a escolha pendente.'); return; }
+    jogo.dicaTarefa = IA.iniciar(p, p.vez, IA.PERFIL_DICA, jogo.bolaNaMao);
+    aviso('Procurando uma boa jogada…', 1.5);
+  },
+  trabalharDica() {
+    const t = jogo.dicaTarefa;
+    if (!t || !IA.trabalhar(t, 4)) return;
+    jogo.dicaTarefa = null;
+    const p = jogo.partida, pl = t.plano;
+    if (!pl || jogo.fase !== 'mirando') return;
+    if (pl.pos) { const br = Entrada.branca(); br.x = pl.pos.x; br.y = pl.pos.y; br.estado = 'mesa'; br.qd = null; }
+    jogo.mira.ang = pl.ang; jogo.efeito = { x: pl.efeito.x, y: pl.efeito.y }; jogo.forcaBarra = pl.forca; jogo.miraCache = null;
+    if (Partida.precisaCantar(p) && pl.cacapa != null) p.cantada = pl.cacapa;
+    jogo.dica = { alvo: pl.alvo, cacapa: pl.cacapa, ate: performance.now() + 7000 };
+    const geo = jogo.geo, f = Math.round(pl.forca * 100);
+    const ef = pl.efeito.y > 0.05 ? ', com siga' : pl.efeito.y < -0.05 ? ', com puxeta' : '';
+    let txt;
+    if (pl.tipo === 'abertura') txt = `Abertura: taque forte (${f}%) no centro da primeira bola.`;
+    else if (pl.tipo === 'ataque') txt = `Encaçape a ${pl.alvo} no ${geo.cacapas[pl.cacapa].nome}, com força de ${f}%${ef}.`;
+    else if (pl.tipo === 'defesa') txt = `Jogada de defesa: toque a ${pl.alvo} devagar (${f}%) e deixe a mesa difícil para o adversário.`;
+    else if (pl.tipo === 'carambola') txt = `Bata na bola ${pl.alvo === 1 ? 'amarela' : pl.alvo === 2 ? 'vermelha' : 'branca'} com força de ${f}%, para a sua bola seguir até a outra.`;
+    else txt = `Sem bola à vista: tente pela tabela, com força de ${f}%.`;
+    if (pl.pos) txt = 'Ponha a branca onde ela está agora. ' + txt;
+    balao('Dica', txt + ' A mira, o efeito e a força já estão prontos: é só tacar (Espaço ou a barra).', 9);
   },
   // Botões do modo (escolher grupo, push out, ver as próprias bolas…)
   acaoRegra(id) {
@@ -4218,6 +4757,7 @@ const Jogo = {
       return;
     }
     const p = jogo.partida, top = jogo.desfazer.pop();
+    jogo.ia = null; jogo.dicaTarefa = null; jogo.dica = null;
     Fisica.restaurar(jogo.sim, top.bolas);
     if (top.dados) {
       const resta = p.lados[top.lado].desfazeres - 1;
@@ -4454,9 +4994,12 @@ function atualizar(dt) {
     t.alfa = Math.max(0, t.alfa - dt * 2.8);
     if (!Fisica.emMovimento(jogo.sim)) Jogo.fimDaJogada();
   } else {
-    // Relógio da tacada (partida): conta enquanto o jogador mira
+    // Vez do computador: pensa (fatiado por quadro) e taca
     const p = jogo.partida;
-    if (emPartida() && !p.fim && p.relogio > 0) {
+    if (Jogo.vezDaIA()) Jogo.turnoIA(dt);
+    else if (jogo.dicaTarefa) Jogo.trabalharDica();
+    // Relógio da tacada (partida): conta enquanto um humano mira
+    else if (emPartida() && !p.fim && p.relogio > 0 && !jogo.dicaTarefa) {
       p.relogio -= dt;
       if (p.relogio <= 0) { p.relogio = 0; Entrada.soltarTudo(); aviso('O tempo acabou!', 1.6); Jogo.tempoEsgotado(); }
     }
@@ -4464,7 +5007,7 @@ function atualizar(dt) {
     const visivel = br && br.estado === 'mesa' && ent.modo !== 'arrastar';
     t.alfa = visivel ? Math.min(1, t.alfa + dt * 4) : Math.max(0, t.alfa - dt * 6);
     const f = ent.modo === 'puxar' || ent.modo === 'forca' ? ent.forca : 0;
-    const alvo = 22 + f * 260;
+    const alvo = jogo.ia ? 30 + 22 * (1 + Math.sin(performance.now() / 260)) : 22 + f * 260;
     t.recuo += (alvo - t.recuo) * Math.min(1, dt * 18);
   }
   atualizarHUD();
@@ -4488,6 +5031,12 @@ function desenhar() {
   if (emPartida() && jogo.fase === 'mirando' && !pa.fim && Partida.precisaCantar(pa))
     Render.desenharCacapasCantar(c, sim.geo, pa.cantada, agora, px);
   Render.desenharBolas(c, sim);
+  // Dica: bola-alvo e caçapa em destaque por alguns segundos
+  if (jogo.dica && agora * 1000 < jogo.dica.ate && jogo.fase === 'mirando') {
+    const b = sim.bolas.find(x => x.num === jogo.dica.alvo && x.estado === 'mesa' && x !== br);
+    if (b) Render.desenharAneis(c, [b], R, agora, px, 'rgba(124,242,166,0.95)');
+    if (jogo.dica.cacapa != null && sim.geo.cacapas[jogo.dica.cacapa]) Render.desenharCacapasCantar(c, sim.geo, jogo.dica.cacapa, agora, px);
+  }
   // Penalidade: bolas que o jogador da vez pode tirar da mesa
   if (emPartida() && pa.pendente && jogo.fase === 'mirando') {
     const lado = pa.pendente.lado;
@@ -4541,6 +5090,7 @@ Salvar.carregar();
 document.querySelectorAll('[data-acao]').forEach(b => b.addEventListener('click', () => acao(b.dataset.acao)));
 el('b-menu').addEventListener('click', () => Telas.alternarPausa());
 el('balao-fechar').addEventListener('click', fecharBalao);
+el('b-dica').addEventListener('click', () => Jogo.pedirDica());
 el('acoes').addEventListener('click', ev => { const b = ev.target.closest('.bt-acao'); if (b) Jogo.acaoRegra(b.dataset.id); });
 el('b-desfazer').addEventListener('click', () => Jogo.desfazer());
 el('b-mover').addEventListener('click', () => Jogo.alternarMover());
@@ -4564,7 +5114,7 @@ Telas.atualizar();
 requestAnimationFrame(quadro);
 
 // Acesso para testes no console, só com #teste no endereço
-if (location.hash === '#teste') window.__sinuca = { jogo, Fisica, Render, Jogo, Rack, Som, FISICA, MESAS, NIVEIS };
+if (location.hash === '#teste') window.__sinuca = { jogo, Fisica, Render, Jogo, Rack, Som, IA, Partida, Entrada, ADVERSARIOS, REGRAS, FISICA, MESAS, NIVEIS };
 })();
 </script>
 </body>
