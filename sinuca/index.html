@@ -74,7 +74,7 @@
   .tela { display: none; }
   .tela.ativa { display: block; }
   .tela .placa { padding: 18px 22px 20px; max-height: calc(100vh - 24px); overflow: auto; box-sizing: border-box;
-    width: min(440px, calc(100vw - 24px)); text-align: center; }
+    width: min(440px, calc(100vw - 24px)); text-align: center; scrollbar-width: thin; scrollbar-color: var(--latao) transparent; }
   h1 { margin: 4px 0 2px; font-size: 44px; letter-spacing: .08em; line-height: 1; color: var(--latao-claro);
     text-shadow: 0 2px 0 #2a1205, 0 0 18px rgba(240,213,138,.25); }
   h1 span { font-size: 26px; letter-spacing: .3em; color: #e9e1cf; }
@@ -94,6 +94,7 @@
   .op select, .op .alterna { min-height: 40px; min-width: 150px; border-radius: 8px; border: 1px solid var(--latao);
     background: #2a1508; color: var(--texto); font: inherit; font-size: 15px; padding: 0 8px; cursor: pointer; }
   .op .alterna[aria-pressed="true"] { background: #1d6b3f; }
+  .op input[type=range] { width: 150px; min-height: 40px; accent-color: var(--latao); cursor: pointer; }
   #controles { text-align: left; font-size: 14px; line-height: 1.45; color: var(--texto); margin: 6px 0 4px; }
   #controles b { color: var(--latao-claro); }
   #controles p { margin: 6px 0; }
@@ -110,6 +111,7 @@
     <button class="bh" id="b-desfazer" title="Desfazer a tacada (Z)" aria-label="Desfazer">↶</button>
     <button class="bh" id="b-mover" title="Mover bolas (M)" aria-label="Mover bolas">✥</button>
     <button class="bh" id="b-arrumar" title="Arrumar as bolas (R)" aria-label="Arrumar as bolas">△</button>
+    <button class="bh" id="b-som" title="Som" aria-label="Som">🔊</button>
   </div>
   <div id="hud-info" class="placa"><div id="info-1"></div><div id="info-2"></div><div id="bandeja"></div></div>
 </div>
@@ -138,7 +140,9 @@
         <p><b>Computador.</b> Mova o mouse para mirar. Segure o botão e puxe para trás: o taco recua; solte para tacar. Puxar de volta até o começo cancela. A barra de força à direita também taca: arraste para baixo e solte.</p>
         <p>Setas ← → ou a roda do mouse: ajuste fino de 0,1° (com Shift, 0,01°). Setas ↑ ↓: força da barra. Espaço ou Enter: taca com a força da barra. Z desfaz, M liga o modo de mover bolas, R arruma as bolas, Esc abre este menu.</p>
         <p><b>Celular.</b> Toque ou arraste na mesa para mirar. Ajuste fino: gire o anel do canto ou arraste com dois dedos. Força: arraste a barra da direita para baixo e solte; arrastar para fora dela cancela.</p>
+        <p><b>Efeito.</b> Arraste o ponto vermelho na bola do seletor (no celular, toque no ícone da branca acima da barra): em cima dá siga, embaixo puxeta, dos lados efeito lateral, que muda a saída da tabela e encurva de leve as tacadas fortes. Fora do círculo tracejado, o taco pode escorregar (miscue). Teclas W, S, A e D movem o ponto; C ou duplo clique centralizam.</p>
         <p><b>Bolas.</b> A branca pode ser arrastada para qualquer lugar. Com ✥ ligado, qualquer bola pode ser arrastada.</p>
+        <p><b>Nível.</b> Aprendiz mostra o caminho real da branca, com o efeito; Clube só a saída da bola-alvo; Profissional só a linha até o contato, e só nele há throw (o atrito entre as bolas desvia a bola-alvo).</p>
       </div>
       <div class="linha">
         <button class="bt fraco" data-acao="menu">Menu principal</button>
@@ -177,6 +181,8 @@ const FISICA = {
   duracaoContato: 0.0002,   // duração do choque bola × bola, s (mola rígida, como a real). Vários choques ao mesmo
                             // tempo dividem a energia (abertura); mais longo desvia o corte (0,0006 → +0,4° em 30°) [0,0002–0,0006]
   passosPorContato: 12,     // sub-passos durante um choque (precisão da mola) [8–30]
+  velocidadeContatoMacio: 150, // mm/s: choques mais lentos que isso viram impulso instantâneo (bolas encostadas,
+                            // empurrão lento num grupo), para não gastar passos curtos à toa [50–300]
   restituicaoTabela: 0.76,  // padrão da borracha; cada mesa pode ter a sua [0,72–0,80]
   atritoTabela: 0.2,        // atrito tangencial bola × borracha: limita o impulso de lado [0,1–0,3]
   giroAposTabela: 0.15,     // fração do giro de rolamento (no sentido da batida) que sobra depois da tabela [0–0,4]
@@ -190,6 +196,13 @@ const FISICA = {
   impactoMinimo: 20,        // mm/s: toques mais fracos que isso não entram no registro da jogada
   folgaRack: 0.15,          // folga entre as bolas do triângulo, mm. Rack justo abre bem; com folga (0,5) os
                             // choques ficam um de cada vez e as bolas do meio quase não saem [0,05–0,5]
+  // Efeito (ponto de contato do taco, em frações do raio: x à direita, y para cima)
+  efeitoMaximo: 0.7,        // até onde o ponto vermelho vai no seletor [0,6–0,8]
+  limiteMiscue: 0.5,        // além disso o taco pode escorregar (miscue) [0,45–0,6]
+  chanceMiscue: 0.85,       // chance de miscue no ponto mais extremo; cresce linear a partir do limite [0,5–1]
+  squirt: 0.025,            // desvio da branca para o lado oposto ao efeito lateral, rad por fração do raio [0–0,05]
+  elevacaoTaco: 0.1,        // inclinação do taco, rad: parte do efeito lateral encurva a bola nas tacadas fortes [0–0,2]
+  atritoBolas: 0.06,        // μ bola × bola no contato: passa giro de uma para outra e, no Profissional, dá o throw [0,03–0,1]
 };
 
 // Mesas. Medidas internas (entre os narizes das tabelas) em mm.
@@ -311,7 +324,10 @@ const DESAFIOS = [];
 const LUZ = (() => { const v = [-0.42, -0.55, -0.72]; const n = Math.hypot(...v); return v.map(c => c / n); })();
 
 // Configurações salvas e seus padrões
-const CONFIG_PADRAO = { bolas: '15', mira: 'aprendiz', feltro: 'verde', rastro: false, vibrar: true };
+const CONFIG_PADRAO = {
+  bolas: '15', nivel: 'aprendiz', feltro: 'verde', rastro: false, vibrar: true,
+  som: true, volGeral: 0.8, volEfeitos: 0.9, volAmbiente: 0.5, ambiente: false,
+};
 
 // Prefixo das chaves do localStorage (os jogos dividem o domínio)
 const PREFIXO = 'sinuca-';
@@ -475,18 +491,20 @@ const Fisica = (() => {
       x: 0, y: 0, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0, q: Q.novo(),
       estado: 'mesa',      // 'mesa' | 'caindo' (sobre o buraco) | 'fora' (encaçapada ou fora da mesa)
       prof: 0, vz: 0, cacapa: -1, movendo: false,
+      giz: null,           // marca de giz da última tacada, em coordenadas do corpo da bola
       cv: null, qd: null,  // cache do desenho (canvas da bola e orientação desenhada)
     };
   }
 
-  // contatos: pares de bolas encostadas agora (para registrar cada choque uma vez só)
-  function criarSim(geo) { return { geo, bolas: [], t: 0, reg: null, ouvinte: null, contatos: new Set() }; }
+  // contatos: pares de bolas encostadas agora → true se o choque é macio (mola), false se foi um toque lento
+  // throw: o atrito entre bolas desvia a bola-alvo (só no nível Profissional)
+  function criarSim(geo) { return { geo, bolas: [], t: 0, reg: null, ouvinte: null, contatos: new Map(), throw: false }; }
 
   // Cópia só com o estado físico (a IA simula sem desenhar)
   function clonar(sim) {
     const s = criarSim(sim.geo);
     s.bolas = sim.bolas.map(b => Object.assign({}, b, { q: b.q.slice(), rgb: b.rgb, cv: null, qd: null }));
-    s.contatos = new Set(sim.contatos); s.t = sim.t;
+    s.contatos = new Map(sim.contatos); s.t = sim.t; s.throw = sim.throw;
     return s;
   }
 
@@ -555,7 +573,11 @@ const Fisica = (() => {
         if (b.estado !== 'mesa' || (!a.movendo && !b.movendo)) continue;
         const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
         const rvx = b.vx - a.vx, rvy = b.vy - a.vy, dv = dx * rvx + dy * rvy;
-        if (d2 < Dq) { if ((d2 < D * D || dv < 0) && dt > dc) dt = dc; continue; }
+        if (d2 < Dq) {
+          // Choque macio em andamento, ou começando rápido: passos curtos
+          if (dt > dc && (sim.contatos.get(a.id * 64 + b.id) === true || -dv > FISICA.velocidadeContatoMacio * Math.sqrt(d2))) dt = dc;
+          continue;
+        }
         if (dv >= 0) continue;
         // Instante em que a distância chega a 2R
         const vv = rvx * rvx + rvy * rvy, disc = dv * dv - vv * (d2 - D * D);
@@ -623,7 +645,7 @@ const Fisica = (() => {
   // Choque bola × bola como mola + amortecedor na normal (só empurra). A rigidez vem da duração do
   // contato e o amortecimento da restituição: e = exp(−ζπ/√(1−ζ²)). As forças são por unidade de massa.
   function forcasContato(sim, h) {
-    const bolas = sim.bolas, D = 2 * sim.geo.R;
+    const bolas = sim.bolas, R = sim.geo.R, D = 2 * R, mu = FISICA.atritoBolas, kh = sim.throw ? 7 : 5;
     const w0 = Math.PI / FISICA.duracaoContato, lnE = Math.log(FISICA.restituicaoBola);
     const zeta = -lnE / Math.sqrt(Math.PI * Math.PI + lnE * lnE);
     const K = w0 * w0 / 2, C = zeta * w0;          // relativos: aceleração da distância = 2 · (Kδ + Cδ')
@@ -637,13 +659,48 @@ const Fisica = (() => {
         if (d2 >= D * D) { sim.contatos.delete(chave); continue; }
         const d = Math.sqrt(d2) || 1e-9, nx = dx / d, ny = dy / d, delta = D - d;
         const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;   // < 0: aproximando
-        if (!sim.contatos.has(chave)) { sim.contatos.add(chave); if (vn < 0) registrarContato(sim, a, b, -vn); }
+        let macio = sim.contatos.get(chave);
+        if (macio === undefined) {
+          macio = -vn > FISICA.velocidadeContatoMacio;
+          sim.contatos.set(chave, macio);
+          if (vn < 0) registrarContato(sim, a, b, -vn);
+        }
+        if (!macio) {
+          // Toque lento: impulso instantâneo na normal e separação, sem passos curtos
+          if (vn < 0) {
+            const J = (1 + FISICA.restituicaoBola) / 2 * -vn;
+            a.vx -= J * nx; a.vy -= J * ny; b.vx += J * nx; b.vy += J * ny;
+            a.movendo = b.movendo = true;
+          }
+          const sep = delta / 2 + 0.005;
+          a.x -= nx * sep; a.y -= ny * sep; b.x += nx * sep; b.y += ny * sep;
+          continue;
+        }
         let F = K * delta - C * vn;
         if (F <= 0) continue;
         F *= h;
         a.vx -= F * nx; a.vy -= F * ny; b.vx += F * nx; b.vy += F * ny;
-        // Etapa 2: transferência parcial de giro e throw (só no Profissional), pelo atrito no contato
         a.movendo = b.movendo = true;
+        // Atrito no ponto de contato: u = deslizamento da superfície de a em relação à de b,
+        // u = (va − vb) + R (wa + wb) × n, só a parte tangente (de lado e vertical)
+        const Wx = a.wx + b.wx, Wy = a.wy + b.wy, Wz = a.wz + b.wz;
+        let ux = a.vx - b.vx - R * Wz * ny, uy = a.vy - b.vy + R * Wz * nx;
+        const uz = R * (Wx * ny - Wy * nx), un = ux * nx + uy * ny;
+        ux -= un * nx; uy -= un * ny;
+        const us = Math.sqrt(ux * ux + uy * uy + uz * uz);
+        if (us < 1e-6) continue;
+        const J = mu * F / us;
+        let jx = ux * J, jy = uy * J, jz = uz * J;
+        // Sem inverter o deslizamento neste sub-passo (aderência): Δu de lado = −kh·J, vertical = −5·J
+        const uh = Math.hypot(ux, uy), jh = Math.hypot(jx, jy);
+        if (jh * kh > uh) { const k = uh / (kh * jh); jx *= k; jy *= k; }
+        if (Math.abs(jz) * 5 > Math.abs(uz)) jz = uz / 5;
+        // Throw: o atrito desvia as bolas (só no Profissional). Nos outros níveis passa só o giro.
+        if (sim.throw) { a.vx -= jx; a.vy -= jy; b.vx += jx; b.vy += jy; }
+        // Giro: Δw = −(5 / 2R) · (n × J), igual para as duas bolas
+        const c = 2.5 / R, cx = ny * jz, cy = -nx * jz, cz = nx * jy - ny * jx;
+        a.wx -= c * cx; a.wy -= c * cy; a.wz -= c * cz;
+        b.wx -= c * cx; b.wy -= c * cy; b.wz -= c * cz;
       }
     }
   }
@@ -663,14 +720,16 @@ const Fisica = (() => {
       const tau = Math.min(h, (R - d) / -vn);
       b.x -= b.vx * tau; b.y -= b.vy * tau;
       const e = sim.geo.e, tx = -ny, ty = nx, vt = b.vx * tx + b.vy * ty;
-      // Impulso de atrito tangencial, limitado por μ × impulso normal (2/7: a bola que rola resiste menos)
-      const jn = (1 + e) * -vn, jt = Math.min(Math.abs(vt) * 2 / 7, FISICA.atritoTabela * jn);
-      const vt2 = vt - Math.sign(vt) * jt, vn2 = -e * vn;
+      // Deslizamento do ponto que toca a borracha: s = vt − R·wz (o efeito lateral entra aqui).
+      // O atrito tenta zerar s (precisa de 2/7 · s) e fica limitado por μ × impulso normal.
+      const sl = vt - R * b.wz;
+      const jn = (1 + e) * -vn, jt = -Math.sign(sl) * Math.min(Math.abs(sl) * 2 / 7, FISICA.atritoTabela * jn);
+      const vt2 = vt + jt, vn2 = -e * vn;
       b.vx = vn2 * nx + vt2 * tx; b.vy = vn2 * ny + vt2 * ty;
+      b.wz -= 2.5 * jt / R;
       // O giro de rolamento no sentido da batida quase some na borracha (o resto vira deslizamento)
       const wk = b.wx * tx + b.wy * ty, perde = (1 - FISICA.giroAposTabela) * wk;
       b.wx -= perde * tx; b.wy -= perde * ty;
-      // Etapa 2: o efeito lateral (wz) muda o ângulo de saída aqui
       b.x += b.vx * tau; b.y += b.vy * tau;
       registrarTabela(sim, b, s, -vn);
     } else {
@@ -679,15 +738,43 @@ const Fisica = (() => {
     return true;
   }
 
-  // ---- Tacada (etapa 1: sem efeito; o ponto de contato chega na etapa 2) ----
-  function tacar(sim, id, ang, forca, efeito) {
-    const b = sim.bolas.find(x => x.id === id);
-    const v = FISICA.velocidadeMaxima * Math.pow(U.clamp(forca, 0, 1), FISICA.curvaForca);
-    b.vx = Math.cos(ang) * v; b.vy = Math.sin(ang) * v;
-    b.wx = b.wy = b.wz = 0;   // Etapa 2: o efeito (efeito.x, efeito.y) define o giro inicial e o miscue
+  // ---- Tacada ----
+  // efeito = { x, y }: ponto de contato do taco em frações do raio (x à direita, y para cima).
+  // falha = null ou { fatorV, desvio }: miscue sorteado antes (sortearMiscue), para a simulação ser repetível.
+  function tacar(sim, id, ang, forca, efeito, falha) {
+    const b = sim.bolas.find(x => x.id === id), R = sim.geo.R;
+    let v = FISICA.velocidadeMaxima * Math.pow(U.clamp(forca, 0, 1), FISICA.curvaForca);
+    let ex = efeito ? efeito.x : 0, ey = efeito ? efeito.y : 0;
+    if (falha) { v *= falha.fatorV; ang += falha.desvio; ex *= 0.3; ey *= 0.3; }
+    // Squirt: com efeito lateral a branca sai um pouco para o outro lado
+    ang -= ex * FISICA.squirt;
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    b.vx = dx * v; b.vy = dy * v;
+    // Giro dado pelo taco: |w| = 5·v·deslocamento / 2R. Siga/puxeta em torno do eixo horizontal
+    // (rolamento natural com y = 0,4); lateral em torno do eixo vertical (z aponta para dentro da mesa).
+    const k = 2.5 * v / R;
+    b.wx = dy * k * ey; b.wy = -dx * k * ey;
+    b.wz = -k * ex;
+    // Taco levemente inclinado: parte do giro lateral fica no eixo da tacada e encurva a bola
+    const par = k * ex * Math.sin(FISICA.elevacaoTaco);
+    b.wx += dx * par; b.wy += dy * par;
     b.movendo = true;
+    // Marca de giz onde o taco tocou (traseira da bola, deslocada pelo efeito), no sistema da bola
+    const fr = Math.sqrt(Math.max(0, 1 - ex * ex - ey * ey));
+    const px = -dx * fr - dy * ex, py = -dy * fr + dx * ex, pz = -ey, m = Q.matriz(b.q, new Float64Array(9));
+    b.giz = [m[0] * px + m[3] * py + m[6] * pz, m[1] * px + m[4] * py + m[7] * pz, m[2] * px + m[5] * py + m[8] * pz];
+    b.qd = null;
     iniciarRegistro(sim, id, v, ang);
-    if (sim.ouvinte) sim.ouvinte('taco', { bola: b, intensidade: forca });
+    sim.reg.efeito = { x: ex, y: ey }; sim.reg.miscue = !!falha;
+    if (sim.ouvinte) sim.ouvinte(falha ? 'miscue' : 'taco', { bola: b, intensidade: forca });
+  }
+  // Sorteia o miscue: só além do limite, com chance crescente até a borda do seletor
+  function sortearMiscue(efeito, rnd = Math.random) {
+    const r = Math.hypot(efeito.x, efeito.y);
+    if (r <= FISICA.limiteMiscue) return null;
+    const p = U.clamp((r - FISICA.limiteMiscue) / (FISICA.efeitoMaximo - FISICA.limiteMiscue), 0, 1) * FISICA.chanceMiscue;
+    if (rnd() >= p) return null;
+    return { fatorV: 0.25 + 0.3 * rnd(), desvio: (rnd() - 0.5) * 0.12 + Math.sign(efeito.x) * 0.03 };
   }
 
   function emMovimento(sim) {
@@ -726,7 +813,7 @@ const Fisica = (() => {
     if (sim.ouvinte) sim.ouvinte('bola', { a, b, intensidade: vel });
     const r = sim.reg;
     if (!r || vel < FISICA.impactoMinimo) return;
-    r.eventos.push({ tipo: 'bola', t: sim.t - r.t0, a: a.id, b: b.id });
+    r.eventos.push({ tipo: 'bola', t: sim.t - r.t0, a: a.id, b: b.id, ax: a.x, ay: a.y, bx: b.x, by: b.y });
     const outra = a.id === r.jogador ? b : b.id === r.jogador ? a : null;
     if (outra) {
       if (r.primeiraBola === null) { r.primeiraBola = outra.id; r.tabelasAntesPrimeiroContato = r.tabelasJogador; }
@@ -839,7 +926,7 @@ const Fisica = (() => {
     }
   }
 
-  return { criarGeometria, criarBola, criarSim, clonar, passo, emMovimento, parar, simularAteParar, tacar,
+  return { criarGeometria, criarBola, criarSim, clonar, passo, emMovimento, parar, simularAteParar, tacar, sortearMiscue,
            fecharRegistro, lancarRaio, posicaoValida, fotografar, restaurar };
 })();
 
@@ -1224,6 +1311,7 @@ const Render = (() => {
   const MARFIM = [246, 242, 230], TINTA = [22, 22, 22];
   const ANG_DECAL = 0.44, MEIA_LISTRA = 0.5;   // raio angular do círculo do número; meia largura da listra (seno)
   const AMB = 0.30, DIF = 0.80;                // luz ambiente e difusa
+  const GIZ_COS = Math.cos(0.12), GIZ_RGB = [70, 125, 200];   // tamanho angular e cor da marca de giz
   let feltroRGB = [28, 106, 62];
 
   // Desenha a bola (cor, listra e número projetados na esfera, com sombreamento difuso) no canvas dela.
@@ -1240,7 +1328,7 @@ const Render = (() => {
     const listrada = b.tipo === 'listrada', dec = b.numerada ? decal(b.num) : null;
     const cor = b.rgb, base = listrada ? MARFIM : b.tipo === 'branca' ? b.rgb : cor;
     const ca = Math.cos(ANG_DECAL), sa = Math.sin(ANG_DECAL), aa = 1.4 * inv;
-    const [Lx, Ly, Lz] = LUZ, fr = feltroRGB;
+    const [Lx, Ly, Lz] = LUZ, fr = feltroRGB, giz = b.giz;
     const lim = (1 + inv) * (1 + inv);
     for (let j = 0; j < S; j++) {
       const dy = (j + 0.5 - c) * inv;
@@ -1267,6 +1355,14 @@ const Render = (() => {
             cr += (MARFIM[0] - cr) * fc; cg += (MARFIM[1] - cg) * fc; cb += (MARFIM[2] - cb) * fc;
             const t = amostra(dec, bx / sa, (bz < 0 ? by : -by) / sa) * fc;
             if (t > 0) { cr += (TINTA[0] - cr) * t; cg += (TINTA[1] - cg) * t; cb += (TINTA[2] - cb) * t; }
+          }
+        }
+        if (giz) {
+          // Marca de giz azul, leve, onde o taco tocou: gira junto com a bola
+          const dg = bx * giz[0] + by * giz[1] + bz * giz[2];
+          if (dg > GIZ_COS - aa) {
+            const f = U.clamp((dg - GIZ_COS) / aa + 0.5, 0, 1) * 0.6;
+            cr += (GIZ_RGB[0] - cr) * f; cg += (GIZ_RGB[1] - cg) * f; cb += (GIZ_RGB[2] - cb) * f;
           }
         }
         // Sombreamento: ambiente + difusa da luminária + reflexo esverdeado do feltro na borda
@@ -1366,7 +1462,8 @@ const Render = (() => {
 
   // ---- Taco: ponteira azul de giz, virola, haste de madeira clara, anel metálico, cabo escuro ----
   // (x, y): centro da branca; ang: direção da tacada; recuo: distância da ponta até a bola, em mm
-  function desenharTaco(c, x, y, ang, recuo, alfa, R) {
+  // lado: efeito lateral (fração do raio); o taco se desloca de lado e a ponta encosta na bola fora do centro
+  function desenharTaco(c, x, y, ang, recuo, alfa, R, lado = 0) {
     if (alfa <= 0.01) return;
     const COMP = 1470;
     const raio = t => t < 720 ? 6.5 + 3.5 * t / 720 : 10.5 + 5 * (t - 720) / 750;
@@ -1374,11 +1471,12 @@ const Render = (() => {
     c.globalAlpha = alfa;
     c.translate(x, y);
     // Sombra no feltro: o cabo fica mais alto que a ponta, então a sombra se afasta para trás
-    const x0 = -(R + recuo);
+    const x0 = -(R * Math.sqrt(Math.max(0, 1 - lado * lado)) + recuo);
     const so = (t) => { const k = t / COMP; return [8 + 60 * k, 10 + 80 * k]; };
     const cs = Math.cos(-ang), sn = Math.sin(-ang);
     const loc = (wx, wy) => [wx * cs - wy * sn, wx * sn + wy * cs];
     c.rotate(ang);
+    c.translate(0, lado * R);
     c.beginPath();
     const ptsS = [];
     for (const [t, lado] of [[0, -1], [COMP, -1], [COMP, 1], [0, 1]]) {
@@ -1442,7 +1540,14 @@ const Render = (() => {
         c.fillStyle = 'rgba(255,236,150,0.6)'; c.fill();
       }
     }
-    if (mira.branca && cfg.linhaBranca) {
+    if (mira.brancaPts) {
+      c.strokeStyle = 'rgba(170,215,255,0.75)'; c.lineWidth = 1.3 * px; c.setLineDash([4 * px, 5 * px]);
+      c.beginPath(); mira.brancaPts.forEach((p, i) => i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)); c.stroke();
+      c.setLineDash([]);
+      const f = mira.brancaPts[mira.brancaPts.length - 1];
+      c.beginPath(); c.arc(f.x, f.y, R, 0, Math.PI * 2);
+      c.strokeStyle = 'rgba(170,215,255,0.45)'; c.lineWidth = 1 * px; c.stroke();
+    } else if (mira.branca && cfg.linhaBranca) {
       const b = mira.branca, t = Math.min(b.t, cfg.linhaBranca);
       c.strokeStyle = 'rgba(170,215,255,0.7)'; c.lineWidth = 1.3 * px; c.setLineDash([4 * px, 5 * px]);
       c.beginPath(); c.moveTo(b.x0, b.y0); c.lineTo(b.x0 + b.dx * t, b.y0 + b.dy * t); c.stroke();
@@ -1514,21 +1619,239 @@ const Render = (() => {
     c.restore();
   }
 
+  // Seletor de efeito: a branca vista de trás, ampliada, com o ponto vermelho onde o taco vai bater.
+  // O círculo tracejado marca o limite do miscue.
+  function desenharEfeito(c, sel, ef, ativo, comFundo) {
+    const { x, y, r: ra } = sel;
+    c.save();
+    if (comFundo) {
+      // painel do celular: placa de madeira em volta
+      c.beginPath(); c.arc(x, y, ra + 14, 0, Math.PI * 2);
+      const gf = c.createLinearGradient(x, y - ra, x, y + ra);
+      gf.addColorStop(0, '#6a3a1e'); gf.addColorStop(1, '#3a1c0d');
+      c.fillStyle = gf; c.fill(); c.strokeStyle = '#c9a24a'; c.lineWidth = 2; c.stroke();
+    } else {
+      c.beginPath(); c.arc(x, y, ra + 5, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(20,10,4,0.6)'; c.fill();
+      c.strokeStyle = ativo ? '#7cf2a6' : '#c9a24a'; c.lineWidth = ativo ? 2 : 1.5; c.stroke();
+    }
+    let g = c.createRadialGradient(x - ra * 0.35, y - ra * 0.4, ra * 0.05, x, y, ra);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, '#f1ecdf'); g.addColorStop(0.85, '#cfc8b6'); g.addColorStop(1, '#9d9584');
+    c.beginPath(); c.arc(x, y, ra, 0, Math.PI * 2); c.fillStyle = g; c.fill();
+    if (ra > 30) {
+      c.strokeStyle = 'rgba(0,0,0,0.15)'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(x - ra, y); c.lineTo(x + ra, y); c.moveTo(x, y - ra); c.lineTo(x, y + ra); c.stroke();
+    }
+    c.setLineDash([3, 3]); c.strokeStyle = 'rgba(190,40,30,0.55)'; c.lineWidth = 1;
+    c.beginPath(); c.arc(x, y, ra * FISICA.limiteMiscue, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+    const px = x + ef.x * ra, py = y - ef.y * ra, rp = Math.max(3.5, ra * 0.12);
+    c.beginPath(); c.arc(px, py, rp, 0, Math.PI * 2);
+    g = c.createRadialGradient(px - rp * 0.3, py - rp * 0.3, 0.5, px, py, rp);
+    g.addColorStop(0, '#ff7a6a'); g.addColorStop(1, '#b3140c');
+    c.fillStyle = g; c.fill(); c.strokeStyle = 'rgba(60,0,0,0.6)'; c.lineWidth = 1; c.stroke();
+    if (ra > 30) {
+      c.fillStyle = '#f0d58a'; c.font = '10px Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'top';
+      c.fillText(comFundo ? 'efeito' : 'EFEITO', x, y + ra + (comFundo ? 1 : 7));
+    }
+    c.restore();
+  }
+
   function definirFeltro(hex) { feltroRGB = U.rgb(hex); }
   function invalidarBolas(sim) { for (const b of sim.bolas) b.qd = null; r.tamSprite = 0; }
 
   return { r, vista, telaParaMesa, mesaParaTela, dirTela, construirCena, desenharBolas, desenharTaco, desenharMira,
-           desenharBarra, desenharAnel, gravarRastros, desenharRastros, definirFeltro, invalidarBolas };
+           desenharBarra, desenharAnel, desenharEfeito, gravarRastros, desenharRastros, definirFeltro, invalidarBolas };
 })();
 
 // =====================================================================
-// 7. ÁUDIO (etapa 2): sons sintetizados com Web Audio. Por ora só o ponto de entrada,
-//    chamado pelos eventos da física (taco, bola, tabela, caçapa).
+// 7. ÁUDIO: tudo sintetizado com Web Audio. Começa só depois do primeiro toque ou tecla.
+//    Os eventos vêm da física (taco, miscue, bola, tabela, caçapa); o rolamento, de cada quadro.
 // =====================================================================
-const Som = {
-  iniciar() {},
-  evento(tipo, dados) {},
-};
+const Som = (() => {
+  let ac = null, mestre = null, gEfeitos = null, gAmb = null, branco = null, rosa = null;
+  let rol = null, amb = null, proxCopo = 0;
+  const vozes = [];                 // instantes em que cada voz tocando termina
+  const MAX_VOZES = 12;             // limite de sons simultâneos
+
+  function iniciar() {
+    if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try { ac = new AC(); } catch (err) { ac = null; return; }
+    mestre = ac.createGain(); mestre.connect(ac.destination);
+    // Compressor leve: choques fortes e simultâneos (abertura) não estouram
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -12; comp.ratio.value = 4; comp.attack.value = 0.002; comp.release.value = 0.15;
+    comp.connect(mestre);
+    gEfeitos = ac.createGain(); gEfeitos.connect(comp);
+    gAmb = ac.createGain(); gAmb.connect(mestre);
+    branco = ruido(false); rosa = ruido(true);
+    // Rolamento: ruído grave contínuo, com volume pela velocidade total das bolas
+    const src = ac.createBufferSource(); src.buffer = branco; src.loop = true;
+    const pb = ac.createBiquadFilter(); pb.type = 'lowpass'; pb.frequency.value = 380;
+    const pa = ac.createBiquadFilter(); pa.type = 'highpass'; pa.frequency.value = 70;
+    rol = ac.createGain(); rol.gain.value = 0;
+    src.connect(pb); pb.connect(pa); pa.connect(rol); rol.connect(gEfeitos); src.start();
+    volumes();
+  }
+  // 2 s de ruído branco ou rosa (filtro de Paul Kellet)
+  function ruido(ehRosa) {
+    const n = ac.sampleRate * 2, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i = 0; i < n; i++) {
+      const w = Math.random() * 2 - 1;
+      if (!ehRosa) { d[i] = w; continue; }
+      b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852;
+      b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+      d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926;
+    }
+    return buf;
+  }
+  function volumes() {
+    if (!ac) return;
+    const c = jogo.config, t = ac.currentTime;
+    mestre.gain.setTargetAtTime(c.som ? c.volGeral : 0, t, 0.03);
+    gEfeitos.gain.setTargetAtTime(c.volEfeitos, t, 0.03);
+    gAmb.gain.setTargetAtTime(c.volAmbiente, t, 0.03);
+    ambiente(c.som && c.ambiente);
+  }
+  // Reserva uma voz; sem vaga, o som é descartado
+  function voz(dur) {
+    const t = ac.currentTime;
+    for (let i = vozes.length - 1; i >= 0; i--) if (vozes[i] < t) vozes.splice(i, 1);
+    if (vozes.length >= MAX_VOZES) return false;
+    vozes.push(t + dur);
+    return true;
+  }
+  function envelope(g, t, pico, dur, ataque = 0.001) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, pico), t + ataque);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  }
+  // Rajada de ruído filtrado
+  function rajada(t, dur, tipo, freq, Q, pico, destino = gEfeitos, freqFim) {
+    const s = ac.createBufferSource(); s.buffer = branco;
+    const f = ac.createBiquadFilter(); f.type = tipo; f.frequency.setValueAtTime(freq, t); f.Q.value = Q;
+    if (freqFim) f.frequency.exponentialRampToValueAtTime(freqFim, t + dur);
+    const g = ac.createGain(); envelope(g, t, pico, dur);
+    s.connect(f); f.connect(g); g.connect(destino);
+    s.start(t, Math.random() * 1.5, dur + 0.05);
+  }
+  // Nota curta com decaimento rápido
+  function tom(t, freq, dur, pico, tipo = 'sine', destino = gEfeitos, freqFim, ataque) {
+    const o = ac.createOscillator(); o.type = tipo; o.frequency.setValueAtTime(freq, t);
+    if (freqFim) o.frequency.exponentialRampToValueAtTime(freqFim, t + dur);
+    const g = ac.createGain(); envelope(g, t, pico, dur, ataque);
+    o.connect(g); g.connect(destino);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  // Bola × bola: "clack" seco, mais alto e mais brilhante quanto mais forte; bolas maiores, mais grave
+  function clack(vel, diam) {
+    const v = U.clamp(vel / 5000, 0, 1);
+    if (v < 0.006 || !voz(0.08)) return;
+    const t = ac.currentTime, alt = (57.15 / diam) * (1 + (Math.random() - 0.5) * 0.12);
+    const pico = 0.04 + 0.85 * Math.pow(v, 0.7);
+    rajada(t, 0.022 + 0.02 * v, 'bandpass', (2600 + 2600 * v) * alt, 1.3, pico);
+    tom(t, 1700 * alt, 0.028 + 0.02 * v, pico * 0.5);
+    tom(t, 4100 * alt, 0.014, pico * 0.22);
+  }
+  // Tabela: "tum" abafado
+  function tabela(vel) {
+    const v = U.clamp(vel / 4000, 0, 1);
+    if (v < 0.012 || !voz(0.15)) return;
+    const t = ac.currentTime, pico = 0.05 + 0.55 * v;
+    rajada(t, 0.08, 'lowpass', 420 + 500 * v, 0.7, pico);
+    tom(t, 105 + 40 * v, 0.12, pico * 0.8, 'sine', gEfeitos, 70);
+  }
+  // Taco na bola: estalo de couro; o miscue é um "tic" agudo com raspão
+  function taco(forca, falha) {
+    if (!voz(0.15)) return;
+    const t = ac.currentTime, pico = 0.12 + 0.6 * forca;
+    if (falha) {
+      tom(t, 5200, 0.02, pico * 0.45, 'square');
+      rajada(t + 0.004, 0.16, 'highpass', 2600, 0.7, pico * 0.35, gEfeitos, 1200);
+      tom(t, 430, 0.07, pico * 0.4, 'triangle', gEfeitos, 240);
+      return;
+    }
+    rajada(t, 0.016 + 0.01 * forca, 'bandpass', 1300 + 900 * forca, 1.8, pico);
+    tom(t, 760 + 240 * forca, 0.03, pico * 0.4, 'triangle');
+  }
+  // Caçapa: queda e a bola rolando pelo canal (ruído grave que some, com batidinhas)
+  function cacapa(vel) {
+    if (!voz(1.1)) return;
+    const t = ac.currentTime, v = U.clamp(vel / 3000, 0.2, 1);
+    tom(t, 88, 0.18, 0.18 + 0.35 * v, 'sine', gEfeitos, 52);
+    rajada(t, 0.07, 'lowpass', 750, 0.8, 0.12 + 0.25 * v);
+    const s = ac.createBufferSource(); s.buffer = branco;
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(330, t + 0.1);
+    f.frequency.exponentialRampToValueAtTime(130, t + 1.0);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t + 0.08); g.gain.exponentialRampToValueAtTime(0.13, t + 0.18);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.05);
+    s.connect(f); f.connect(g); g.connect(gEfeitos); s.start(t + 0.08, Math.random(), 1.0);
+    for (let k = 0; k < 3; k++) tom(t + 0.24 + k * 0.17 + Math.random() * 0.07, 170 + Math.random() * 70, 0.05, 0.07 * (1 - k * 0.25));
+  }
+  function rolamento(soma) {
+    if (!ac) return;
+    rol.gain.setTargetAtTime(Math.min(0.1, soma / 50000 * 0.1), ac.currentTime, 0.08);
+  }
+  // Ambiente de bar: murmúrio (ruído rosa filtrado, com volume que ondula) e copos de vez em quando
+  function ambiente(ligar) {
+    if (ligar && !amb) {
+      const s = ac.createBufferSource(); s.buffer = rosa; s.loop = true;
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 520; bp.Q.value = 0.6;
+      const pb = ac.createBiquadFilter(); pb.type = 'lowpass'; pb.frequency.value = 1500;
+      const g = ac.createGain(); g.gain.value = 0.22;
+      const lfo = ac.createOscillator(), prof = ac.createGain();
+      lfo.frequency.value = 0.13; prof.gain.value = 0.07; lfo.connect(prof); prof.connect(g.gain);
+      s.connect(bp); bp.connect(pb); pb.connect(g); g.connect(gAmb);
+      s.start(); lfo.start();
+      amb = { s, lfo };
+      proxCopo = ac.currentTime + 2 + Math.random() * 4;
+    } else if (!ligar && amb) {
+      try { amb.s.stop(); amb.lfo.stop(); } catch (err) {}
+      amb = null;
+    }
+  }
+  function copos() {
+    if (!amb || ac.currentTime < proxCopo) return;
+    proxCopo = ac.currentTime + 4 + Math.random() * 10;
+    const t = ac.currentTime, f = 2400 + Math.random() * 1600, n = 1 + (Math.random() < 0.4 ? 1 : 0);
+    for (let k = 0; k < n; k++) {
+      const tk = t + k * (0.09 + Math.random() * 0.08);
+      tom(tk, f, 0.45, 0.04, 'sine', gAmb);
+      tom(tk, f * 2.71, 0.25, 0.015, 'sine', gAmb);
+    }
+  }
+  // Vinhetas curtas: vitória, derrota, falta e eliminação (Mata-mata)
+  const JINGLES = {
+    vitoria:    [[523, 0, 0.14], [659, 0.12, 0.14], [784, 0.24, 0.14], [1047, 0.36, 0.5]],
+    derrota:    [[392, 0, 0.22], [311, 0.2, 0.22], [262, 0.4, 0.6]],
+    falta:      [[330, 0, 0.14], [247, 0.14, 0.3]],
+    eliminacao: [[262, 0, 0.16], [247, 0.15, 0.16], [233, 0.3, 0.16], [208, 0.45, 0.6]],
+  };
+  function jingle(nome) {
+    if (!ac || !jogo.config.som || !JINGLES[nome]) return;
+    const t = ac.currentTime;
+    for (const [f, dt, dur] of JINGLES[nome]) {
+      tom(t + dt, f, dur, 0.16, 'triangle', gEfeitos, null, 0.01);
+      tom(t + dt, f * 2, dur * 0.6, 0.04, 'sine', gEfeitos, null, 0.01);
+    }
+  }
+
+  function evento(tipo, d) {
+    if (!ac || !jogo.config.som) return;
+    const diam = jogo.geo ? jogo.geo.mesa.diametroBola : 57.15;
+    if (tipo === 'bola') clack(d.intensidade, diam);
+    else if (tipo === 'tabela') tabela(d.intensidade);
+    else if (tipo === 'taco') taco(d.intensidade, false);
+    else if (tipo === 'miscue') taco(d.intensidade, true);
+    else if (tipo === 'cacapa') cacapa(d.intensidade);
+  }
+  function quadro(soma) { if (!ac) return; rolamento(jogo.config.som ? soma : 0); if (jogo.config.som) copos(); }
+  return { iniciar, volumes, evento, quadro, jingle };
+})();
 
 // =====================================================================
 // 8. ENTRADA: mouse, teclado e toque
@@ -1540,8 +1863,10 @@ const jogo = {
   geo: null, sim: null, partida: null,
   config: Object.assign({}, CONFIG_PADRAO),
   mira: { ang: 0 },        // ângulo da tacada, em radianos, no sistema da mesa
+  efeito: { x: 0, y: 0 },  // ponto de contato do taco na branca, em frações do raio (x à direita, y para cima)
+  painelEfeito: false,     // painel do seletor de efeito aberto (celular)
   forcaBarra: 0.45,        // força guardada na barra (Espaço/Enter)
-  taco: { recuo: 22, alfa: 0, prog: 0, dur: 0.1, r0: 0, forca: 0 },
+  taco: { recuo: 22, alfa: 0, prog: 0, dur: 0.1, r0: 0, forca: 0, alvo: 0, falha: null },
   acum: 0,                 // acumulador do passo fixo
   desfazer: [],            // fotografias antes de cada tacada
   ultima: null,            // registro da última tacada
@@ -1550,14 +1875,16 @@ const jogo = {
   toque: matchMedia('(pointer: coarse)').matches,
   girar: false,            // mesa girada 90° (retrato)
   retratoAceito: false,
-  lay: { s: 1, barra: { x: 0, y: 0, w: 56, h: 300 }, anel: { x: 0, y: 0, r: 40 } },
+  lay: { s: 1, barra: { x: 0, y: 0, w: 56, h: 300 }, anel: { x: 0, y: 0, r: 40 },
+         efeito: { x: 0, y: 0, r: 36 }, painel: { x: 0, y: 0, r: 70 } },
   miraCache: null,
 };
 const seguro = { topo: 0, dir: 0, esq: 0, baixo: 0 };
 
 const Entrada = (() => {
   const e = {
-    modo: null,            // 'puxar' | 'forca' | 'anel' | 'arrastar' | 'mirarToque' | 'doisDedos'
+    modo: null,            // 'puxar' | 'forca' | 'anel' | 'efeito' | 'arrastar' | 'mirarToque' | 'doisDedos'
+    sel: null,             // seletor de efeito em uso (o fixo ou o painel)
     id: null,              // ponteiro dono do modo
     ini: { x: 0, y: 0 },
     forca: 0, fora: false,
@@ -1601,6 +1928,18 @@ const Entrada = (() => {
     const dist = U.clamp(Math.min(Render.r.cw, Render.r.ch) * 0.36, 140, 320);
     return U.clamp(((e.ini.x - x) * d.x + (e.ini.y - y) * d.y) / dist, 0, 1);
   }
+  // Ponto vermelho do seletor de efeito sob o ponteiro (limitado ao máximo; perto do centro, gruda no centro)
+  function mudarEfeito(x, y) {
+    const s = e.sel, M = FISICA.efeitoMaximo;
+    let ax = (x - s.x) / s.r, ay = -(y - s.y) / s.r;
+    const r = Math.hypot(ax, ay);
+    if (r > M) { ax *= M / r; ay *= M / r; }
+    if (r < 0.05) ax = ay = 0;
+    jogo.efeito = { x: ax, y: ay };
+    jogo.miraCache = null;
+  }
+  // Prende o ponteiro no canvas (falha em ponteiros sintéticos ou já soltos: ignora)
+  function capturar(id) { try { tela.setPointerCapture(id); } catch (err) {} }
   function soltarTudo() {
     if (e.modo === 'arrastar' && e.bola) e.invalido = null;
     e.modo = null; e.id = null; e.forca = 0; e.fora = false; e.bola = null; e.toques.clear();
@@ -1614,16 +1953,32 @@ const Entrada = (() => {
     const x = ev.clientX, y = ev.clientY, L = jogo.lay;
     if (ev.button === 2) { if (e.modo === 'puxar') soltarTudo(); return; }
     if (e.modo && e.modo !== 'mirarToque') return;     // já há um gesto em andamento
+    // Seletor de efeito: no computador fica sempre à vista; no celular abre num painel pelo ícone da branca
+    const sel = L.efeito;
+    if (Math.hypot(x - sel.x, y - sel.y) < sel.r + 8) {
+      if (jogo.toque) { jogo.painelEfeito = !jogo.painelEfeito; return; }
+      e.modo = 'efeito'; e.id = ev.pointerId; e.sel = sel; mudarEfeito(x, y);
+      capturar(ev.pointerId);
+      return;
+    }
+    if (jogo.painelEfeito) {
+      const pn = L.painel;
+      if (Math.hypot(x - pn.x, y - pn.y) < pn.r + 12) {
+        e.modo = 'efeito'; e.id = ev.pointerId; e.sel = pn; mudarEfeito(x, y);
+        capturar(ev.pointerId);
+      } else jogo.painelEfeito = false;                  // toque fora fecha o painel
+      return;
+    }
     // Barra de força
     if (dentro(L.barra, x, y, 8)) {
       e.modo = 'forca'; e.id = ev.pointerId; e.ini = { x, y }; e.forca = 0; e.fora = false;
-      tela.setPointerCapture?.(ev.pointerId);
+      capturar(ev.pointerId);
       return;
     }
     // Anel de ajuste fino
     if (jogo.toque && Math.hypot(x - L.anel.x, y - L.anel.y) < L.anel.r + 14) {
       e.modo = 'anel'; e.id = ev.pointerId; e.anelUlt = Math.atan2(y - L.anel.y, x - L.anel.x);
-      tela.setPointerCapture?.(ev.pointerId);
+      capturar(ev.pointerId);
       return;
     }
     const p = Render.telaParaMesa(x, y);
@@ -1638,14 +1993,14 @@ const Entrada = (() => {
       e.modo = 'arrastar'; e.id = ev.pointerId; e.bola = b; e.invalido = null;
       e.desloc = { x: b.x - p.x, y: b.y - p.y };
       e.foto = Fisica.fotografar(jogo.sim);
-      tela.setPointerCapture?.(ev.pointerId);
+      capturar(ev.pointerId);
       tela.style.cursor = 'grabbing';
       return;
     }
     if (ev.pointerType === 'mouse') {
       if (ev.button !== 0) return;
       e.modo = 'puxar'; e.id = ev.pointerId; e.ini = { x, y }; e.forca = 0;
-      tela.setPointerCapture?.(ev.pointerId);
+      capturar(ev.pointerId);
     } else {
       e.modo = 'mirarToque'; e.id = ev.pointerId;
       e.toques.clear(); e.toques.set(ev.pointerId, { x, y });
@@ -1675,6 +2030,7 @@ const Entrada = (() => {
     if (ev.pointerId !== e.id && e.modo !== 'doisDedos') return;
     const L = jogo.lay;
     if (e.modo === 'puxar') e.forca = forcaPuxada(x, y);
+    else if (e.modo === 'efeito') mudarEfeito(x, y);
     else if (e.modo === 'forca') {
       e.forca = U.clamp((y - e.ini.y) / (L.barra.h * 0.8), 0, 1);
       e.fora = !dentro(L.barra, x, y, 40);
@@ -1735,6 +2091,15 @@ const Entrada = (() => {
     else if (k === 'z' || k === 'Z') Jogo.desfazer();
     else if (k === 'm' || k === 'M') Jogo.alternarMover();
     else if (k === 'r' || k === 'R') Jogo.arrumar();
+    else if ('wasdWASD'.includes(k) && k.length === 1) {
+      // Efeito pelo teclado: W siga, S puxeta, A e D lateral
+      const l = k.toLowerCase(), M = FISICA.efeitoMaximo;
+      let { x, y } = jogo.efeito;
+      if (l === 'w') y += 0.05; else if (l === 's') y -= 0.05; else if (l === 'a') x -= 0.05; else x += 0.05;
+      const r = Math.hypot(x, y);
+      if (r > M) { x *= M / r; y *= M / r; }
+      jogo.efeito = { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 }; jogo.miraCache = null;
+    } else if (k === 'c' || k === 'C') { jogo.efeito = { x: 0, y: 0 }; jogo.miraCache = null; }
   }
   function roda(ev) {
     ev.preventDefault();
@@ -1750,6 +2115,11 @@ const Entrada = (() => {
     window.addEventListener('pointercancel', up);
     tela.addEventListener('contextmenu', ev => ev.preventDefault());
     tela.addEventListener('wheel', roda, { passive: false });
+    // Duplo clique no seletor de efeito volta ao centro
+    tela.addEventListener('dblclick', ev => {
+      const s = jogo.lay.efeito;
+      if (jogo.tela === 'partida' && Math.hypot(ev.clientX - s.x, ev.clientY - s.y) < s.r + 8) { jogo.efeito = { x: 0, y: 0 }; jogo.miraCache = null; }
+    });
     window.addEventListener('keydown', tecla);
     window.addEventListener('blur', soltarTudo);
   }
@@ -1815,12 +2185,29 @@ const Telas = {
     };
     const vb = MODOS.treino.variantes.bolas;
     sel(vb.nome, vb.opcoes, jogo.config.bolas, v => { jogo.config.bolas = v; Salvar.config(); Jogo.arrumar(); });
-    sel('Mira', Object.entries(NIVEIS).map(([id, n]) => ({ id, nome: n.nome })), jogo.config.mira,
-        v => { jogo.config.mira = v; jogo.miraCache = null; Salvar.config(); });
+    sel('Nível (mira e throw)', Object.entries(NIVEIS).map(([id, n]) => ({ id, nome: n.nome })), jogo.config.nivel,
+        v => { jogo.config.nivel = v; jogo.sim.throw = NIVEIS[v].throw; jogo.miraCache = null; Salvar.config(); });
     sel('Feltro', Object.entries(FELTROS).map(([id, f]) => ({ id, nome: f.nome })), jogo.config.feltro,
         v => { jogo.config.feltro = v; Salvar.config(); Jogo.refazerCena(); });
     alterna('Rastro das bolas', jogo.config.rastro, v => { jogo.config.rastro = v; Salvar.config(); });
     if (jogo.toque && navigator.vibrate) alterna('Vibrar na tacada', jogo.config.vibrar, v => { jogo.config.vibrar = v; Salvar.config(); });
+    // Som: liga/desliga, volumes separados e o ambiente de bar
+    const faixa = (rotulo, chave) => {
+      const d = document.createElement('div'); d.className = 'op';
+      const id = 'op-' + chave;
+      d.innerHTML = `<label for="${id}"></label><input type="range" min="0" max="100" step="5" id="${id}">`;
+      d.querySelector('label').textContent = rotulo;
+      const r = d.querySelector('input');
+      r.value = Math.round(jogo.config[chave] * 100);
+      r.addEventListener('input', () => { jogo.config[chave] = r.value / 100; Som.volumes(); });
+      r.addEventListener('change', () => { Salvar.config(); if (chave === 'volEfeitos') Som.evento('bola', { intensidade: 2500 }); });
+      box.appendChild(d);
+    };
+    alterna('Som', jogo.config.som, v => { jogo.config.som = v; Som.volumes(); Salvar.config(); atualizarHUD(); });
+    faixa('Volume geral', 'volGeral');
+    faixa('Efeitos', 'volEfeitos');
+    faixa('Ambiente', 'volAmbiente');
+    alterna('Ambiente de bar', jogo.config.ambiente, v => { jogo.config.ambiente = v; Som.volumes(); Salvar.config(); });
   },
 };
 
@@ -1859,7 +2246,13 @@ function atualizarHUD() {
   const ent = Entrada.e;
   const forca = ent.modo === 'puxar' || ent.modo === 'forca' ? ent.forca : jogo.forcaBarra;
   const vel = FISICA.velocidadeMaxima * Math.pow(forca, FISICA.curvaForca) / 1000;
-  hudTexto('info-1', `Mira ${U.num(graus, 2)}° · força ${Math.round(forca * 100)}% (${U.num(vel, 1)} m/s)`);
+  const ef = jogo.efeito, pct = v => Math.round(Math.abs(v) / FISICA.efeitoMaximo * 100) + '%';
+  const partes = [];
+  if (ef.y > 0.02) partes.push('siga ' + pct(ef.y)); else if (ef.y < -0.02) partes.push('puxeta ' + pct(ef.y));
+  if (ef.x > 0.02) partes.push('direita ' + pct(ef.x)); else if (ef.x < -0.02) partes.push('esquerda ' + pct(ef.x));
+  const risco = Math.hypot(ef.x, ef.y) > FISICA.limiteMiscue ? ' (risco de miscue)' : '';
+  hudTexto('info-1', `Mira ${U.num(graus, 2)}° · força ${Math.round(forca * 100)}% (${U.num(vel, 1)} m/s) · ` +
+                     `efeito: ${partes.length ? partes.join(', ') : 'centro'}${risco}`);
   const u = jogo.ultima;
   let l2;
   if (!u) l2 = jogo.toque ? 'Toque na mesa para mirar. Arraste a barra de força para baixo e solte.'
@@ -1887,6 +2280,7 @@ function atualizarHUD() {
     }
   }
   el('b-desfazer').disabled = !jogo.desfazer.length || jogo.fase !== 'mirando';
+  hudTexto('b-som', jogo.config.som ? '🔊' : '🔇');
   el('b-mover').classList.toggle('ativo', jogo.mover);
 }
 
@@ -1896,11 +2290,12 @@ const Jogo = {
     jogo.geo = Fisica.criarGeometria(MODOS.treino.mesaPadrao);
     jogo.sim = Fisica.criarSim(jogo.geo);
     jogo.sim.ouvinte = (tipo, d) => Som.evento(tipo, d);
-    jogo.partida = Partida.criar('treino', [{ nome: 'Você', humano: true, nivel: jogo.config.mira }], { bolas: jogo.config.bolas });
+    jogo.sim.throw = NIVEIS[jogo.config.nivel].throw;
+    jogo.partida = Partida.criar('treino', [{ nome: 'Você', humano: true, nivel: jogo.config.nivel }], { bolas: jogo.config.bolas });
     jogo.partida.regras.montar(jogo.sim, jogo.partida.jogadores, jogo.partida.opcoes);
     jogo.tela = 'partida'; jogo.fase = 'mirando'; jogo.pausado = false;
     jogo.desfazer = []; jogo.ultima = null; jogo.bolaNaMao = null; jogo.mover = false;
-    jogo.mira.ang = 0; jogo.taco.alfa = 0; jogo.miraCache = null;
+    jogo.mira.ang = 0; jogo.taco.alfa = 0; jogo.miraCache = null; jogo.painelEfeito = false;
     Render.r.rastros.clear();
     layout(); Jogo.refazerCena();
     Telas.atualizar(); atualizarHUD();
@@ -1932,17 +2327,28 @@ const Jogo = {
     jogo.desfazer.push(Fisica.fotografar(jogo.sim));
     if (jogo.desfazer.length > 200) jogo.desfazer.shift();
     const t = jogo.taco;
-    t.forca = forca; t.r0 = Math.max(t.recuo, 30); t.prog = 0;
-    const vTaco = Math.max(900, FISICA.velocidadeMaxima * Math.pow(forca, FISICA.curvaForca) * 0.8);
+    t.forca = forca; t.prog = 0;
+    t.falha = Fisica.sortearMiscue(jogo.efeito);
+    // Sem puxar o taco antes (Espaço, barra pelo teclado), ele recua primeiro e depois avança
+    t.alvo = 22 + forca * 260;
+    jogo.fase = t.recuo < t.alvo - 15 ? 'recuando' : 'tacando';
+    if (jogo.fase === 'tacando') Jogo.avancarTaco();
+    jogo.bolaNaMao = null; jogo.painelEfeito = false;
+    Render.r.rastros.clear();
+  },
+  // Começa o avanço do taco a partir do recuo atual; quanto mais força, mais rápido
+  avancarTaco() {
+    const t = jogo.taco;
+    t.r0 = Math.max(t.recuo, 30); t.prog = 0;
+    const vTaco = Math.max(900, FISICA.velocidadeMaxima * Math.pow(t.forca, FISICA.curvaForca) * 0.8);
     t.dur = U.clamp(t.r0 / vTaco, 0.04, 0.22);
     jogo.fase = 'tacando';
-    jogo.bolaNaMao = null;
-    Render.r.rastros.clear();
   },
   // A ponta do taco chegou na bola
   golpear() {
     const t = jogo.taco;
-    Fisica.tacar(jogo.sim, Entrada.branca().id, jogo.mira.ang, t.forca, { x: 0, y: 0 });
+    Fisica.tacar(jogo.sim, Entrada.branca().id, jogo.mira.ang, t.forca, jogo.efeito, t.falha);
+    if (t.falha) aviso('Miscue! O taco escorregou na bola.', 2);
     jogo.fase = 'rolando'; jogo.acum = 0;
     jogo.partida.tacadas++;
     t.recuo = 0;
@@ -2018,7 +2424,7 @@ const Salvar = {
     const c = Salvar.ler('config', {});
     for (const k in CONFIG_PADRAO) if (c && typeof c[k] === typeof CONFIG_PADRAO[k]) jogo.config[k] = c[k];
     if (!MODOS.treino.variantes.bolas.opcoes.some(o => o.id === jogo.config.bolas)) jogo.config.bolas = CONFIG_PADRAO.bolas;
-    if (!NIVEIS[jogo.config.mira]) jogo.config.mira = CONFIG_PADRAO.mira;
+    if (!NIVEIS[jogo.config.nivel]) jogo.config.nivel = CONFIG_PADRAO.nivel;
     if (!FELTROS[jogo.config.feltro]) jogo.config.feltro = CONFIG_PADRAO.feltro;
   },
 };
@@ -2054,8 +2460,15 @@ function layout() {
   const cx = esq + aw / 2, cy = topo + ah / 2;
   R_.view = jogo.girar ? { a: 0, b: s, c: -s, d: 0, e: cx, f: cy, s } : { a: s, b: 0, c: 0, d: s, e: cx, f: cy, s };
   jogo.lay.s = s;
-  const bh = U.clamp(ah * 0.8, 170, 440);
-  jogo.lay.barra = { x: cw - dir + (dir - seguro.dir - 56) / 2, y: topo + (ah - bh) / 2, w: 56, h: bh };
+  // Coluna da direita: seletor de efeito (ou o ícone dele, no celular) em cima e a barra de força embaixo
+  const colX = cw - dir + (dir - seguro.dir) / 2, rSel = jogo.toque ? 22 : 34;
+  jogo.lay.efeito = { x: colX, y: topo + 6 + rSel, r: rSel };
+  const y0 = jogo.lay.efeito.y + rSel + (jogo.toque ? 10 : 24);
+  const bh = U.clamp(Math.min(400, ah * 0.75, ch - seguro.baixo - 10 - y0), 120, 440);
+  jogo.lay.barra = { x: colX - 28, y: y0, w: 56, h: bh };
+  // Painel do efeito no celular: à esquerda da coluna, perto do topo
+  const rp = U.clamp(Math.min(cw, ch) * 0.2, 56, 80);
+  jogo.lay.painel = { x: cw - dir - rp - 20, y: U.clamp(jogo.lay.efeito.y + rp - 10, rp + 16, ch - rp - 16), r: rp };
   jogo.lay.anel = jogo.girar ? { x: 70 + seguro.esq, y: ch - seguro.baixo - 56, r: 40 }
                              : { x: seguro.esq + 50, y: ch - seguro.baixo - 54, r: 40 };
 }
@@ -2066,13 +2479,15 @@ function aoRedimensionar() {
   refazer = requestAnimationFrame(() => { layout(); if (jogo.geo) Jogo.refazerCena(); Telas.atualizar(); });
 }
 
-// Mira calculada para o ângulo atual (refeita só quando algo muda)
+// Mira calculada para o ângulo atual (refeita só quando algo muda). No Aprendiz, a previsão vem
+// de uma simulação da tacada (com o efeito e a força atuais); nos outros níveis, da geometria.
 function calcularMira() {
   const sim = jogo.sim, br = Entrada.branca();
   if (!br || br.estado !== 'mesa') return null;
+  if (jogo.config.nivel === 'aprendiz') return preverSimulando(br);
   const c = jogo.miraCache;
-  if (c && c.ang === jogo.mira.ang && c.x === br.x && c.y === br.y && c.nivel === jogo.config.mira) return c.res;
-  const nivel = NIVEIS[jogo.config.mira];
+  if (c && c.ang === jogo.mira.ang && c.x === br.x && c.y === br.y && c.nivel === jogo.config.nivel) return c.res;
+  const nivel = NIVEIS[jogo.config.nivel];
   let ox = br.x, oy = br.y, dx = Math.cos(jogo.mira.ang), dy = Math.sin(jogo.mira.ang), ric = nivel.mira.ricochetes;
   const res = { pts: [{ x: ox, y: oy }], fantasma: null, alvo: null, branca: null };
   for (let k = 0; k < 4; k++) {
@@ -2107,14 +2522,71 @@ function calcularMira() {
     res.fantasma = { x: px, y: py };
     break;
   }
-  jogo.miraCache = { ang: jogo.mira.ang, x: br.x, y: br.y, nivel: jogo.config.mira, res };
+  jogo.miraCache = { ang: jogo.mira.ang, x: br.x, y: br.y, nivel: jogo.config.nivel, res };
   return res;
+}
+
+// Previsão do Aprendiz: simula a tacada numa cópia da mesa, sem desenhar. Mostra o caminho real da
+// branca até o primeiro contato (com squirt, curva e até uma tabela), a bola fantasma onde ela encosta,
+// a saída da bola-alvo e uns 45 cm do caminho da branca depois do choque (puxeta, siga, efeito).
+const previsao = { chave: '', quando: 0, res: null };
+function preverSimulando(br0) {
+  const ent = Entrada.e, nivel = NIVEIS.aprendiz;
+  const forca = ent.modo === 'puxar' || ent.modo === 'forca' ? Math.max(ent.forca, 0.05) : jogo.forcaBarra;
+  let soma = 0;
+  for (const b of jogo.sim.bolas) if (b.estado === 'mesa') soma += b.x * 1.3 + b.y * 0.7 + b.id;
+  const chave = [jogo.mira.ang, jogo.efeito.x, jogo.efeito.y, Math.round(forca * 100), soma].join('|');
+  const agora = performance.now();
+  if (previsao.res && (chave === previsao.chave || agora - previsao.quando < 90)) return previsao.res;
+  previsao.chave = chave; previsao.quando = agora;
+  const sim = Fisica.clonar(jogo.sim);
+  sim.throw = nivel.throw;
+  const br = sim.bolas.find(b => b.id === br0.id), reg0 = () => sim.reg;
+  Fisica.tacar(sim, br.id, jogo.mira.ang, forca, jogo.efeito, null);
+  const reg = reg0(), h = 1 / FISICA.hz, lim = nivel.mira.linhaBranca;
+  const pts = [{ x: br.x, y: br.y }];
+  let fantasma = null, alvo = null, depois = null, andou = 0;
+  // Teto de tempo por cálculo: num choque com o triângulo, o caminho da branca depois do contato sai mais curto
+  const prazo = agora + 4;
+  for (let i = 0; i < FISICA.hz * 4 && Fisica.emMovimento(sim); i++) {
+    if ((i & 7) === 0 && performance.now() > prazo + (fantasma ? 0 : 4)) break;
+    Fisica.passo(sim, h);
+    if (!fantasma && reg.primeiraBola !== null) {
+      const ev = reg.eventos.find(e => e.tipo === 'bola' && (e.a === br.id || e.b === br.id));
+      const ehA = ev.a === br.id;
+      fantasma = { x: ehA ? ev.ax : ev.bx, y: ehA ? ev.ay : ev.by };
+      pts.push(fantasma);
+      const ob = sim.bolas.find(b => b.id === reg.primeiraBola), v = Math.hypot(ob.vx, ob.vy);
+      const ox = ehA ? ev.bx : ev.ax, oy = ehA ? ev.by : ev.ay;
+      if (v > 1) {
+        const dx = ob.vx / v, dy = ob.vy / v, ha = Fisica.lancarRaio(jogo.sim, ox, oy, dx, dy, [ob.id, br.id]);
+        alvo = { x0: ox, y0: oy, dx, dy, t: ha ? ha.t : 0, tipo: ha ? ha.tipo : null };
+      }
+      depois = [fantasma];
+    }
+    const p = { x: br.x, y: br.y };
+    if (!fantasma) {
+      const u = pts[pts.length - 1];
+      if (Math.hypot(p.x - u.x, p.y - u.y) > 6) pts.push(p);
+      if (reg.tabelasJogador > nivel.mira.ricochetes || br.estado !== 'mesa') break;
+    } else {
+      const u = depois[depois.length - 1], d = Math.hypot(p.x - u.x, p.y - u.y);
+      if (d > 4) { andou += d; depois.push(p); }
+      if (andou >= lim || br.estado !== 'mesa') break;
+    }
+  }
+  if (!fantasma) pts.push({ x: br.x, y: br.y });
+  previsao.res = { pts, fantasma, alvo, branca: null, brancaPts: depois && depois.length > 1 ? depois : null };
+  return previsao.res;
 }
 
 function atualizar(dt) {
   if (jogo.tela !== 'partida' || jogo.pausado) return;
   const t = jogo.taco, ent = Entrada.e;
-  if (jogo.fase === 'tacando') {
+  if (jogo.fase === 'recuando') {
+    t.recuo += (t.alvo - t.recuo) * Math.min(1, dt * 9);
+    if (t.alvo - t.recuo < 3) Jogo.avancarTaco();
+  } else if (jogo.fase === 'tacando') {
     t.prog += dt / t.dur;
     if (t.prog >= 1) Jogo.golpear();
     else t.recuo = t.r0 * (1 - U.easeIn(t.prog));
@@ -2150,7 +2622,7 @@ function desenhar() {
   const mirando = jogo.tela === 'partida' && jogo.fase === 'mirando' && ent.modo !== 'arrastar' && br && br.estado === 'mesa';
   const verTaco = jogo.tela === 'partida' && br && (br.estado === 'mesa' || jogo.fase !== 'mirando');
   // Mira por baixo das bolas
-  if (mirando) { const m = calcularMira(); if (m) Render.desenharMira(c, sim, m, NIVEIS[jogo.config.mira], px); }
+  if (mirando) { const m = calcularMira(); if (m) Render.desenharMira(c, sim, m, NIVEIS[jogo.config.nivel], px); }
   Render.desenharBolas(c, sim);
   // Branca arrastável (bola na mão) e posição recusada
   if (jogo.tela === 'partida' && jogo.fase === 'mirando' && br && br.estado === 'mesa' && (jogo.bolaNaMao || ent.modo === 'arrastar')) {
@@ -2167,7 +2639,7 @@ function desenhar() {
   if (verTaco && jogo.taco.alfa > 0) {
     if (jogo.fase !== 'rolando') jogo.taco.pos = { x: br.x, y: br.y };
     const p = jogo.taco.pos;
-    if (p) Render.desenharTaco(c, p.x, p.y, jogo.mira.ang, jogo.taco.recuo, jogo.taco.alfa, R);
+    if (p) Render.desenharTaco(c, p.x, p.y, jogo.mira.ang, jogo.taco.recuo, jogo.taco.alfa, R, jogo.efeito.x);
   }
   // Controles da tela
   c.setTransform(R_.dpr, 0, 0, R_.dpr, 0, 0);
@@ -2175,6 +2647,9 @@ function desenhar() {
     const ativa = ent.modo === 'forca' || ent.modo === 'puxar';
     Render.desenharBarra(c, jogo.lay.barra, ativa ? ent.forca : jogo.forcaBarra, ativa, ent.modo === 'forca' && ent.fora);
     if (jogo.toque) Render.desenharAnel(c, jogo.lay.anel, ent.anelGiro, ent.modo === 'anel');
+    // Seletor de efeito: fixo no computador; no celular, ícone da branca que abre o painel
+    Render.desenharEfeito(c, jogo.lay.efeito, jogo.efeito, ent.modo === 'efeito' && !jogo.toque, false);
+    if (jogo.toque && jogo.painelEfeito) Render.desenharEfeito(c, jogo.lay.painel, jogo.efeito, ent.modo === 'efeito', true);
   }
 }
 
@@ -2183,6 +2658,10 @@ function quadro(ts) {
   const dt = ultimo ? Math.min(0.1, (ts - ultimo) / 1000) : 0;
   ultimo = ts;
   atualizar(dt);
+  // Ruído de rolamento pela soma das velocidades das bolas; tilintar do ambiente
+  let soma = 0;
+  if (jogo.sim && jogo.tela === 'partida' && !jogo.pausado) for (const b of jogo.sim.bolas) if (b.estado === 'mesa' && b.movendo) soma += Math.hypot(b.vx, b.vy);
+  Som.quadro(soma);
   desenhar();
   requestAnimationFrame(quadro);
 }
@@ -2194,6 +2673,10 @@ el('b-menu').addEventListener('click', () => Telas.alternarPausa());
 el('b-desfazer').addEventListener('click', () => Jogo.desfazer());
 el('b-mover').addEventListener('click', () => Jogo.alternarMover());
 el('b-arrumar').addEventListener('click', () => Jogo.arrumar());
+el('b-som').addEventListener('click', () => { Som.iniciar(); jogo.config.som = !jogo.config.som; Som.volumes(); Salvar.config(); atualizarHUD(); });
+// O áudio só pode começar depois de um gesto do usuário
+document.addEventListener('pointerdown', () => Som.iniciar());
+document.addEventListener('keydown', () => Som.iniciar());
 // Toques nas telas e no HUD pedem tela cheia (no fim do toque)
 document.addEventListener('pointerup', ev => {
   if (ev.pointerType === 'touch') { jogo.toque = true; if (ev.target.closest && ev.target.closest('#telas, #hud-botoes')) pedirTelaCheia(); }
@@ -2207,6 +2690,9 @@ Entrada.ligar();
 Jogo.cenaDoMenu();
 Telas.atualizar();
 requestAnimationFrame(quadro);
+
+// Acesso para testes no console, só com #teste no endereço
+if (location.hash === '#teste') window.__sinuca = { jogo, Fisica, Render, Jogo, Rack, Som, FISICA, MESAS, NIVEIS };
 })();
 </script>
 </body>
