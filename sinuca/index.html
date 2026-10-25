@@ -1,0 +1,2213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icone-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>Sinuca de Bico</title>
+<style>
+  /* Margens seguras (entalhe, cantos arredondados), lidas pelo script */
+  :root {
+    --seguro-topo: env(safe-area-inset-top, 0px);
+    --seguro-dir: env(safe-area-inset-right, 0px);
+    --seguro-esq: env(safe-area-inset-left, 0px);
+    --seguro-baixo: env(safe-area-inset-bottom, 0px);
+    --latao: #c9a24a;
+    --latao-claro: #f0d58a;
+    --texto: #f6ead2;
+    --fraco: #c9b48e;
+  }
+  html, body { margin: 0; height: 100%; background: #0d0906; overflow: hidden;
+    font-family: Georgia, "Times New Roman", serif; color: var(--texto); }
+  canvas { display: block; position: fixed; inset: 0; touch-action: none; user-select: none;
+    -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  button { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+
+  /* Placa de madeira com moldura de latão (HUD e telas) */
+  .placa {
+    background:
+      repeating-linear-gradient(92deg, rgba(0,0,0,.10) 0 2px, rgba(255,255,255,.025) 2px 5px, rgba(0,0,0,.06) 5px 9px),
+      linear-gradient(180deg, #6a3a1e, #4a2512 60%, #3a1c0d);
+    border: 2px solid var(--latao);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,230,180,.25), inset 0 -2px 6px rgba(0,0,0,.4);
+  }
+
+  /* HUD da partida */
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #hud[hidden] { display: none; }
+  #hud-botoes { position: absolute; top: calc(8px + var(--seguro-topo)); left: calc(8px + var(--seguro-esq));
+    display: flex; gap: 6px; pointer-events: auto; }
+  #hud.compacto #hud-botoes { flex-direction: column; top: calc(6px + var(--seguro-topo)); }
+  .bh { width: 46px; height: 46px; border-radius: 9px; border: 2px solid var(--latao); cursor: pointer;
+    background: linear-gradient(180deg, #5d3219, #3b1d0d); color: var(--latao-claro); font-size: 22px; line-height: 1;
+    box-shadow: 0 3px 10px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,230,180,.25); padding: 0; }
+  .bh:hover { filter: brightness(1.15); }
+  .bh.ativo { background: linear-gradient(180deg, #2c7a4a, #17502e); color: #fff; }
+  .bh:disabled { opacity: .4; cursor: default; filter: none; }
+  #hud-info { position: absolute; top: calc(8px + var(--seguro-topo)); right: calc(104px + var(--seguro-dir));
+    max-width: min(560px, 52vw); padding: 6px 12px; font-size: 14px; line-height: 1.35; pointer-events: none; }
+  #hud.compacto #hud-info { top: calc(2px + var(--seguro-topo)); right: auto; left: 50%; transform: translateX(-50%);
+    font-size: 11px; padding: 2px 10px; max-width: 64vw; border-width: 1px; opacity: .92; }
+  #info-1 { color: var(--latao-claro); }
+  #info-2 { color: var(--fraco); }
+  #bandeja { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+  #bandeja:empty { display: none; }
+  .mini { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font: bold 9px Arial, sans-serif; color: #111; box-shadow: inset -2px -3px 4px rgba(0,0,0,.45); }
+  #hud.compacto .mini { width: 13px; height: 13px; font-size: 7px; }
+
+  /* Aviso curto no meio da tela */
+  #aviso { position: fixed; left: 50%; top: 22%; transform: translate(-50%, -8px); padding: 10px 18px; max-width: 80vw;
+    text-align: center; font-size: 16px; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; }
+  #aviso.ver { opacity: 1; transform: translate(-50%, 0); }
+
+  /* Telas (menu, pausa, aviso de girar) */
+  #telas { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,.25), rgba(0,0,0,.72)); padding: 12px; box-sizing: border-box; }
+  #telas.ativo { display: flex; }
+  .tela { display: none; }
+  .tela.ativa { display: block; }
+  .tela .placa { padding: 18px 22px 20px; max-height: calc(100vh - 24px); overflow: auto; box-sizing: border-box;
+    width: min(440px, calc(100vw - 24px)); text-align: center; }
+  h1 { margin: 4px 0 2px; font-size: 44px; letter-spacing: .08em; line-height: 1; color: var(--latao-claro);
+    text-shadow: 0 2px 0 #2a1205, 0 0 18px rgba(240,213,138,.25); }
+  h1 span { font-size: 26px; letter-spacing: .3em; color: #e9e1cf; }
+  h2 { margin: 0 0 12px; font-size: 24px; color: var(--latao-claro); }
+  .sub { margin: 6px 0 16px; color: var(--fraco); font-style: italic; }
+  .nota { margin: 14px 0 0; font-size: 13px; color: var(--fraco); }
+  .bt { display: block; width: 100%; min-height: 46px; margin: 8px 0; border-radius: 10px; cursor: pointer;
+    border: 2px solid var(--latao); font-size: 18px; color: #fff;
+    background: radial-gradient(ellipse at 50% 30%, #2f8653, #165a33 70%, #0f4425);
+    box-shadow: 0 3px 10px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.2); }
+  .bt:hover { filter: brightness(1.12); }
+  .bt.fraco { background: linear-gradient(180deg, #5d3219, #3b1d0d); color: var(--latao-claro); font-size: 16px; }
+  .linha { display: flex; gap: 8px; }
+  .linha .bt { flex: 1; }
+  .op { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; text-align: left; }
+  .op label { font-size: 15px; }
+  .op select, .op .alterna { min-height: 40px; min-width: 150px; border-radius: 8px; border: 1px solid var(--latao);
+    background: #2a1508; color: var(--texto); font: inherit; font-size: 15px; padding: 0 8px; cursor: pointer; }
+  .op .alterna[aria-pressed="true"] { background: #1d6b3f; }
+  #controles { text-align: left; font-size: 14px; line-height: 1.45; color: var(--texto); margin: 6px 0 4px; }
+  #controles b { color: var(--latao-claro); }
+  #controles p { margin: 6px 0; }
+  .icone-girar { font-size: 54px; color: var(--latao-claro); animation: girar 2.4s ease-in-out infinite; }
+  @keyframes girar { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(90deg); } }
+</style>
+</head>
+<body>
+<canvas id="tela"></canvas>
+
+<div id="hud" hidden>
+  <div id="hud-botoes">
+    <button class="bh" id="b-menu" title="Menu (Esc)" aria-label="Menu">☰</button>
+    <button class="bh" id="b-desfazer" title="Desfazer a tacada (Z)" aria-label="Desfazer">↶</button>
+    <button class="bh" id="b-mover" title="Mover bolas (M)" aria-label="Mover bolas">✥</button>
+    <button class="bh" id="b-arrumar" title="Arrumar as bolas (R)" aria-label="Arrumar as bolas">△</button>
+  </div>
+  <div id="hud-info" class="placa"><div id="info-1"></div><div id="info-2"></div><div id="bandeja"></div></div>
+</div>
+
+<div id="aviso" class="placa"></div>
+
+<div id="telas">
+  <section class="tela" id="t-menu">
+    <div class="placa">
+      <h1>SINUCA<br><span>DE BICO</span></h1>
+      <p class="sub">Sinuca e bilhar de bar, vistos de cima.</p>
+      <button class="bt" data-acao="treino">Treino livre</button>
+      <button class="bt fraco" data-acao="jogos">Jogos</button>
+      <p class="nota">Em construção: por enquanto só o treino livre. Os modos de jogo, os adversários e o campeonato chegam nas próximas versões.</p>
+    </div>
+  </section>
+
+  <section class="tela" id="t-pausa">
+    <div class="placa">
+      <h2>Treino livre</h2>
+      <button class="bt" data-acao="continuar">Continuar</button>
+      <div id="opcoes"></div>
+      <button class="bt fraco" data-acao="arrumar">Arrumar as bolas</button>
+      <button class="bt fraco" data-acao="controles" aria-expanded="false">Controles</button>
+      <div id="controles" hidden>
+        <p><b>Computador.</b> Mova o mouse para mirar. Segure o botão e puxe para trás: o taco recua; solte para tacar. Puxar de volta até o começo cancela. A barra de força à direita também taca: arraste para baixo e solte.</p>
+        <p>Setas ← → ou a roda do mouse: ajuste fino de 0,1° (com Shift, 0,01°). Setas ↑ ↓: força da barra. Espaço ou Enter: taca com a força da barra. Z desfaz, M liga o modo de mover bolas, R arruma as bolas, Esc abre este menu.</p>
+        <p><b>Celular.</b> Toque ou arraste na mesa para mirar. Ajuste fino: gire o anel do canto ou arraste com dois dedos. Força: arraste a barra da direita para baixo e solte; arrastar para fora dela cancela.</p>
+        <p><b>Bolas.</b> A branca pode ser arrastada para qualquer lugar. Com ✥ ligado, qualquer bola pode ser arrastada.</p>
+      </div>
+      <div class="linha">
+        <button class="bt fraco" data-acao="menu">Menu principal</button>
+        <button class="bt fraco" data-acao="jogos">Jogos</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="tela" id="t-girar">
+    <div class="placa">
+      <div class="icone-girar">▯</div>
+      <h2>Gire o aparelho</h2>
+      <p class="sub">A mesa fica bem maior na horizontal.</p>
+      <button class="bt" data-acao="retrato">Jogar assim mesmo</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// =====================================================================
+// 1. CONFIG E TABELAS DE DADOS
+//    Tudo o que se ajusta fica aqui. Unidades: milímetros, segundos, radianos.
+// =====================================================================
+
+// Coeficientes da física. Faixas boas para testar entre colchetes.
+const FISICA = {
+  hz: 240,                  // passos de simulação por segundo (passo fixo, independe do FPS)
+  g: 9810,                  // gravidade, mm/s²
+  atritoRolamento: 0.012,   // μ de rolamento: desacelera a bola que já rola [0,006–0,02]
+  atritoDeslizamento: 0.2,  // μ de deslizamento bola × feltro: a bola que escorrega passa a rolar [0,15–0,3]
+  atritoGiro: 0.022,        // μ do giro em torno do eixo vertical (efeito lateral), decai à parte [0,01–0,05]
+  restituicaoBola: 0.95,    // choque bola × bola: 1 seria perfeitamente elástico [0,9–0,98]
+  duracaoContato: 0.0002,   // duração do choque bola × bola, s (mola rígida, como a real). Vários choques ao mesmo
+                            // tempo dividem a energia (abertura); mais longo desvia o corte (0,0006 → +0,4° em 30°) [0,0002–0,0006]
+  passosPorContato: 12,     // sub-passos durante um choque (precisão da mola) [8–30]
+  restituicaoTabela: 0.76,  // padrão da borracha; cada mesa pode ter a sua [0,72–0,80]
+  atritoTabela: 0.2,        // atrito tangencial bola × borracha: limita o impulso de lado [0,1–0,3]
+  giroAposTabela: 0.15,     // fração do giro de rolamento (no sentido da batida) que sobra depois da tabela [0–0,4]
+  restituicaoCacapa: 0.2,   // bola batendo na parede do buraco, já caindo [0,1–0,4]
+  amortecimentoCacapa: 4,   // perda de velocidade da bola dentro do buraco, por segundo
+  velocidadeMaxima: 9000,   // velocidade da branca com força 100%, mm/s (9 m/s) [6000–11000]
+  curvaForca: 1.6,          // força da barra (0–1) → velocidade: v = vmax · f^curva (mais controle nas fracas) [1–2]
+  fracaoSubpasso: 0.25,     // deslocamento máximo de uma bola por sub-passo, em raios (evita atravessar) [0,1–0,4]
+  velocidadeParada: 4,      // mm/s: abaixo disso a bola que rola para
+  limiteRolamento: 2,       // mm/s de escorregamento no ponto de contato abaixo do qual a bola já rola
+  impactoMinimo: 20,        // mm/s: toques mais fracos que isso não entram no registro da jogada
+  folgaRack: 0.15,          // folga entre as bolas do triângulo, mm. Rack justo abre bem; com folga (0,5) os
+                            // choques ficam um de cada vez e as bolas do meio quase não saem [0,05–0,5]
+};
+
+// Mesas. Medidas internas (entre os narizes das tabelas) em mm.
+// boca*: largura da boca entre as pontas das tabelas; angulo*: ângulo interno entre a tabela e a
+// mandíbula (maior = mandíbula mais fechada); recuo*: quanto o centro do buraco fica atrás da boca;
+// raio*: raio do buraco (a bola cai quando o centro dela passa sobre ele).
+const MESAS = {
+  bar: {
+    nome: 'Mesa de bar', L: 2000, W: 1000, diametroBola: 54, cacapas: 6,
+    bocaCanto: 124, bocaMeio: 134, anguloCanto: 140, anguloMeio: 104,
+    recuoCanto: 68, recuoMeio: 44, raioCanto: 64, raioMeio: 64,
+    larguraTabela: 46, larguraMadeira: 120, feltro: 'verde', madeira: 'imbuia',
+    restituicaoTabela: 0.74, velocidadeFeltro: 0.8, linhaSaida: 500, raioMeiaLua: 0,
+  },
+  clube: {
+    nome: 'Mesa de clube', L: 2540, W: 1270, diametroBola: 57.15, cacapas: 6,
+    bocaCanto: 118, bocaMeio: 132, anguloCanto: 142, anguloMeio: 104,
+    recuoCanto: 70, recuoMeio: 45, raioCanto: 60, raioMeio: 62,
+    larguraTabela: 50, larguraMadeira: 140, feltro: 'verde', madeira: 'mogno',
+    restituicaoTabela: 0.76, velocidadeFeltro: 1.0, linhaSaida: 635, raioMeiaLua: 0,
+  },
+  oficial: {
+    nome: 'Mesa oficial de sinuca', L: 3570, W: 1780, diametroBola: 52.5, cacapas: 6,
+    bocaCanto: 88, bocaMeio: 98, anguloCanto: 140, anguloMeio: 106,
+    recuoCanto: 56, recuoMeio: 40, raioCanto: 48, raioMeio: 50,
+    larguraTabela: 50, larguraMadeira: 160, feltro: 'verde', madeira: 'nogueira',
+    restituicaoTabela: 0.78, velocidadeFeltro: 1.1, linhaSaida: 737, raioMeiaLua: 292,
+  },
+  carambola: {
+    nome: 'Mesa de carambola', L: 2840, W: 1420, diametroBola: 61.5, cacapas: 0,
+    bocaCanto: 0, bocaMeio: 0, anguloCanto: 0, anguloMeio: 0,
+    recuoCanto: 0, recuoMeio: 0, raioCanto: 0, raioMeio: 0,
+    larguraTabela: 50, larguraMadeira: 150, feltro: 'azul', madeira: 'cerejeira',
+    restituicaoTabela: 0.80, velocidadeFeltro: 1.05, linhaSaida: 710, raioMeiaLua: 0,
+  },
+};
+
+// Cores do feltro e da madeira (base, veio escuro, veio claro)
+const FELTROS = {
+  verde: { nome: 'Verde', cor: '#1c6a3e' },
+  azul:  { nome: 'Azul', cor: '#1d4f8a' },
+  vinho: { nome: 'Vinho', cor: '#6a1d2b' },
+};
+const MADEIRAS = {
+  mogno:     { base: '#5b2a15', escuro: '#2e1208', claro: '#8a4a26' },
+  imbuia:    { base: '#4a2f1c', escuro: '#22140a', claro: '#7a5332' },
+  nogueira:  { base: '#3f2716', escuro: '#1c1007', claro: '#6b4728' },
+  cerejeira: { base: '#6e2c18', escuro: '#35120a', claro: '#9c4f2c' },
+};
+
+// Cores fiéis de cada jogo de bolas
+const CORES_BOLAS = {
+  branca: '#f4efe1',
+  // Pool: 1–8 lisas; 9–15 listradas, com a cor da lisa de número − 8
+  pool: { 1: '#f2b705', 2: '#1d3fa5', 3: '#d0202a', 4: '#4b2585', 5: '#f06418', 6: '#0e7a3d', 7: '#7d1a1d', 8: '#141414' },
+  // Sinuca brasileira: valor → cor
+  brasileira: { 1: '#c61a1f', 2: '#f2c40a', 3: '#167a3a', 4: '#6b3a1c', 5: '#1c47a8', 6: '#e57ba6', 7: '#151515' },
+  // Snooker: vermelhas valem 1, coloridas 2 a 7
+  snooker: { vermelha: '#b5121b', amarela: '#f3c51a', verde: '#137a3c', marrom: '#6a3b1d', azul: '#1a4fb0', rosa: '#ec8fb4', preta: '#121212' },
+  // Carambola: branca, amarela e vermelha, sem números
+  carambola: { branca: '#f4efe1', amarela: '#f3c623', vermelha: '#c8151d' },
+};
+
+// Níveis de ajuda. Valem para qualquer modo; no treino, o nível escolhe a mira.
+// mira.ricochetes: tabelas que a linha de mira atravessa refletindo; linhaAlvo: 'tabela' (até onde
+// a bola-alvo bate), um comprimento em mm, ou 0; linhaBranca: comprimento da saída prevista da branca.
+const NIVEIS = {
+  aprendiz: {
+    nome: 'Aprendiz', mira: { ricochetes: 1, linhaAlvo: 'tabela', linhaBranca: 450, fantasma: true },
+    dicas: 'sempre', botaoDica: true, desfazer: Infinity, tempo: 0, throw: false, pushOut: false,
+  },
+  clube: {
+    nome: 'Clube', mira: { ricochetes: 0, linhaAlvo: 160, linhaBranca: 0, fantasma: true },
+    dicas: 'falta', botaoDica: false, desfazer: 1, tempo: 60, throw: false, pushOut: false,
+  },
+  profissional: {
+    nome: 'Profissional', mira: { ricochetes: 0, linhaAlvo: 0, linhaBranca: 0, fantasma: false },
+    dicas: 'nunca', botaoDica: false, desfazer: 0, tempo: 45, throw: true, pushOut: true,
+  },
+};
+
+// Modos de jogo. "etapa" diz em que etapa do desenvolvimento o modo fica pronto.
+// variantes: { chave: { nome, opcoes: [{ id, nome }], padrao, texto } } — regras que mudam de bar para bar.
+const MODOS = {
+  bola8:      { nome: 'Bola 8', min: 2, max: 2, duplas: true, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'clube', bolas: 'pool', etapa: 3, variantes: {} },
+  parImpar:   { nome: 'Par × Ímpar', min: 2, max: 2, duplas: true, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'pool', etapa: 3, variantes: {} },
+  mataMata:   { nome: 'Mata-mata', min: 2, max: 6, duplas: false, secretas: true, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'pool', etapa: 4, variantes: {} },
+  contagem:   { nome: 'Contagem de pontos ("61")', min: 2, max: 4, duplas: false, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'pool', etapa: 3, variantes: {} },
+  tresJog:    { nome: 'Três jogadores', min: 3, max: 3, duplas: false, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'pool', etapa: 4, variantes: {} },
+  brasileira: { nome: 'Sinuca brasileira', min: 2, max: 2, duplas: false, secretas: false, mesas: ['bar', 'oficial'], mesaPadrao: 'oficial', bolas: 'brasileira', etapa: 4, variantes: {} },
+  bola9:      { nome: 'Bola 9', min: 2, max: 2, duplas: false, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'clube', bolas: 'pool', etapa: 4, variantes: {} },
+  carambola:  { nome: 'Carambola', min: 2, max: 2, duplas: false, secretas: false, mesas: ['carambola'], mesaPadrao: 'carambola', bolas: 'carambola', etapa: 4, variantes: {} },
+  snooker:    { nome: 'Snooker internacional', min: 2, max: 2, duplas: false, secretas: false, mesas: ['oficial'], mesaPadrao: 'oficial', bolas: 'snooker', etapa: 7, variantes: {} },
+  treino: {
+    nome: 'Treino livre', min: 1, max: 1, duplas: false, secretas: false,
+    mesas: ['clube'], mesaPadrao: 'clube', bolas: 'pool', etapa: 1,
+    variantes: {
+      bolas: {
+        nome: 'Bolas na mesa', padrao: '15',
+        opcoes: [
+          { id: '0', nome: 'Só a branca' }, { id: '1', nome: 'Branca e a 1' }, { id: '3', nome: 'Triângulo de 3' },
+          { id: '9', nome: 'Losango de 9' }, { id: '10', nome: 'Triângulo de 10' }, { id: '15', nome: 'Triângulo de 15' },
+        ],
+        texto: 'Quantas bolas o treino arruma na mesa.',
+      },
+    },
+  },
+  desafios:   { nome: 'Desafios de tacada', min: 1, max: 1, duplas: false, secretas: false, mesas: ['clube'], mesaPadrao: 'clube', bolas: 'pool', etapa: 7, variantes: {} },
+};
+
+// Adversários da IA (etapa 5): { nome, apelido, cidade, cores, precisao, forca, efeito, agressividade, favorito, frases }
+const ADVERSARIOS = [];
+// Campeonatos (etapa 6): { id, nome, modos por fase, mesa, nivel dos adversários }
+const CAMPEONATOS = [];
+// Desafios de tacada (etapa 7): { nome, bolas, objetivo, zona, estrelas }
+const DESAFIOS = [];
+
+// Luz da luminária (direção para a luz, no sistema da mesa: x direita, y para baixo, z para dentro da mesa)
+const LUZ = (() => { const v = [-0.42, -0.55, -0.72]; const n = Math.hypot(...v); return v.map(c => c / n); })();
+
+// Configurações salvas e seus padrões
+const CONFIG_PADRAO = { bolas: '15', mira: 'aprendiz', feltro: 'verde', rastro: false, vibrar: true };
+
+// Prefixo das chaves do localStorage (os jogos dividem o domínio)
+const PREFIXO = 'sinuca-';
+
+// =====================================================================
+// 2. UTILITÁRIOS: vetores, quaternion, RNG com semente, easing
+// =====================================================================
+const U = {
+  clamp: (v, a, b) => v < a ? a : v > b ? b : v,
+  lerp: (a, b, t) => a + (b - a) * t,
+  // RNG com semente (mulberry32): a mesma semente dá sempre a mesma sequência
+  rng(semente) {
+    let s = semente >>> 0;
+    return () => {
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  },
+  embaralhar(arr, rnd) {
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr;
+  },
+  easeIn: t => t * t,
+  easeOut: t => 1 - (1 - t) * (1 - t) * (1 - t),
+  // Ângulo no intervalo [-π, π]
+  angDif(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; },
+  // Número com vírgula decimal
+  num: (v, casas) => v.toFixed(casas).replace('.', ','),
+  rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; },
+  // Clareia (f > 0) ou escurece (f < 0) uma cor
+  tom(hex, f) {
+    const c = U.rgb(hex).map(x => f > 0 ? x + (255 - x) * f : x * (1 + f));
+    return `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+  },
+};
+
+// Quaternion [w, x, y, z]: orientação 3D de cada bola (do corpo da bola para a mesa)
+const Q = {
+  novo: () => [1, 0, 0, 0],
+  eixo(ax, ay, az, ang) { const s = Math.sin(ang / 2); return [Math.cos(ang / 2), ax * s, ay * s, az * s]; },
+  mult(a, b) {
+    return [
+      a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
+      a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
+      a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
+      a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0],
+    ];
+  },
+  // Gira q (no lugar) pela velocidade angular (wx, wy, wz) da mesa durante h segundos, com rotação exata
+  girar(q, wx, wy, wz, h) {
+    const w = Math.sqrt(wx * wx + wy * wy + wz * wz);
+    if (w < 1e-9) return;
+    const meio = w * h / 2, s = Math.sin(meio) / w;
+    const rw = Math.cos(meio), rx = wx * s, ry = wy * s, rz = wz * s;
+    const [qw, qx, qy, qz] = q;
+    let nw = rw * qw - rx * qx - ry * qy - rz * qz;
+    let nx = rw * qx + rx * qw + ry * qz - rz * qy;
+    let ny = rw * qy - rx * qz + ry * qw + rz * qx;
+    let nz = rw * qz + rx * qy - ry * qx + rz * qw;
+    const n = 1 / Math.sqrt(nw * nw + nx * nx + ny * ny + nz * nz);
+    q[0] = nw * n; q[1] = nx * n; q[2] = ny * n; q[3] = nz * n;
+  },
+  // Matriz 3×3 (linha a linha) que leva coordenadas do corpo para a mesa
+  matriz(q, m) {
+    const [w, x, y, z] = q;
+    m[0] = 1 - 2 * (y * y + z * z); m[1] = 2 * (x * y - w * z);     m[2] = 2 * (x * z + w * y);
+    m[3] = 2 * (x * y + w * z);     m[4] = 1 - 2 * (x * x + z * z); m[5] = 2 * (y * z - w * x);
+    m[6] = 2 * (x * z - w * y);     m[7] = 2 * (y * z + w * x);     m[8] = 1 - 2 * (x * x + y * y);
+    return m;
+  },
+};
+
+// =====================================================================
+// 3. FÍSICA: bola, mesa, colisões, caçapas, passo de simulação, registro da jogada
+//    Sistema da mesa: origem no centro, x ao longo do comprimento, y na largura (para baixo
+//    na tela), z para dentro da mesa. O ponto de contato da bola com o feltro fica em (0, 0, R).
+// =====================================================================
+const Fisica = (() => {
+  // Monta a geometria da mesa: segmentos de tabela e de mandíbula, buracos e polígonos das borrachas
+  function criarGeometria(mesaId) {
+    const m = MESAS[mesaId];
+    const L = m.L, W = m.W, R = m.diametroBola / 2, hx = L / 2, hy = W / 2, cw = m.larguraTabela;
+    const geo = {
+      id: mesaId, mesa: m, L, W, R, hx, hy, cw,
+      bx: hx + cw, by: hy + cw,                                          // meia-medida do leito (até o fundo da borracha)
+      ex: hx + cw + m.larguraMadeira, ey: hy + cw + m.larguraMadeira,    // meia-medida externa da moldura
+      segs: [], cacapas: [], almofadas: [],
+      e: m.restituicaoTabela ?? FISICA.restituicaoTabela,
+      atritoRol: FISICA.atritoRolamento / m.velocidadeFeltro,
+    };
+    if (m.cacapas === 0) {
+      addTabela(geo, [-hx, -hy], [hx, -hy], [0, 1], 'superior');
+      addTabela(geo, [-hx, hy], [hx, hy], [0, -1], 'inferior');
+      addTabela(geo, [-hx, -hy], [-hx, hy], [1, 0], 'esquerda');
+      addTabela(geo, [hx, -hy], [hx, hy], [-1, 0], 'direita');
+      return geo;
+    }
+    // Caçapas: 0 canto sup. esq., 1 meio sup., 2 canto sup. dir., 3 canto inf. esq., 4 meio inf., 5 canto inf. dir.
+    const a = m.bocaCanto / Math.SQRT2, bm = m.bocaMeio / 2;
+    const nomes = ['canto superior esquerdo', 'meio superior', 'canto superior direito',
+                   'canto inferior esquerdo', 'meio inferior', 'canto inferior direito'];
+    for (const sy of [-1, 1]) {
+      for (const sx of [-1, 0, 1]) {
+        let c;
+        if (sx === 0) c = { x: 0, y: sy * (hy + m.recuoMeio), r: m.raioMeio, tipo: 'meio', ax: 0, ay: sy };
+        else {
+          const meio = [sx * (hx - a / 2), sy * (hy - a / 2)], k = m.recuoCanto / Math.SQRT2;
+          c = { x: meio[0] + sx * k, y: meio[1] + sy * k, r: m.raioCanto, tipo: 'canto', ax: sx / Math.SQRT2, ay: sy / Math.SQRT2 };
+        }
+        c.nome = nomes[geo.cacapas.length];
+        geo.cacapas.push(c);
+      }
+    }
+    const tc = m.anguloCanto * Math.PI / 180, tm = m.anguloMeio * Math.PI / 180;
+    addTabela(geo, [-hx + a, -hy], [-bm, -hy], [0, 1], 'superior', [tc, 0], [tm, 1]);
+    addTabela(geo, [bm, -hy], [hx - a, -hy], [0, 1], 'superior', [tm, 1], [tc, 2]);
+    addTabela(geo, [-hx + a, hy], [-bm, hy], [0, -1], 'inferior', [tc, 3], [tm, 4]);
+    addTabela(geo, [bm, hy], [hx - a, hy], [0, -1], 'inferior', [tm, 4], [tc, 5]);
+    addTabela(geo, [-hx, -hy + a], [-hx, hy - a], [1, 0], 'esquerda', [tc, 0], [tc, 3]);
+    addTabela(geo, [hx, -hy + a], [hx, hy - a], [-1, 0], 'direita', [tc, 2], [tc, 5]);
+    return geo;
+  }
+
+  // Uma tabela reta de A a B, com normal n para dentro da mesa. bocaA/bocaB = [ângulo da mandíbula, caçapa].
+  // A mandíbula sai da ponta da tabela para fora, girando o sentido "para longe da caçapa" pelo ângulo.
+  function addTabela(geo, A, B, n, nome, bocaA, bocaB) {
+    geo.segs.push(seg(A, B, nome, -1));
+    const ux = B[0] - A[0], uy = B[1] - A[1], ul = Math.hypot(ux, uy);
+    const dir = [ux / ul, uy / ul];
+    const poly = [];
+    const ponta = (P, u, boca) => {
+      if (!boca) return [[P[0] - n[0] * geo.cw, P[1] - n[1] * geo.cw]];
+      const [th, ic] = boca, c = geo.cacapas[ic];
+      const f = [u[0] * Math.cos(th) - n[0] * Math.sin(th), u[1] * Math.cos(th) - n[1] * Math.sin(th)];
+      const tTrilho = geo.cw / Math.sin(th);                // até o fundo da borracha
+      // A mandíbula de colisão vai até a borda do buraco (ou até o fundo da borracha)
+      const px = P[0] - c.x, py = P[1] - c.y, b = px * f[0] + py * f[1], cc = px * px + py * py - c.r * c.r;
+      const disc = b * b - cc;
+      let t = tTrilho;
+      if (disc > 0) { const t1 = -b - Math.sqrt(disc); if (t1 > 0 && t1 < tTrilho) t = t1; }
+      geo.segs.push(seg(P, [P[0] + f[0] * t, P[1] + f[1] * t], 'boca', ic));
+      return [[P[0] + f[0] * tTrilho, P[1] + f[1] * tTrilho]];
+    };
+    const ptA = ponta(A, dir, bocaA), ptB = ponta(B, [-dir[0], -dir[1]], bocaB);
+    poly.push(A, B, ...ptB, ...ptA);
+    geo.almofadas.push({ pts: poly, n, nome });
+  }
+  function seg(A, B, nome, cacapa) {
+    const ex = B[0] - A[0], ey = B[1] - A[1], len = Math.hypot(ex, ey);
+    return { ax: A[0], ay: A[1], bx: B[0], by: B[1], ex, ey, len, len2: len * len,
+             nx: -ey / len, ny: ex / len, nome, cacapa };
+  }
+
+  // Cria uma bola a partir da descrição { num, tipo, cor, numerada }
+  function criarBola(id, d) {
+    return {
+      id, num: d.num, tipo: d.tipo, cor: d.cor, rgb: U.rgb(d.cor), numerada: !!d.numerada,
+      x: 0, y: 0, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0, q: Q.novo(),
+      estado: 'mesa',      // 'mesa' | 'caindo' (sobre o buraco) | 'fora' (encaçapada ou fora da mesa)
+      prof: 0, vz: 0, cacapa: -1, movendo: false,
+      cv: null, qd: null,  // cache do desenho (canvas da bola e orientação desenhada)
+    };
+  }
+
+  // contatos: pares de bolas encostadas agora (para registrar cada choque uma vez só)
+  function criarSim(geo) { return { geo, bolas: [], t: 0, reg: null, ouvinte: null, contatos: new Set() }; }
+
+  // Cópia só com o estado físico (a IA simula sem desenhar)
+  function clonar(sim) {
+    const s = criarSim(sim.geo);
+    s.bolas = sim.bolas.map(b => Object.assign({}, b, { q: b.q.slice(), rgb: b.rgb, cv: null, qd: null }));
+    s.contatos = new Set(sim.contatos); s.t = sim.t;
+    return s;
+  }
+
+  // ---- Atrito com o feltro: deslizando → rolando → parada ----
+  function atrito(b, h, geo) {
+    const R = geo.R, g = FISICA.g;
+    // Velocidade do ponto de contato: u = v + w × (0, 0, R) = (vx + wy·R, vy − wx·R)
+    const ux = b.vx + b.wy * R, uy = b.vy - b.wx * R;
+    const us = Math.hypot(ux, uy);
+    if (us > FISICA.limiteRolamento) {
+      // Deslizando: o atrito age contra u e reduz u a uma taxa de 7/2 · μ · g
+      const mu = FISICA.atritoDeslizamento;
+      const f = Math.min(1, us / (3.5 * mu * g * h));      // fração do passo até começar a rolar
+      const ax = -ux / us, ay = -uy / us;
+      const dv = mu * g * h * f;
+      b.vx += ax * dv; b.vy += ay * dv;
+      // Torque do atrito: dw = (5 μ g / 2R) · (−ay, ax)
+      const dw = 2.5 * mu * g * h * f / R;
+      b.wx += -ay * dw; b.wy += ax * dw;
+      if (f < 1) rolar(b, R);
+    } else {
+      // Rolando: desacelera pelo atrito de rolamento e mantém o vínculo de rolamento
+      const s = Math.hypot(b.vx, b.vy), dec = geo.atritoRol * g * h;
+      if (s <= dec || s < FISICA.velocidadeParada) { b.vx = 0; b.vy = 0; }
+      else { const k = (s - dec) / s; b.vx *= k; b.vy *= k; }
+      rolar(b, R);
+    }
+    // Giro vertical (efeito lateral): decai à parte
+    if (b.wz !== 0) {
+      const dz = 2.5 * FISICA.atritoGiro * g / R * h;
+      b.wz = Math.abs(b.wz) <= dz ? 0 : b.wz - Math.sign(b.wz) * dz;
+    }
+    if (b.vx === 0 && b.vy === 0 && Math.abs(b.wx) + Math.abs(b.wy) < 1e-6 && Math.abs(b.wz) < 0.05) {
+      b.wx = b.wy = 0; b.movendo = false;
+    }
+  }
+  // Vínculo de rolamento sem escorregar: w × (0,0,R) = −v
+  function rolar(b, R) { b.wx = b.vy / R; b.wy = -b.vx / R; }
+
+  // ---- Um passo fixo, dividido em sub-passos de tamanho variável ----
+  // Sem contato, nenhuma bola anda mais que ~R/4 por sub-passo, e o sub-passo termina no instante
+  // exato em que duas bolas se encostam. Com bolas encostadas, os sub-passos ficam curtos: o choque
+  // é uma mola rígida que dura ~0,6 ms, e vários choques ao mesmo tempo (abertura) se dividem sozinhos.
+  function passo(sim, h) {
+    let resta = h, guarda = 0;
+    while (resta > 1e-9 && guarda++ < 20000) {
+      const dt = escolherDt(sim, resta);
+      subpasso(sim, dt);
+      resta -= dt;
+    }
+  }
+
+  function escolherDt(sim, resta) {
+    const bolas = sim.bolas, R = sim.geo.R, D = 2 * R, Dq = (D + 0.02) * (D + 0.02);
+    let vmax = 0;
+    for (const b of bolas) {
+      if (b.estado === 'caindo' || b.estado === 'mesa' && b.movendo) { const v = Math.hypot(b.vx, b.vy); if (v > vmax) vmax = v; }
+    }
+    let dt = vmax > 0 ? Math.min(resta, R * FISICA.fracaoSubpasso / vmax) : resta;
+    const dc = FISICA.duracaoContato / FISICA.passosPorContato;
+    for (let i = 0; i < bolas.length; i++) {
+      const a = bolas[i];
+      if (a.estado !== 'mesa') continue;
+      for (let j = i + 1; j < bolas.length; j++) {
+        const b = bolas[j];
+        if (b.estado !== 'mesa' || (!a.movendo && !b.movendo)) continue;
+        const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+        const rvx = b.vx - a.vx, rvy = b.vy - a.vy, dv = dx * rvx + dy * rvy;
+        if (d2 < Dq) { if ((d2 < D * D || dv < 0) && dt > dc) dt = dc; continue; }
+        if (dv >= 0) continue;
+        // Instante em que a distância chega a 2R
+        const vv = rvx * rvx + rvy * rvy, disc = dv * dv - vv * (d2 - D * D);
+        if (disc < 0) continue;
+        const tc = (-dv - Math.sqrt(disc)) / vv;
+        if (tc < dt) dt = Math.max(tc, 1e-7);
+      }
+    }
+    return Math.min(dt, resta);
+  }
+
+  function subpasso(sim, h) {
+    const geo = sim.geo, bolas = sim.bolas, R = geo.R;
+    sim.t += h;
+    for (const b of bolas) if (b.estado === 'mesa' && b.movendo) atrito(b, h, geo);
+    forcasContato(sim, h);
+    for (const b of bolas) {
+      if (b.estado === 'mesa') {
+        if (!b.movendo) continue;
+        b.x += b.vx * h; b.y += b.vy * h;
+        Q.girar(b.q, b.wx, b.wy, b.wz, h);
+      } else if (b.estado === 'caindo') cair(sim, b, h);
+    }
+    // Tabelas e mandíbulas (só para bolas perto da borda)
+    const margemX = geo.hx - 2 * R, margemY = geo.hy - 2 * R;
+    for (const b of bolas) {
+      if (b.estado !== 'mesa' || !b.movendo || (Math.abs(b.x) < margemX && Math.abs(b.y) < margemY)) continue;
+      for (const s of geo.segs) colidirTabela(sim, b, s, h);
+    }
+    // Caçapas e saída da mesa
+    for (const b of bolas) {
+      if (b.estado !== 'mesa' || !b.movendo) continue;
+      for (let i = 0; i < geo.cacapas.length; i++) {
+        const c = geo.cacapas[i], dx = b.x - c.x, dy = b.y - c.y;
+        if (dx * dx + dy * dy < c.r * c.r) {
+          b.estado = 'caindo'; b.cacapa = i; b.prof = 0; b.vz = 0;
+          registrarCacapa(sim, b, i);
+          break;
+        }
+      }
+      if (b.estado === 'mesa' && (Math.abs(b.x) > geo.bx + 20 || Math.abs(b.y) > geo.by + 20)) {
+        b.estado = 'fora'; b.movendo = false; b.vx = b.vy = 0;
+        registrarFora(sim, b);
+      }
+    }
+  }
+
+  // Bola sobre o buraco: afunda com a gravidade e quica fraco na parede do buraco até sumir
+  function cair(sim, b, h) {
+    const geo = sim.geo, R = geo.R, c = geo.cacapas[b.cacapa];
+    b.vz += FISICA.g * h; b.prof += b.vz * h;
+    const k = Math.exp(-FISICA.amortecimentoCacapa * h);
+    b.vx *= k; b.vy *= k;
+    b.x += b.vx * h; b.y += b.vy * h;
+    Q.girar(b.q, b.wx * k, b.wy * k, b.wz, h);
+    const dx = b.x - c.x, dy = b.y - c.y, d = Math.hypot(dx, dy), lim = c.r + R * 0.35;
+    if (d > lim) {
+      const nx = dx / d, ny = dy / d, vn = b.vx * nx + b.vy * ny;
+      if (vn > 0) { b.vx -= (1 + FISICA.restituicaoCacapa) * vn * nx; b.vy -= (1 + FISICA.restituicaoCacapa) * vn * ny; }
+      b.x = c.x + nx * lim; b.y = c.y + ny * lim;
+    }
+    if (b.prof >= 2.2 * R) { b.estado = 'fora'; b.movendo = false; b.vx = b.vy = b.wx = b.wy = b.wz = 0; }
+  }
+
+  // Choque bola × bola como mola + amortecedor na normal (só empurra). A rigidez vem da duração do
+  // contato e o amortecimento da restituição: e = exp(−ζπ/√(1−ζ²)). As forças são por unidade de massa.
+  function forcasContato(sim, h) {
+    const bolas = sim.bolas, D = 2 * sim.geo.R;
+    const w0 = Math.PI / FISICA.duracaoContato, lnE = Math.log(FISICA.restituicaoBola);
+    const zeta = -lnE / Math.sqrt(Math.PI * Math.PI + lnE * lnE);
+    const K = w0 * w0 / 2, C = zeta * w0;          // relativos: aceleração da distância = 2 · (Kδ + Cδ')
+    for (let i = 0; i < bolas.length; i++) {
+      const a = bolas[i];
+      if (a.estado !== 'mesa') continue;
+      for (let j = i + 1; j < bolas.length; j++) {
+        const b = bolas[j];
+        if (b.estado !== 'mesa' || (!a.movendo && !b.movendo)) continue;
+        const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy, chave = a.id * 64 + b.id;
+        if (d2 >= D * D) { sim.contatos.delete(chave); continue; }
+        const d = Math.sqrt(d2) || 1e-9, nx = dx / d, ny = dy / d, delta = D - d;
+        const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;   // < 0: aproximando
+        if (!sim.contatos.has(chave)) { sim.contatos.add(chave); if (vn < 0) registrarContato(sim, a, b, -vn); }
+        let F = K * delta - C * vn;
+        if (F <= 0) continue;
+        F *= h;
+        a.vx -= F * nx; a.vy -= F * ny; b.vx += F * nx; b.vy += F * ny;
+        // Etapa 2: transferência parcial de giro e throw (só no Profissional), pelo atrito no contato
+        a.movendo = b.movendo = true;
+      }
+    }
+  }
+
+  // Choque bola × tabela (ou mandíbula, ou ponta de tabela). O segmento funciona como uma cápsula de raio R.
+  function colidirTabela(sim, b, s, h) {
+    const R = sim.geo.R;
+    let t = ((b.x - s.ax) * s.ex + (b.y - s.ay) * s.ey) / s.len2;
+    t = U.clamp(t, 0, 1);
+    const cx = s.ax + s.ex * t, cy = s.ay + s.ey * t;
+    let dx = b.x - cx, dy = b.y - cy;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= R * R) return false;
+    const d = Math.sqrt(d2) || 1e-9, nx = dx / d, ny = dy / d;
+    const vn = b.vx * nx + b.vy * ny;
+    if (vn < 0) {
+      const tau = Math.min(h, (R - d) / -vn);
+      b.x -= b.vx * tau; b.y -= b.vy * tau;
+      const e = sim.geo.e, tx = -ny, ty = nx, vt = b.vx * tx + b.vy * ty;
+      // Impulso de atrito tangencial, limitado por μ × impulso normal (2/7: a bola que rola resiste menos)
+      const jn = (1 + e) * -vn, jt = Math.min(Math.abs(vt) * 2 / 7, FISICA.atritoTabela * jn);
+      const vt2 = vt - Math.sign(vt) * jt, vn2 = -e * vn;
+      b.vx = vn2 * nx + vt2 * tx; b.vy = vn2 * ny + vt2 * ty;
+      // O giro de rolamento no sentido da batida quase some na borracha (o resto vira deslizamento)
+      const wk = b.wx * tx + b.wy * ty, perde = (1 - FISICA.giroAposTabela) * wk;
+      b.wx -= perde * tx; b.wy -= perde * ty;
+      // Etapa 2: o efeito lateral (wz) muda o ângulo de saída aqui
+      b.x += b.vx * tau; b.y += b.vy * tau;
+      registrarTabela(sim, b, s, -vn);
+    } else {
+      b.x = cx + nx * R; b.y = cy + ny * R;
+    }
+    return true;
+  }
+
+  // ---- Tacada (etapa 1: sem efeito; o ponto de contato chega na etapa 2) ----
+  function tacar(sim, id, ang, forca, efeito) {
+    const b = sim.bolas.find(x => x.id === id);
+    const v = FISICA.velocidadeMaxima * Math.pow(U.clamp(forca, 0, 1), FISICA.curvaForca);
+    b.vx = Math.cos(ang) * v; b.vy = Math.sin(ang) * v;
+    b.wx = b.wy = b.wz = 0;   // Etapa 2: o efeito (efeito.x, efeito.y) define o giro inicial e o miscue
+    b.movendo = true;
+    iniciarRegistro(sim, id, v, ang);
+    if (sim.ouvinte) sim.ouvinte('taco', { bola: b, intensidade: forca });
+  }
+
+  function emMovimento(sim) {
+    for (const b of sim.bolas) {
+      if (b.estado === 'caindo') return true;
+      if (b.estado === 'mesa' && b.movendo && (b.vx !== 0 || b.vy !== 0 || Math.abs(b.wx) + Math.abs(b.wy) > 1e-6)) return true;
+    }
+    return false;
+  }
+  // Para tudo: zera giros que sobraram (bola girando no lugar)
+  function parar(sim) { for (const b of sim.bolas) { b.vx = b.vy = b.wx = b.wy = b.wz = 0; b.movendo = false; } }
+
+  // Avança até tudo parar (para a IA e para testes), com limite de tempo simulado
+  function simularAteParar(sim, maxSeg = 40) {
+    const h = 1 / FISICA.hz, fim = sim.t + maxSeg;
+    while (emMovimento(sim) && sim.t < fim) passo(sim, h);
+    return sim;
+  }
+
+  // ---- Registro da jogada: tudo o que o motor de regras precisa saber ----
+  function iniciarRegistro(sim, idJogador, velocidade, angulo) {
+    sim.reg = {
+      jogador: idJogador, velocidade, angulo, t0: sim.t,
+      eventos: [],               // em ordem: { tipo: 'bola'|'tabela'|'cacapa'|'fora', t, ... }
+      primeiraBola: null,        // id da primeira bola que a bola do jogador tocou
+      contatosJogador: [],       // todos os contatos da bola do jogador, em ordem: { bola, tabelasAntes }
+      tabelasJogador: 0,         // tabelas tocadas pela bola do jogador até agora
+      tabelasAntesPrimeiroContato: 0,
+      tabelaAposContato: false,  // alguma bola tocou tabela depois do primeiro contato
+      encacapadas: [],           // { bola, num, cacapa, nome }
+      brancaCaiu: false,         // a bola do jogador caiu
+      saiuDaMesa: [],
+    };
+  }
+  function registrarContato(sim, a, b, vel) {
+    if (sim.ouvinte) sim.ouvinte('bola', { a, b, intensidade: vel });
+    const r = sim.reg;
+    if (!r || vel < FISICA.impactoMinimo) return;
+    r.eventos.push({ tipo: 'bola', t: sim.t - r.t0, a: a.id, b: b.id });
+    const outra = a.id === r.jogador ? b : b.id === r.jogador ? a : null;
+    if (outra) {
+      if (r.primeiraBola === null) { r.primeiraBola = outra.id; r.tabelasAntesPrimeiroContato = r.tabelasJogador; }
+      r.contatosJogador.push({ bola: outra.id, tabelasAntes: r.tabelasJogador });
+    }
+  }
+  function registrarTabela(sim, b, s, vel) {
+    if (sim.ouvinte) sim.ouvinte('tabela', { bola: b, intensidade: vel });
+    const r = sim.reg;
+    if (!r || vel < FISICA.impactoMinimo) return;
+    r.eventos.push({ tipo: 'tabela', t: sim.t - r.t0, bola: b.id, tabela: s.nome, cacapa: s.cacapa });
+    if (b.id === r.jogador) r.tabelasJogador++;
+    if (r.primeiraBola !== null) r.tabelaAposContato = true;
+  }
+  function registrarCacapa(sim, b, ic) {
+    if (sim.ouvinte) sim.ouvinte('cacapa', { bola: b, intensidade: Math.hypot(b.vx, b.vy) });
+    const r = sim.reg;
+    if (!r) return;
+    const nome = sim.geo.cacapas[ic].nome;
+    r.eventos.push({ tipo: 'cacapa', t: sim.t - r.t0, bola: b.id, cacapa: ic });
+    r.encacapadas.push({ bola: b.id, num: b.num, cacapa: ic, nome });
+    if (b.id === r.jogador) r.brancaCaiu = true;
+  }
+  function registrarFora(sim, b) {
+    const r = sim.reg;
+    if (!r) return;
+    r.eventos.push({ tipo: 'fora', t: sim.t - r.t0, bola: b.id });
+    r.saiuDaMesa.push(b.id);
+  }
+  // Fecha o registro quando tudo parou
+  function fecharRegistro(sim) {
+    const r = sim.reg;
+    if (!r) return null;
+    r.duracao = sim.t - r.t0;
+    const ult = r.contatosJogador.length ? r.contatosJogador[r.contatosJogador.length - 1].tabelasAntes : 0;
+    r.tabelasDepoisUltimoContato = r.tabelasJogador - ult;
+    sim.reg = null;
+    return r;
+  }
+
+  // ---- Raio para a mira: por onde passa o centro de uma bola lançada de (ox, oy) na direção (dx, dy) ----
+  // Devolve o primeiro obstáculo: { t, tipo: 'bola'|'tabela'|'cacapa', bola, nx, ny }
+  function lancarRaio(sim, ox, oy, dx, dy, ignorar) {
+    const geo = sim.geo, R = geo.R, ign = Array.isArray(ignorar) ? ignorar : [ignorar];
+    let melhor = null;
+    const tentar = (t, tipo, extra) => { if (t > 1e-6 && (!melhor || t < melhor.t)) melhor = Object.assign({ t, tipo }, extra); };
+    const circulo = (cx, cy, r) => {
+      const fx = ox - cx, fy = oy - cy, b = fx * dx + fy * dy, c = fx * fx + fy * fy - r * r;
+      if (c <= 0) return -1;                  // começa dentro: ignora
+      const disc = b * b - c;
+      return disc < 0 ? -1 : -b - Math.sqrt(disc);
+    };
+    for (const b of sim.bolas) {
+      if (b.estado !== 'mesa' || ign.includes(b.id)) continue;
+      const t = circulo(b.x, b.y, 2 * R);
+      if (t > 0) tentar(t, 'bola', { bola: b });
+    }
+    for (const s of geo.segs) {
+      // Lado da reta onde está a origem
+      const s0 = (ox - s.ax) * s.nx + (oy - s.ay) * s.ny, lado = s0 >= 0 ? 1 : -1;
+      const nx = s.nx * lado, ny = s.ny * lado, den = dx * nx + dy * ny;
+      if (den < -1e-9 && Math.abs(s0) >= R) {
+        const t = (R - Math.abs(s0)) / den, px = ox + dx * t, py = oy + dy * t;
+        const u = ((px - s.ax) * s.ex + (py - s.ay) * s.ey) / s.len2;
+        if (u >= 0 && u <= 1) tentar(t, 'tabela', { nx, ny, seg: s });
+      }
+      for (const [qx, qy] of [[s.ax, s.ay], [s.bx, s.by]]) {
+        const t = circulo(qx, qy, R);
+        if (t > 0) {
+          const px = ox + dx * t - qx, py = oy + dy * t - qy;
+          tentar(t, 'tabela', { nx: px / R, ny: py / R, seg: s });
+        }
+      }
+    }
+    for (let i = 0; i < geo.cacapas.length; i++) {
+      const c = geo.cacapas[i], t = circulo(c.x, c.y, c.r);
+      if (t > 0) tentar(t, 'cacapa', { cacapa: i });
+    }
+    return melhor;
+  }
+
+  // Posição válida para pôr uma bola (bola na mão, arrasto): dentro da mesa, fora dos buracos,
+  // sem encostar em outra bola e dentro da área permitida pelo modo.
+  function posicaoValida(sim, bola, x, y, area = 'mesa') {
+    const geo = sim.geo, R = geo.R;
+    if (Math.abs(x) > geo.hx - R || Math.abs(y) > geo.hy - R) return false;
+    for (const c of geo.cacapas) if (Math.hypot(x - c.x, y - c.y) < c.r + R * 0.2) return false;
+    for (const b of sim.bolas) {
+      if (b === bola || b.estado !== 'mesa') continue;
+      if (Math.hypot(b.x - x, b.y - y) < 2 * R + 0.2) return false;
+    }
+    const xs = -geo.hx + geo.mesa.linhaSaida;
+    if (area === 'atras' && x > xs) return false;
+    if (area === 'meiaLua' && (x > xs || Math.hypot(x - xs, y) > geo.mesa.raioMeiaLua)) return false;
+    return true;
+  }
+
+  // Fotografia das bolas (desfazer) e restauração
+  function fotografar(sim) {
+    return sim.bolas.map(b => ({ id: b.id, x: b.x, y: b.y, estado: b.estado, q: b.q.slice(), cacapa: b.cacapa }));
+  }
+  function restaurar(sim, foto) {
+    sim.contatos.clear();
+    for (const f of foto) {
+      const b = sim.bolas.find(x => x.id === f.id);
+      if (!b) continue;
+      Object.assign(b, { x: f.x, y: f.y, estado: f.estado, cacapa: f.cacapa, prof: 0, vz: 0 });
+      b.q = f.q.slice(); b.qd = null;
+      b.vx = b.vy = b.wx = b.wy = b.wz = 0; b.movendo = false;
+    }
+  }
+
+  return { criarGeometria, criarBola, criarSim, clonar, passo, emMovimento, parar, simularAteParar, tacar,
+           fecharRegistro, lancarRaio, posicaoValida, fotografar, restaurar };
+})();
+
+// =====================================================================
+// 4. REGRAS: um objeto por modo, todos com a mesma interface, e o gerenciador de partida
+//    montar(sim, jogadores, opcoes) · bolaDaVez(estado) · validarJogada(registro, estado) →
+//    { falta, continuaJogando, pontos, bolaNaMao, recolocar, eliminados, fimDePartida, vencedor, mensagemDica }
+//    · textoRegras · pontuacaoHUD(estado)
+// =====================================================================
+const Rack = (() => {
+  // Descrição de uma bola de pool: 0 é a branca, 1–8 lisas, 9–15 listradas
+  function descPool(num) {
+    if (num === 0) return { num: 0, tipo: 'branca', cor: CORES_BOLAS.branca, numerada: false };
+    const base = num > 8 ? num - 8 : num;
+    return { num, tipo: num > 8 ? 'listrada' : 'lisa', cor: CORES_BOLAS.pool[base], numerada: true };
+  }
+  // Orientação inicial: número mais ou menos para cima, virado para qualquer lado
+  function orientar(rnd) {
+    const giro = Q.eixo(0, 0, 1, rnd() * Math.PI * 2);
+    const a = rnd() * Math.PI * 2, inc = rnd() * 0.7;
+    return Q.mult(Q.eixo(Math.cos(a), Math.sin(a), 0, inc), giro);
+  }
+  // Posições de linhas de bolas com o ápice no ponto (px, 0), crescendo para +x.
+  // linhas = quantidade de bolas em cada fileira.
+  function fileiras(geo, px, linhas, rnd) {
+    const R = geo.R + FISICA.folgaRack, dx = Math.sqrt(3) * R, pos = [];
+    linhas.forEach((n, i) => {
+      for (let j = 0; j < n; j++) pos.push({ x: px + i * dx, y: (j - (n - 1) / 2) * 2 * R + (rnd() - 0.5) * 0.06 });
+    });
+    return pos;
+  }
+  // Arruma as bolas do treino: 'quantas' = '0', '1', '3', '9', '10' ou '15'
+  function arrumarPool(sim, quantas, semente) {
+    const geo = sim.geo, rnd = U.rng(semente), pe = geo.hx / 2;
+    const bolas = [Fisica.criarBola(0, descPool(0))];
+    let pos = [], nums = [];
+    if (quantas === '1') { pos = [{ x: pe, y: 0 }]; nums = [1]; }
+    else if (quantas === '3') { pos = fileiras(geo, pe, [1, 2], rnd); nums = [1, 2, 3]; }
+    else if (quantas === '9') {
+      pos = fileiras(geo, pe, [1, 2, 3, 2, 1], rnd);
+      // Losango: 1 no ápice, 9 no centro
+      const resto = U.embaralhar([2, 3, 4, 5, 6, 7, 8], rnd);
+      nums = pos.map((_, i) => i === 0 ? 1 : i === 4 ? 9 : resto.pop());
+    } else if (quantas === '10') {
+      pos = fileiras(geo, pe, [1, 2, 3, 4], rnd);
+      const resto = U.embaralhar([2, 3, 4, 5, 6, 7, 8, 9], rnd);
+      nums = pos.map((_, i) => i === 0 ? 1 : i === 4 ? 10 : resto.pop());
+    } else if (quantas === '15') {
+      pos = fileiras(geo, pe, [1, 2, 3, 4, 5], rnd);
+      // 1 no ápice, 8 no centro, uma lisa e uma listrada nos cantos de trás
+      const lisas = U.embaralhar([2, 3, 4, 5, 6, 7], rnd), listr = U.embaralhar([9, 10, 11, 12, 13, 14, 15], rnd);
+      const canto1 = lisas.pop(), canto2 = listr.pop();
+      const resto = U.embaralhar(lisas.concat(listr), rnd);
+      nums = pos.map((_, i) => i === 0 ? 1 : i === 4 ? 8 : i === 10 ? canto1 : i === 14 ? canto2 : resto.pop());
+    }
+    pos.forEach((p, i) => { const b = Fisica.criarBola(i + 1, descPool(nums[i])); b.x = p.x; b.y = p.y; bolas.push(b); });
+    for (const b of bolas) b.q = orientar(rnd);
+    bolas[0].x = -geo.hx / 2; bolas[0].y = 0;
+    sim.bolas = bolas; sim.contatos.clear();
+  }
+  return { descPool, orientar, arrumarPool };
+})();
+
+const REGRAS = {
+  treino: {
+    id: 'treino',
+    textoRegras: 'Treino livre: sem regras e sem faltas. Arraste a branca para onde quiser; com o modo de mover ligado, ' +
+                 'arraste qualquer bola. Depois de cada tacada aparecem a velocidade, o ângulo e o que aconteceu.',
+    montar(sim, jogadores, opcoes) { Rack.arrumarPool(sim, opcoes.bolas, (Math.random() * 1e9) | 0); },
+    bolaDaVez() { return null; },
+    validarJogada(reg) {
+      return {
+        falta: false, continuaJogando: true, pontos: 0,
+        bolaNaMao: reg.brancaCaiu || reg.saiuDaMesa.includes(reg.jogador) ? 'mesa' : null,
+        recolocar: [], eliminados: [], fimDePartida: false, vencedor: null,
+        mensagemDica: reg.brancaCaiu ? 'A branca caiu. Ela voltou à mesa: arraste-a para onde quiser.' : '',
+      };
+    },
+    pontuacaoHUD() { return ''; },
+  },
+};
+
+// Gerenciador da partida: modo, jogadores e vez. Na etapa 1 há só o treino, com um jogador.
+const Partida = {
+  criar(modoId, jogadores, opcoes) {
+    return { modo: modoId, regras: REGRAS[modoId], jogadores, vez: 0, opcoes, tacadas: 0 };
+  },
+  jogadorDaVez(p) { return p.jogadores[p.vez]; },
+};
+
+// =====================================================================
+// 5. IA (etapa 5): gera tacadas candidatas, simula com Fisica.clonar + simularAteParar,
+//    pontua pelo motor de regras e aplica o erro humano de cada adversário.
+// =====================================================================
+const IA = {};
+
+// =====================================================================
+// 6. RENDERIZAÇÃO: texturas, mesa, bolas, taco, mira, controles
+// =====================================================================
+const tela = document.getElementById('tela');
+const ctx = tela.getContext('2d');
+
+const Render = (() => {
+  const r = {
+    cw: 1, ch: 1, dpr: 1,
+    view: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, s: 1 },  // mesa (mm) → tela (px CSS)
+    cena: null,        // fundo + mesa pré-desenhados no tamanho da tela
+    brilho: null,      // sprite do reflexo especular (igual para todas as bolas)
+    sombra: null,      // sprite da sombra da bola
+    tamSprite: 0,
+    decais: {},        // máscara do número de cada bola (Float32Array)
+    rastros: new Map(),
+  };
+  const TD = 64;       // resolução da máscara do número
+
+  // Desenho do mundo: aplica a vista (com o devicePixelRatio)
+  function vista(c) {
+    const v = r.view, k = r.dpr;
+    c.setTransform(v.a * k, v.b * k, v.c * k, v.d * k, v.e * k, v.f * k);
+  }
+  function telaParaMesa(sx, sy) {
+    const v = r.view, det = v.a * v.d - v.b * v.c, x = sx - v.e, y = sy - v.f;
+    return { x: (v.d * x - v.c * y) / det, y: (-v.b * x + v.a * y) / det };
+  }
+  function mesaParaTela(x, y) {
+    const v = r.view;
+    return { x: v.a * x + v.c * y + v.e, y: v.b * x + v.d * y + v.f };
+  }
+  // Direção na mesa → direção na tela (unitária)
+  function dirTela(dx, dy) {
+    const v = r.view, x = v.a * dx + v.c * dy, y = v.b * dx + v.d * dy, n = Math.hypot(x, y) || 1;
+    return { x: x / n, y: y / n };
+  }
+
+  // ---- Textura da mesa: madeira, feltro, buracos, borrachas, cantoneiras e marcadores ----
+  function texturaMesa(geo, k, corFeltro, madeira) {
+    const { ex, ey, bx, by, hx, hy } = geo;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(2 * ex * k); cv.height = Math.ceil(2 * ey * k);
+    const c = cv.getContext('2d');
+    const mundo = () => c.setTransform(k, 0, 0, k, ex * k, ey * k);
+    mundo();
+    const rnd = U.rng(20240611);
+    const M = MADEIRAS[madeira] || MADEIRAS.mogno;
+
+    // 1. Moldura de madeira
+    retRedondo(c, -ex, -ey, 2 * ex, 2 * ey, 60);
+    c.fillStyle = M.base; c.fill();
+    // Veio: cada trilho em trapézio (cantos em meia-esquadria), com o veio ao longo dele
+    const trilhos = [
+      { pts: [[-ex, -ey], [ex, -ey], [bx, -by], [-bx, -by]], horiz: true, a: -ey, b: -by },
+      { pts: [[-ex, ey], [ex, ey], [bx, by], [-bx, by]], horiz: true, a: ey, b: by },
+      { pts: [[-ex, -ey], [-bx, -by], [-bx, by], [-ex, ey]], horiz: false, a: -ex, b: -bx },
+      { pts: [[ex, -ey], [bx, -by], [bx, by], [ex, ey]], horiz: false, a: ex, b: bx },
+    ];
+    for (const t of trilhos) {
+      c.save();
+      c.beginPath(); t.pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath();
+      c.clip();
+      const comp = t.horiz ? ex : ey, lo = Math.min(t.a, t.b) - 5, hi = Math.max(t.a, t.b) + 5;
+      // tom de fundo levemente variado por trilho
+      c.fillStyle = `rgba(0,0,0,${0.05 + rnd() * 0.08})`; c.fillRect(-ex, -ey, 2 * ex, 2 * ey);
+      for (let y0 = lo; y0 < hi; y0 += 1.6 + rnd() * 2.2) {
+        const f1 = 1 / (160 + rnd() * 200), f2 = 1 / (30 + rnd() * 40), A1 = 1 + rnd() * 2.5, A2 = rnd() * 0.8;
+        const p1 = rnd() * 7, p2 = rnd() * 7, escuro = rnd() < 0.7;
+        c.beginPath();
+        for (let s = -comp; s <= comp; s += 18) {
+          const o = y0 + A1 * Math.sin(s * f1 + p1) + A2 * Math.sin(s * f2 + p2);
+          if (t.horiz) s === -comp ? c.moveTo(s, o) : c.lineTo(s, o);
+          else s === -comp ? c.moveTo(o, s) : c.lineTo(o, s);
+        }
+        c.strokeStyle = escuro ? hexA(M.escuro, 0.10 + rnd() * 0.22) : hexA(M.claro, 0.06 + rnd() * 0.12);
+        c.lineWidth = 0.4 + rnd() * 1.4;
+        c.stroke();
+      }
+      // Verniz: faixa de brilho ao longo do trilho
+      const g = t.horiz ? c.createLinearGradient(0, t.a, 0, t.b) : c.createLinearGradient(t.a, 0, t.b, 0);
+      g.addColorStop(0, 'rgba(0,0,0,0.35)');
+      g.addColorStop(0.12, 'rgba(255,235,200,0.05)');
+      g.addColorStop(0.38, 'rgba(255,240,215,0.16)');
+      g.addColorStop(0.55, 'rgba(255,240,215,0.04)');
+      g.addColorStop(0.9, 'rgba(0,0,0,0.10)');
+      g.addColorStop(1, 'rgba(0,0,0,0.45)');
+      c.fillStyle = g; c.fillRect(-ex, -ey, 2 * ex, 2 * ey);
+      c.restore();
+    }
+    // Emendas das meias-esquadrias
+    c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 1.2;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      c.beginPath(); c.moveTo(sx * ex, sy * ey); c.lineTo(sx * bx, sy * by); c.stroke();
+    }
+    // Luz da luminária sobre o verniz
+    c.save(); c.scale(1, ey / ex);
+    let g = c.createRadialGradient(0, 0, 0, 0, 0, ex * 1.05);
+    g.addColorStop(0, 'rgba(255,236,200,0.14)'); g.addColorStop(0.7, 'rgba(255,236,200,0.03)'); g.addColorStop(1, 'rgba(0,0,0,0.25)');
+    c.fillStyle = g; c.fillRect(-ex, -ex, 2 * ex, 2 * ex);
+    c.restore();
+    // Borda externa com bisel
+    retRedondo(c, -ex + 3, -ey + 3, 2 * ex - 6, 2 * ey - 6, 57);
+    c.strokeStyle = 'rgba(255,225,180,0.16)'; c.lineWidth = 2; c.stroke();
+    retRedondo(c, -ex + 0.8, -ey + 0.8, 2 * ex - 1.6, 2 * ey - 1.6, 60);
+    c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1.6; c.stroke();
+
+    // 2. Leito de feltro: cor, ruído fino de tecido e luz mais forte no centro
+    c.save();
+    c.beginPath(); c.rect(-bx, -by, 2 * bx, 2 * by); c.clip();
+    c.fillStyle = corFeltro; c.fillRect(-bx, -by, 2 * bx, 2 * by);
+    c.setTransform(1, 0, 0, 1, 0, 0);                 // ruído no pixel do aparelho
+    c.fillStyle = c.createPattern(ruido(128, 0.075, 3), 'repeat');
+    c.fillRect(0, 0, cv.width, cv.height);
+    c.fillStyle = c.createPattern(ruido(64, 0.045, 7), 'repeat');
+    c.save(); c.scale(3, 3); c.fillRect(0, 0, cv.width, cv.height); c.restore();
+    mundo();
+    c.scale(1, by / bx);
+    g = c.createRadialGradient(0, 0, 0, 0, 0, bx * 1.12);
+    g.addColorStop(0, 'rgba(255,255,225,0.13)');
+    g.addColorStop(0.45, 'rgba(255,255,225,0.04)');
+    g.addColorStop(0.8, 'rgba(0,0,0,0.12)');
+    g.addColorStop(1, 'rgba(0,0,0,0.42)');
+    c.fillStyle = g; c.fillRect(-bx * 1.2, -bx * 1.2, bx * 2.4, bx * 2.4);
+    c.restore();
+    // Marcas do ponto de cima e do ponto de saída
+    c.fillStyle = 'rgba(255,255,255,0.28)';
+    for (const x of [-hx / 2, hx / 2]) { c.beginPath(); c.arc(x, 0, 3.2, 0, Math.PI * 2); c.fill(); }
+    // Sombra interna das tabelas no feltro
+    for (const a of geo.almofadas) {
+      const [A, B] = a.pts, n = a.n, w = 26;
+      g = c.createLinearGradient(A[0], A[1], A[0] + n[0] * w, A[1] + n[1] * w);
+      g.addColorStop(0, 'rgba(0,0,0,0.38)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g;
+      c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]);
+      c.lineTo(B[0] + n[0] * w, B[1] + n[1] * w); c.lineTo(A[0] + n[0] * w, A[1] + n[1] * w); c.closePath(); c.fill();
+    }
+    // Encontro do feltro com a madeira
+    c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 2.5; c.strokeRect(-bx, -by, 2 * bx, 2 * by);
+
+    // 3. Buracos com profundidade
+    for (const p of geo.cacapas) {
+      g = c.createRadialGradient(p.x - p.ax * p.r * 0.25, p.y - p.ay * p.r * 0.25, p.r * 0.1, p.x, p.y, p.r * 1.04);
+      g.addColorStop(0, '#000'); g.addColorStop(0.6, '#030303'); g.addColorStop(0.9, '#141210'); g.addColorStop(1, '#2a2320');
+      c.fillStyle = g;
+      c.beginPath(); c.arc(p.x, p.y, p.r * 1.04, 0, Math.PI * 2); c.fill();
+    }
+
+    // 4. Borrachas com bisel: mais claras no nariz, escuras junto à madeira
+    for (const a of geo.almofadas) {
+      const [A, B] = a.pts, n = a.n;
+      c.beginPath(); a.pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath();
+      g = c.createLinearGradient(A[0], A[1], A[0] - n[0] * geo.cw, A[1] - n[1] * geo.cw);
+      g.addColorStop(0, U.tom(corFeltro, 0.16));
+      g.addColorStop(0.18, U.tom(corFeltro, 0.04));
+      g.addColorStop(0.6, U.tom(corFeltro, -0.12));
+      g.addColorStop(1, U.tom(corFeltro, -0.42));
+      c.fillStyle = g; c.fill();
+      c.save(); c.clip();
+      c.fillStyle = c.createPattern(ruido(64, 0.05, 11), 'repeat');
+      c.setTransform(1, 0, 0, 1, 0, 0); c.fillRect(0, 0, cv.width, cv.height);
+      c.restore(); mundo();
+      // Fio de luz no nariz da borracha
+      c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]);
+      c.strokeStyle = 'rgba(255,255,240,0.22)'; c.lineWidth = 1.4; c.stroke();
+      // Mandíbulas: aresta escura
+      c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(a.pts[a.pts.length - 1][0], a.pts[a.pts.length - 1][1]);
+      c.moveTo(B[0], B[1]); c.lineTo(a.pts[2][0], a.pts[2][1]);
+      c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 1.2; c.stroke();
+    }
+
+    // 5. Cantoneiras metálicas em volta dos buracos (só sobre a madeira)
+    for (const p of geo.cacapas) {
+      c.save();
+      c.beginPath();
+      c.rect(-ex, -ey, 2 * ex, 2 * ey); c.rect(-bx, -by, 2 * bx, 2 * by);
+      c.clip('evenodd');
+      const ri = p.r * 1.04, re = p.r * 1.04 + (p.tipo === 'canto' ? 22 : 18);
+      c.beginPath(); c.arc(p.x, p.y, re, 0, Math.PI * 2); c.arc(p.x, p.y, ri, 0, Math.PI * 2, true);
+      g = c.createLinearGradient(p.x - re, p.y - re, p.x + re, p.y + re);
+      g.addColorStop(0, '#f6f7f9'); g.addColorStop(0.3, '#8e949c'); g.addColorStop(0.5, '#e9ecef');
+      g.addColorStop(0.72, '#686d74'); g.addColorStop(1, '#cfd3d8');
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 1; c.stroke();
+      c.beginPath(); c.arc(p.x, p.y, re - 3, 0, Math.PI * 2);
+      c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 0.8; c.stroke();
+      // parafusos
+      for (const ang of [Math.atan2(p.ay, p.ax) + 0.9, Math.atan2(p.ay, p.ax) - 0.9]) {
+        const rr = (ri + re) / 2, qx = p.x + Math.cos(ang) * rr, qy = p.y + Math.sin(ang) * rr;
+        c.beginPath(); c.arc(qx, qy, 2.6, 0, Math.PI * 2); c.fillStyle = '#5d6168'; c.fill();
+        c.beginPath(); c.arc(qx - 0.6, qy - 0.6, 1.2, 0, Math.PI * 2); c.fillStyle = '#e8eaec'; c.fill();
+      }
+      c.restore();
+    }
+
+    // 6. Marcadores de madrepérola
+    const meio = geo.cw + geo.mesa.larguraMadeira * 0.46;
+    const diamantes = [];
+    for (let i = 1; i < 8; i++) {
+      if (i === 4 && geo.cacapas.length) continue;
+      const x = -hx + i * geo.L / 8;
+      diamantes.push([x, -hy - meio, true], [x, hy + meio, true]);
+    }
+    for (let j = 1; j < 4; j++) {
+      const y = -hy + j * geo.W / 4;
+      diamantes.push([-hx - meio, y, false], [hx + meio, y, false]);
+    }
+    for (const [x, y, horiz] of diamantes) {
+      const a = horiz ? 10 : 5.5, b = horiz ? 5.5 : 10;
+      c.beginPath(); c.moveTo(x - a, y); c.lineTo(x, y - b); c.lineTo(x + a, y); c.lineTo(x, y + b); c.closePath();
+      g = c.createRadialGradient(x - 2, y - 2, 0.5, x, y, Math.max(a, b));
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, '#f3e7ef'); g.addColorStop(0.65, '#cddcea'); g.addColorStop(1, '#93a7b8');
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(30,15,5,0.6)'; c.lineWidth = 0.8; c.stroke();
+    }
+    return cv;
+  }
+
+  // Ladrilho de ruído cinza com transparência (tecido do feltro)
+  function ruido(tam, forca, semente) {
+    const cv = document.createElement('canvas'); cv.width = cv.height = tam;
+    const c = cv.getContext('2d'), img = c.createImageData(tam, tam), d = img.data, rnd = U.rng(semente);
+    for (let i = 0; i < d.length; i += 4) {
+      const v = rnd(), claro = v > 0.5;
+      d[i] = d[i + 1] = d[i + 2] = claro ? 255 : 0;
+      d[i + 3] = Math.abs(v - 0.5) * 2 * forca * 255;
+    }
+    c.putImageData(img, 0, 0);
+    return cv;
+  }
+  function hexA(hex, a) { const [r1, g1, b1] = U.rgb(hex); return `rgba(${r1},${g1},${b1},${a})`; }
+  function retRedondo(c, x, y, w, h, rr) {
+    c.beginPath(); c.moveTo(x + rr, y); c.arcTo(x + w, y, x + w, y + h, rr); c.arcTo(x + w, y + h, x, y + h, rr);
+    c.arcTo(x, y + h, x, y, rr); c.arcTo(x, y, x + w, y, rr); c.closePath();
+  }
+
+  // ---- Cena estática: fundo do salão + mesa já posicionada. Refeita ao redimensionar ou trocar feltro/mesa ----
+  function construirCena(geo, corFeltro, madeira) {
+    const W = Math.round(r.cw * r.dpr), H = Math.round(r.ch * r.dpr);
+    if (!r.cena) r.cena = document.createElement('canvas');
+    r.cena.width = W; r.cena.height = H;
+    const c = r.cena.getContext('2d');
+    const centro = mesaParaTela(0, 0);
+    // Salão escuro com o cone de luz da luminária
+    c.setTransform(r.dpr, 0, 0, r.dpr, 0, 0);
+    c.fillStyle = '#0b0705'; c.fillRect(0, 0, r.cw, r.ch);
+    const raio = Math.max(r.cw, r.ch) * 0.75;
+    const g = c.createRadialGradient(centro.x, centro.y, 0, centro.x, centro.y, raio);
+    g.addColorStop(0, 'rgba(120,88,52,0.55)'); g.addColorStop(0.45, 'rgba(60,40,22,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, r.cw, r.ch);
+    // Sombra da mesa no chão
+    vista(c);
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,0.75)'; c.shadowBlur = 30 * r.dpr; c.shadowOffsetX = 6 * r.dpr; c.shadowOffsetY = 10 * r.dpr;
+    retRedondo(c, -geo.ex, -geo.ey, 2 * geo.ex, 2 * geo.ey, 60); c.fillStyle = '#000'; c.fill();
+    c.restore();
+    const k = r.view.s * r.dpr;
+    const tex = texturaMesa(geo, k, corFeltro, madeira);
+    c.drawImage(tex, -geo.ex, -geo.ey, tex.width / k, tex.height / k);
+  }
+
+  // ---- Bolas ----
+  // Máscara do número (texto preto sobre o círculo branco), amostrada na esfera
+  function decal(num) {
+    if (r.decais[num]) return r.decais[num];
+    const cv = document.createElement('canvas'); cv.width = cv.height = TD;
+    const c = cv.getContext('2d');
+    const s = String(num);
+    c.fillStyle = '#000'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = `bold ${Math.round(TD * (s.length > 1 ? 0.52 : 0.66))}px Arial, Helvetica, sans-serif`;
+    if (s.length > 1) { c.save(); c.translate(TD / 2, TD / 2 + TD * 0.04); c.scale(0.86, 1); c.fillText(s, 0, 0); c.restore(); }
+    else c.fillText(s, TD / 2, TD / 2 + TD * 0.04);
+    if (num === 6 || num === 9) c.fillRect(TD * 0.36, TD * 0.79, TD * 0.28, TD * 0.05);
+    const d = c.getImageData(0, 0, TD, TD).data, m = new Float32Array(TD * TD);
+    for (let i = 0; i < m.length; i++) m[i] = d[i * 4 + 3] / 255;
+    return (r.decais[num] = m);
+  }
+  function amostra(m, u, v) {
+    const fx = (u * 0.5 + 0.5) * (TD - 1), fy = (v * 0.5 + 0.5) * (TD - 1);
+    if (fx < 0 || fy < 0 || fx >= TD - 1 || fy >= TD - 1) return 0;
+    const ix = fx | 0, iy = fy | 0, ax = fx - ix, ay = fy - iy, i = iy * TD + ix;
+    return (m[i] * (1 - ax) + m[i + 1] * ax) * (1 - ay) + (m[i + TD] * (1 - ax) + m[i + TD + 1] * ax) * ay;
+  }
+
+  const MAT = new Float64Array(9);
+  const MARFIM = [246, 242, 230], TINTA = [22, 22, 22];
+  const ANG_DECAL = 0.44, MEIA_LISTRA = 0.5;   // raio angular do círculo do número; meia largura da listra (seno)
+  const AMB = 0.30, DIF = 0.80;                // luz ambiente e difusa
+  let feltroRGB = [28, 106, 62];
+
+  // Desenha a bola (cor, listra e número projetados na esfera, com sombreamento difuso) no canvas dela.
+  // Só redesenha quando a orientação muda: bolas paradas usam o cache.
+  function texturaBola(b, rpx) {
+    const S = Math.ceil(rpx * 2) + 2;
+    if (!b.cv || b.cv.width !== S) {
+      b.cv = document.createElement('canvas'); b.cv.width = b.cv.height = S;
+      b.cx = b.cv.getContext('2d'); b.img = b.cx.createImageData(S, S); b.qd = null;
+    }
+    const q = b.q;
+    if (b.qd && Math.abs(b.qd[0] * q[0] + b.qd[1] * q[1] + b.qd[2] * q[2] + b.qd[3] * q[3]) > 0.999999) return b.cv;
+    const d = b.img.data, c = S / 2, inv = 1 / rpx, m = Q.matriz(q, MAT);
+    const listrada = b.tipo === 'listrada', dec = b.numerada ? decal(b.num) : null;
+    const cor = b.rgb, base = listrada ? MARFIM : b.tipo === 'branca' ? b.rgb : cor;
+    const ca = Math.cos(ANG_DECAL), sa = Math.sin(ANG_DECAL), aa = 1.4 * inv;
+    const [Lx, Ly, Lz] = LUZ, fr = feltroRGB;
+    const lim = (1 + inv) * (1 + inv);
+    for (let j = 0; j < S; j++) {
+      const dy = (j + 0.5 - c) * inv;
+      for (let i = 0; i < S; i++) {
+        const dx = (i + 0.5 - c) * inv, d2 = dx * dx + dy * dy, idx = (j * S + i) * 4;
+        if (d2 >= lim) { d[idx + 3] = 0; continue; }
+        const dd = Math.sqrt(d2);
+        let nx = dx, ny = dy, nz;
+        if (d2 >= 1) { nx = dx / dd; ny = dy / dd; nz = 0; } else nz = -Math.sqrt(1 - d2);
+        // Ponto da superfície no sistema da bola
+        const bx = m[0] * nx + m[3] * ny + m[6] * nz;
+        const by = m[1] * nx + m[4] * ny + m[7] * nz;
+        const bz = m[2] * nx + m[5] * ny + m[8] * nz;
+        let cr = base[0], cg = base[1], cb = base[2];
+        if (listrada) {
+          const f = U.clamp((MEIA_LISTRA - Math.abs(by)) / aa + 0.5, 0, 1);
+          if (f > 0) { cr += (cor[0] - cr) * f; cg += (cor[1] - cg) * f; cb += (cor[2] - cb) * f; }
+        }
+        if (dec) {
+          const az = bz < 0 ? -bz : bz;
+          if (az > ca - aa) {
+            // Círculo branco do número nos polos ±z do corpo
+            const fc = U.clamp((az - ca) / aa + 0.5, 0, 1);
+            cr += (MARFIM[0] - cr) * fc; cg += (MARFIM[1] - cg) * fc; cb += (MARFIM[2] - cb) * fc;
+            const t = amostra(dec, bx / sa, (bz < 0 ? by : -by) / sa) * fc;
+            if (t > 0) { cr += (TINTA[0] - cr) * t; cg += (TINTA[1] - cg) * t; cb += (TINTA[2] - cb) * t; }
+          }
+        }
+        // Sombreamento: ambiente + difusa da luminária + reflexo esverdeado do feltro na borda
+        let lam = nx * Lx + ny * Ly + nz * Lz; if (lam < 0) lam = 0;
+        const sh = AMB + DIF * lam, borda = (1 - nz * nz) * (1 - nz * nz) * 0.22;
+        d[idx] = cr * sh + fr[0] * borda;
+        d[idx + 1] = cg * sh + fr[1] * borda;
+        d[idx + 2] = cb * sh + fr[2] * borda;
+        d[idx + 3] = U.clamp((1 - dd) * rpx + 0.5, 0, 1) * 255;
+      }
+    }
+    b.cx.putImageData(b.img, 0, 0);
+    b.qd = q.slice();
+    return b.cv;
+  }
+
+  // Sprites cacheados: reflexo especular e sombra (iguais para todas as bolas de um tamanho)
+  function sprites(rpx) {
+    const S = Math.ceil(rpx * 2) + 2;
+    if (r.tamSprite === S) return;
+    r.tamSprite = S;
+    r.brilho = document.createElement('canvas'); r.brilho.width = r.brilho.height = S;
+    let c = r.brilho.getContext('2d');
+    const h = [LUZ[0], LUZ[1], LUZ[2] - 1], hn = Math.hypot(...h);
+    const hx = S / 2 + h[0] / hn * rpx, hy = S / 2 + h[1] / hn * rpx;
+    c.beginPath(); c.arc(S / 2, S / 2, rpx, 0, Math.PI * 2); c.clip();
+    let g = c.createRadialGradient(hx, hy, 0, hx, hy, rpx * 0.55);
+    g.addColorStop(0, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, S, S);
+    g = c.createRadialGradient(hx, hy, 0, hx, hy, rpx * 0.16);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.6, 'rgba(255,255,255,0.6)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, S, S);
+    // reflexo fraco da segunda lâmpada, do outro lado
+    const ox = S / 2 + rpx * 0.5, oy = S / 2 + rpx * 0.55;
+    g = c.createRadialGradient(ox, oy, 0, ox, oy, rpx * 0.22);
+    g.addColorStop(0, 'rgba(255,255,255,0.14)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, S, S);
+
+    const T = S * 2;
+    r.sombra = document.createElement('canvas'); r.sombra.width = r.sombra.height = T;
+    c = r.sombra.getContext('2d');
+    const cx = T / 2 + rpx * 0.3, cy = T / 2 + rpx * 0.38;
+    g = c.createRadialGradient(cx, cy, 0, cx, cy, rpx * 1.25);
+    g.addColorStop(0, 'rgba(0,0,0,0.5)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, T, T);
+    g = c.createRadialGradient(T / 2 + rpx * 0.08, T / 2 + rpx * 0.1, 0, T / 2 + rpx * 0.08, T / 2 + rpx * 0.1, rpx * 0.9);
+    g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, T, T);
+  }
+
+  function desenharBolas(c, sim) {
+    const geo = sim.geo, R = geo.R, k = r.view.s * r.dpr, rpx = R * k;
+    sprites(rpx);
+    const S = r.tamSprite, lado = S / k, sl = r.sombra.width / k;
+    // Bolas caindo: recortadas pelo buraco, menores e mais escuras conforme afundam
+    for (const b of sim.bolas) {
+      if (b.estado !== 'caindo') continue;
+      const p = geo.cacapas[b.cacapa], fund = U.clamp(b.prof / (2 * R), 0, 1), esc = 1 - 0.3 * fund;
+      c.save();
+      c.beginPath(); c.arc(p.x, p.y, p.r * 1.04, 0, Math.PI * 2); c.clip();
+      const cv = texturaBola(b, rpx), l = lado * esc;
+      c.drawImage(cv, b.x - l / 2, b.y - l / 2, l, l);
+      c.globalAlpha = 1 - fund * 0.3; c.drawImage(r.brilho, b.x - l / 2, b.y - l / 2, l, l);
+      c.globalAlpha = fund * 0.9; c.fillStyle = '#000';
+      c.beginPath(); c.arc(b.x, b.y, R * esc + 0.5, 0, Math.PI * 2); c.fill();
+      c.restore();
+    }
+    for (const b of sim.bolas) if (b.estado === 'mesa') c.drawImage(r.sombra, b.x - sl / 2, b.y - sl / 2, sl, sl);
+    for (const b of sim.bolas) {
+      if (b.estado !== 'mesa') continue;
+      c.drawImage(texturaBola(b, rpx), b.x - lado / 2, b.y - lado / 2, lado, lado);
+      c.drawImage(r.brilho, b.x - lado / 2, b.y - lado / 2, lado, lado);
+    }
+  }
+
+  // Rastro sutil (opcional): guarda pontos das bolas em movimento
+  function gravarRastros(sim) {
+    for (const b of sim.bolas) {
+      if (b.estado !== 'mesa' || !b.movendo) continue;
+      let l = r.rastros.get(b.id);
+      if (!l) r.rastros.set(b.id, l = []);
+      const u = l[l.length - 1];
+      if (!u || Math.hypot(u.x - b.x, u.y - b.y) > 6) { l.push({ x: b.x, y: b.y }); if (l.length > 600) l.shift(); }
+    }
+  }
+  function desenharRastros(c, sim, px) {
+    c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+    for (const [id, l] of r.rastros) {
+      if (l.length < 2) continue;
+      const b = sim.bolas.find(x => x.id === id);
+      c.strokeStyle = b && b.tipo !== 'branca' ? hexA(b.cor, 0.3) : 'rgba(255,255,255,0.25)';
+      c.lineWidth = 1.5 * px;
+      c.beginPath(); l.forEach((p, i) => i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)); c.stroke();
+    }
+    c.restore();
+  }
+
+  // ---- Taco: ponteira azul de giz, virola, haste de madeira clara, anel metálico, cabo escuro ----
+  // (x, y): centro da branca; ang: direção da tacada; recuo: distância da ponta até a bola, em mm
+  function desenharTaco(c, x, y, ang, recuo, alfa, R) {
+    if (alfa <= 0.01) return;
+    const COMP = 1470;
+    const raio = t => t < 720 ? 6.5 + 3.5 * t / 720 : 10.5 + 5 * (t - 720) / 750;
+    c.save();
+    c.globalAlpha = alfa;
+    c.translate(x, y);
+    // Sombra no feltro: o cabo fica mais alto que a ponta, então a sombra se afasta para trás
+    const x0 = -(R + recuo);
+    const so = (t) => { const k = t / COMP; return [8 + 60 * k, 10 + 80 * k]; };
+    const cs = Math.cos(-ang), sn = Math.sin(-ang);
+    const loc = (wx, wy) => [wx * cs - wy * sn, wx * sn + wy * cs];
+    c.rotate(ang);
+    c.beginPath();
+    const ptsS = [];
+    for (const [t, lado] of [[0, -1], [COMP, -1], [COMP, 1], [0, 1]]) {
+      const [ox, oy] = loc(...so(t));
+      ptsS.push([x0 - t + ox, lado * raio(t) + oy]);
+    }
+    ptsS.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]));
+    c.closePath();
+    c.fillStyle = 'rgba(0,0,0,0.26)'; c.fill();
+
+    const parte = (t0, t1, cor, brilho = 0.35) => {
+      const r0 = raio(t0), r1 = raio(t1), rm = Math.max(r0, r1);
+      const g = c.createLinearGradient(0, -rm, 0, rm);
+      g.addColorStop(0, U.tom(cor, -0.5)); g.addColorStop(0.28, U.tom(cor, brilho));
+      g.addColorStop(0.5, cor); g.addColorStop(1, U.tom(cor, -0.6));
+      c.fillStyle = g;
+      c.beginPath(); c.moveTo(x0 - t0, -r0); c.lineTo(x0 - t1, -r1); c.lineTo(x0 - t1, r1); c.lineTo(x0 - t0, r0); c.closePath(); c.fill();
+    };
+    parte(0, 7, '#2f6fb8', 0.25);              // ponteira com giz azul
+    parte(7, 28, '#f1ede2', 0.4);              // virola
+    parte(28, 718, '#e2c48e', 0.3);            // haste de bordo
+    parte(718, 734, '#c9ced4', 0.7);           // anel metálico da junta
+    parte(734, 1052, '#4a2213', 0.25);         // antebraço escuro
+    // pontas decorativas de madeira clara no antebraço
+    c.fillStyle = '#d6ac63';
+    c.beginPath(); c.moveTo(x0 - 1052, -raio(1052) * 0.82); c.lineTo(x0 - 830, 0); c.lineTo(x0 - 1052, raio(1052) * 0.82); c.closePath();
+    c.globalAlpha = alfa * 0.85; c.fill(); c.globalAlpha = alfa;
+    parte(1052, 1064, '#c7a24c', 0.6);         // anel de latão
+    parte(1064, 1350, '#1d1b1a', 0.18);        // empunhadura
+    c.strokeStyle = 'rgba(255,255,255,0.06)'; c.lineWidth = 1;
+    for (let t = 1072; t < 1345; t += 7) { c.beginPath(); c.moveTo(x0 - t, -raio(t)); c.lineTo(x0 - t - 5, raio(t)); c.stroke(); }
+    parte(1350, 1456, '#2b140a', 0.25);        // luva do cabo
+    parte(1456, COMP, '#0d0d0d', 0.15);        // ponteira de borracha
+    c.restore();
+  }
+
+  // ---- Mira: linha até a bola-alvo, bola fantasma e saídas previstas ----
+  function desenharMira(c, sim, mira, nivel, px) {
+    const geo = sim.geo, R = geo.R, cfg = nivel.mira;
+    c.save(); c.lineCap = 'round';
+    c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 1.3 * px; c.setLineDash([7 * px, 6 * px]);
+    c.beginPath(); mira.pts.forEach((p, i) => i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)); c.stroke();
+    c.setLineDash([]);
+    if (mira.fantasma) {
+      const f = mira.fantasma;
+      if (cfg.fantasma) {
+        c.beginPath(); c.arc(f.x, f.y, R, 0, Math.PI * 2);
+        c.fillStyle = 'rgba(255,255,255,0.12)'; c.fill();
+        c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 1.2 * px; c.stroke();
+      } else {
+        c.beginPath(); c.arc(f.x, f.y, 3 * px, 0, Math.PI * 2);
+        c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 1.2 * px; c.stroke();
+      }
+    }
+    if (mira.alvo && cfg.linhaAlvo) {
+      const a = mira.alvo, t = cfg.linhaAlvo === 'tabela' ? a.t : Math.min(a.t, cfg.linhaAlvo);
+      c.strokeStyle = 'rgba(255,236,150,0.85)'; c.lineWidth = 1.6 * px;
+      c.beginPath(); c.moveTo(a.x0, a.y0); c.lineTo(a.x0 + a.dx * t, a.y0 + a.dy * t); c.stroke();
+      if (cfg.linhaAlvo === 'tabela' && a.tipo === 'cacapa') {
+        c.beginPath(); c.arc(a.x0 + a.dx * t, a.y0 + a.dy * t, R * 0.5, 0, Math.PI * 2);
+        c.fillStyle = 'rgba(255,236,150,0.6)'; c.fill();
+      }
+    }
+    if (mira.branca && cfg.linhaBranca) {
+      const b = mira.branca, t = Math.min(b.t, cfg.linhaBranca);
+      c.strokeStyle = 'rgba(170,215,255,0.7)'; c.lineWidth = 1.3 * px; c.setLineDash([4 * px, 5 * px]);
+      c.beginPath(); c.moveTo(b.x0, b.y0); c.lineTo(b.x0 + b.dx * t, b.y0 + b.dy * t); c.stroke();
+    }
+    c.restore();
+  }
+
+  // ---- Controles na tela (px CSS): barra de força e anel de ajuste fino ----
+  function desenharBarra(c, bar, forca, ativa, cancelada) {
+    const { x, y, w, h } = bar;
+    c.save();
+    // caixa de madeira com moldura de latão
+    retRedondo(c, x, y, w, h, 12);
+    let g = c.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, '#3a1c0c'); g.addColorStop(0.5, '#6a3a1e'); g.addColorStop(1, '#2e1608');
+    c.fillStyle = g; c.fill();
+    c.strokeStyle = '#c9a24a'; c.lineWidth = 2; c.stroke();
+    // trilho
+    const tx = x + w / 2 - 9, ty = y + 30, tw = 18, th = h - 60;
+    retRedondo(c, tx, ty, tw, th, 9); c.fillStyle = '#120904'; c.fill();
+    if (forca > 0) {
+      c.save(); retRedondo(c, tx, ty, tw, th, 9); c.clip();
+      g = c.createLinearGradient(0, ty, 0, ty + th);
+      g.addColorStop(0, '#3fbf6a'); g.addColorStop(0.55, '#e8c440'); g.addColorStop(1, '#e0452e');
+      c.fillStyle = cancelada ? 'rgba(120,120,120,0.6)' : g;
+      c.fillRect(tx, ty, tw, th * forca);
+      c.restore();
+    }
+    // marcas
+    c.strokeStyle = 'rgba(240,213,138,0.5)'; c.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const yy = ty + th * i / 10, l = i % 5 ? 4 : 8;
+      c.beginPath(); c.moveTo(tx - 3 - l, yy); c.lineTo(tx - 3, yy); c.moveTo(tx + tw + 3, yy); c.lineTo(tx + tw + 3 + l, yy); c.stroke();
+    }
+    // cursor (ponta de taco)
+    const cy = ty + th * forca;
+    retRedondo(c, x + 6, cy - 7, w - 12, 14, 7);
+    g = c.createLinearGradient(0, cy - 7, 0, cy + 7);
+    g.addColorStop(0, '#f6e7c0'); g.addColorStop(0.5, '#d8b77a'); g.addColorStop(1, '#8a6a36');
+    c.fillStyle = g; c.fill();
+    c.fillStyle = '#2f6fb8'; c.fillRect(x + 6 + (w - 12) / 2 - 6, cy - 7, 12, 3);
+    // textos
+    c.fillStyle = '#f0d58a'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = 'bold 11px Georgia, serif'; c.fillText('FORÇA', x + w / 2, y + 15);
+    c.font = '12px Georgia, serif';
+    c.fillStyle = cancelada ? '#ff8a7a' : ativa ? '#fff' : '#f0d58a';
+    c.fillText(cancelada ? 'solte' : Math.round(forca * 100) + '%', x + w / 2, y + h - 15);
+    c.restore();
+  }
+  function desenharAnel(c, anel, giro, ativo) {
+    const { x, y, r: ra } = anel;
+    c.save();
+    c.beginPath(); c.arc(x, y, ra + 6, 0, Math.PI * 2);
+    c.fillStyle = 'rgba(20,10,4,0.55)'; c.fill();
+    c.beginPath(); c.arc(x, y, ra, 0, Math.PI * 2); c.arc(x, y, ra - 14, 0, Math.PI * 2, true);
+    const g = c.createLinearGradient(x - ra, y - ra, x + ra, y + ra);
+    g.addColorStop(0, '#f2f4f6'); g.addColorStop(0.4, '#8d939b'); g.addColorStop(0.6, '#dfe3e7'); g.addColorStop(1, '#5f646b');
+    c.fillStyle = g; c.fill('evenodd');
+    c.strokeStyle = ativo ? '#7cf2a6' : 'rgba(0,0,0,0.6)'; c.lineWidth = ativo ? 2 : 1;
+    c.beginPath(); c.arc(x, y, ra, 0, Math.PI * 2); c.stroke();
+    c.strokeStyle = 'rgba(30,30,30,0.7)'; c.lineWidth = 1.5;
+    for (let i = 0; i < 24; i++) {
+      const a = giro + i * Math.PI / 12, l = i % 6 ? 5 : 9;
+      c.beginPath(); c.moveTo(x + Math.cos(a) * (ra - 2), y + Math.sin(a) * (ra - 2));
+      c.lineTo(x + Math.cos(a) * (ra - 2 - l), y + Math.sin(a) * (ra - 2 - l)); c.stroke();
+    }
+    c.fillStyle = '#f0d58a'; c.font = '10px Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('ajuste', x, y - 5); c.fillText('fino', x, y + 7);
+    c.restore();
+  }
+
+  function definirFeltro(hex) { feltroRGB = U.rgb(hex); }
+  function invalidarBolas(sim) { for (const b of sim.bolas) b.qd = null; r.tamSprite = 0; }
+
+  return { r, vista, telaParaMesa, mesaParaTela, dirTela, construirCena, desenharBolas, desenharTaco, desenharMira,
+           desenharBarra, desenharAnel, gravarRastros, desenharRastros, definirFeltro, invalidarBolas };
+})();
+
+// =====================================================================
+// 7. ÁUDIO (etapa 2): sons sintetizados com Web Audio. Por ora só o ponto de entrada,
+//    chamado pelos eventos da física (taco, bola, tabela, caçapa).
+// =====================================================================
+const Som = {
+  iniciar() {},
+  evento(tipo, dados) {},
+};
+
+// =====================================================================
+// 8. ENTRADA: mouse, teclado e toque
+// =====================================================================
+const jogo = {
+  tela: 'menu',            // 'menu' | 'partida'
+  fase: 'mirando',         // 'mirando' | 'tacando' | 'rolando'
+  pausado: false,          // menu de pausa aberto
+  geo: null, sim: null, partida: null,
+  config: Object.assign({}, CONFIG_PADRAO),
+  mira: { ang: 0 },        // ângulo da tacada, em radianos, no sistema da mesa
+  forcaBarra: 0.45,        // força guardada na barra (Espaço/Enter)
+  taco: { recuo: 22, alfa: 0, prog: 0, dur: 0.1, r0: 0, forca: 0 },
+  acum: 0,                 // acumulador do passo fixo
+  desfazer: [],            // fotografias antes de cada tacada
+  ultima: null,            // registro da última tacada
+  bolaNaMao: null,         // área permitida para pôr a branca ('mesa' | 'atras' | 'meiaLua') ou null
+  mover: false,            // modo de mover qualquer bola
+  toque: matchMedia('(pointer: coarse)').matches,
+  girar: false,            // mesa girada 90° (retrato)
+  retratoAceito: false,
+  lay: { s: 1, barra: { x: 0, y: 0, w: 56, h: 300 }, anel: { x: 0, y: 0, r: 40 } },
+  miraCache: null,
+};
+const seguro = { topo: 0, dir: 0, esq: 0, baixo: 0 };
+
+const Entrada = (() => {
+  const e = {
+    modo: null,            // 'puxar' | 'forca' | 'anel' | 'arrastar' | 'mirarToque' | 'doisDedos'
+    id: null,              // ponteiro dono do modo
+    ini: { x: 0, y: 0 },
+    forca: 0, fora: false,
+    bola: null, invalido: null,
+    anelGiro: 0, anelUlt: 0,
+    toques: new Map(),     // toques na mesa: id → {x, y}
+    centro: null,
+    suspensa: null,        // mira presa depois de ajuste fino: ponto do mouse onde foi presa
+    mouse: null,
+  };
+  const branca = () => jogo.sim && jogo.sim.bolas.find(b => b.tipo === 'branca');
+  const podeInteragir = () => jogo.tela === 'partida' && !jogo.pausado && jogo.fase === 'mirando' && !precisaGirar();
+
+  function dentro(r, x, y, folga = 0) { return x >= r.x - folga && x <= r.x + r.w + folga && y >= r.y - folga && y <= r.y + r.h + folga; }
+  // Bola sob o ponteiro que pode ser arrastada agora
+  function bolaArrastavel(p) {
+    const sim = jogo.sim, R = sim.geo.R;
+    let melhor = null, dm = R * (jogo.toque ? 1.8 : 1.15);
+    for (const b of sim.bolas) {
+      if (b.estado !== 'mesa') continue;
+      const ok = b.tipo === 'branca' ? (jogo.partida.modo === 'treino' || jogo.bolaNaMao) : jogo.mover;
+      if (!ok) continue;
+      const d = Math.hypot(b.x - p.x, b.y - p.y);
+      if (d < dm) { dm = d; melhor = b; }
+    }
+    return melhor;
+  }
+  function mirarEm(p) {
+    const br = branca();
+    if (!br || br.estado !== 'mesa') return;
+    const dx = p.x - br.x, dy = p.y - br.y;
+    if (Math.hypot(dx, dy) < jogo.sim.geo.R * 0.6) return;
+    jogo.mira.ang = Math.atan2(dy, dx);
+  }
+  function ajusteFino(graus) {
+    jogo.mira.ang = U.angDif(jogo.mira.ang + graus * Math.PI / 180);
+    if (e.mouse) e.suspensa = { x: e.mouse.x, y: e.mouse.y };
+  }
+  function forcaPuxada(x, y) {
+    const d = Render.dirTela(Math.cos(jogo.mira.ang), Math.sin(jogo.mira.ang));
+    const dist = U.clamp(Math.min(Render.r.cw, Render.r.ch) * 0.36, 140, 320);
+    return U.clamp(((e.ini.x - x) * d.x + (e.ini.y - y) * d.y) / dist, 0, 1);
+  }
+  function soltarTudo() {
+    if (e.modo === 'arrastar' && e.bola) e.invalido = null;
+    e.modo = null; e.id = null; e.forca = 0; e.fora = false; e.bola = null; e.toques.clear();
+  }
+
+  function down(ev) {
+    ev.preventDefault();
+    Som.iniciar();
+    if (ev.pointerType === 'touch') jogo.toque = true;
+    if (!podeInteragir()) return;
+    const x = ev.clientX, y = ev.clientY, L = jogo.lay;
+    if (ev.button === 2) { if (e.modo === 'puxar') soltarTudo(); return; }
+    if (e.modo && e.modo !== 'mirarToque') return;     // já há um gesto em andamento
+    // Barra de força
+    if (dentro(L.barra, x, y, 8)) {
+      e.modo = 'forca'; e.id = ev.pointerId; e.ini = { x, y }; e.forca = 0; e.fora = false;
+      tela.setPointerCapture?.(ev.pointerId);
+      return;
+    }
+    // Anel de ajuste fino
+    if (jogo.toque && Math.hypot(x - L.anel.x, y - L.anel.y) < L.anel.r + 14) {
+      e.modo = 'anel'; e.id = ev.pointerId; e.anelUlt = Math.atan2(y - L.anel.y, x - L.anel.x);
+      tela.setPointerCapture?.(ev.pointerId);
+      return;
+    }
+    const p = Render.telaParaMesa(x, y);
+    if (ev.pointerType === 'touch' && e.modo === 'mirarToque') {
+      // Segundo dedo na mesa: ajuste fino com dois dedos
+      e.toques.set(ev.pointerId, { x, y });
+      if (e.toques.size >= 2) { e.modo = 'doisDedos'; e.centro = centroToques(); }
+      return;
+    }
+    const b = bolaArrastavel(p);
+    if (b) {
+      e.modo = 'arrastar'; e.id = ev.pointerId; e.bola = b; e.invalido = null;
+      e.desloc = { x: b.x - p.x, y: b.y - p.y };
+      e.foto = Fisica.fotografar(jogo.sim);
+      tela.setPointerCapture?.(ev.pointerId);
+      tela.style.cursor = 'grabbing';
+      return;
+    }
+    if (ev.pointerType === 'mouse') {
+      if (ev.button !== 0) return;
+      e.modo = 'puxar'; e.id = ev.pointerId; e.ini = { x, y }; e.forca = 0;
+      tela.setPointerCapture?.(ev.pointerId);
+    } else {
+      e.modo = 'mirarToque'; e.id = ev.pointerId;
+      e.toques.clear(); e.toques.set(ev.pointerId, { x, y });
+      mirarEm(p);
+    }
+  }
+  function centroToques() {
+    let x = 0, y = 0;
+    for (const t of e.toques.values()) { x += t.x; y += t.y; }
+    return { x: x / e.toques.size, y: y / e.toques.size };
+  }
+
+  function move(ev) {
+    const x = ev.clientX, y = ev.clientY;
+    if (ev.pointerType === 'mouse') e.mouse = { x, y };
+    if (e.toques.has(ev.pointerId)) e.toques.set(ev.pointerId, { x, y });
+    if (!podeInteragir()) return;
+    if (!e.modo) {
+      if (ev.pointerType !== 'mouse') return;
+      if (e.suspensa && Math.hypot(x - e.suspensa.x, y - e.suspensa.y) < 12) return;
+      e.suspensa = null;
+      const p = Render.telaParaMesa(x, y);
+      tela.style.cursor = bolaArrastavel(p) ? 'grab' : 'crosshair';
+      mirarEm(p);
+      return;
+    }
+    if (ev.pointerId !== e.id && e.modo !== 'doisDedos') return;
+    const L = jogo.lay;
+    if (e.modo === 'puxar') e.forca = forcaPuxada(x, y);
+    else if (e.modo === 'forca') {
+      e.forca = U.clamp((y - e.ini.y) / (L.barra.h * 0.8), 0, 1);
+      e.fora = !dentro(L.barra, x, y, 40);
+    } else if (e.modo === 'anel') {
+      const a = Math.atan2(y - L.anel.y, x - L.anel.x), d = U.angDif(a - e.anelUlt);
+      e.anelUlt = a; e.anelGiro += d;
+      jogo.mira.ang = U.angDif(jogo.mira.ang + d / 30);     // uma volta inteira do anel = 12°
+    } else if (e.modo === 'mirarToque') {
+      mirarEm(Render.telaParaMesa(x, y));
+    } else if (e.modo === 'doisDedos') {
+      const c = centroToques(), dx = c.x - e.centro.x, dy = c.y - e.centro.y;
+      e.centro = c;
+      const d = Render.dirTela(Math.cos(jogo.mira.ang), Math.sin(jogo.mira.ang));
+      // Arrastar de lado em relação à mira gira a mira para aquele lado, devagar
+      jogo.mira.ang = U.angDif(jogo.mira.ang + (dx * -d.y + dy * d.x) * 0.0004);
+    } else if (e.modo === 'arrastar') {
+      const sim = jogo.sim, geo = sim.geo, R = geo.R, p = Render.telaParaMesa(x, y);
+      const nx = U.clamp(p.x + e.desloc.x, -geo.hx + R, geo.hx - R), ny = U.clamp(p.y + e.desloc.y, -geo.hy + R, geo.hy - R);
+      const area = e.bola.tipo === 'branca' && jogo.bolaNaMao ? jogo.bolaNaMao : 'mesa';
+      if (Fisica.posicaoValida(sim, e.bola, nx, ny, area)) {
+        e.bola.x = nx; e.bola.y = ny; e.invalido = null; e.movido = true;
+      } else e.invalido = { x: nx, y: ny };
+    }
+  }
+
+  function up(ev) {
+    if (e.toques.has(ev.pointerId)) {
+      e.toques.delete(ev.pointerId);
+      if (e.modo === 'doisDedos' && e.toques.size < 2) { e.modo = e.toques.size ? 'mirarToque' : null; if (e.modo) e.id = [...e.toques.keys()][0]; e.centro = null; }
+      else if (e.modo === 'mirarToque' && !e.toques.size) e.modo = null;
+      return;
+    }
+    if (ev.pointerId !== e.id) return;
+    const modo = e.modo, f = e.forca, fora = e.fora;
+    if (modo === 'arrastar') {
+      if (e.movido) { jogo.desfazer.push(e.foto); if (jogo.desfazer.length > 200) jogo.desfazer.shift(); }
+      e.movido = false; e.invalido = null; tela.style.cursor = 'grab';
+      jogo.miraCache = null;
+    }
+    soltarTudo();
+    if (modo === 'puxar' || modo === 'forca') {
+      if (ev.type === 'pointercancel' || fora) aviso('Tacada cancelada');
+      else if (f >= 0.02) { jogo.forcaBarra = f; Jogo.darTacada(f); }
+    }
+  }
+
+  function tecla(ev) {
+    if (jogo.tela !== 'partida') return;
+    const k = ev.key;
+    if (k === 'Escape') { ev.preventDefault(); Telas.alternarPausa(); return; }
+    if (jogo.pausado || precisaGirar()) return;
+    const fino = ev.shiftKey ? 0.01 : 0.1;
+    if (k === 'ArrowLeft') { ev.preventDefault(); ajusteFino(-fino); }
+    else if (k === 'ArrowRight') { ev.preventDefault(); ajusteFino(fino); }
+    else if (k === 'ArrowUp') { ev.preventDefault(); jogo.forcaBarra = U.clamp(jogo.forcaBarra - 0.02, 0.02, 1); }
+    else if (k === 'ArrowDown') { ev.preventDefault(); jogo.forcaBarra = U.clamp(jogo.forcaBarra + 0.02, 0.02, 1); }
+    else if (k === ' ' || k === 'Enter') { ev.preventDefault(); if (!e.modo) Jogo.darTacada(jogo.forcaBarra); }
+    else if (k === 'z' || k === 'Z') Jogo.desfazer();
+    else if (k === 'm' || k === 'M') Jogo.alternarMover();
+    else if (k === 'r' || k === 'R') Jogo.arrumar();
+  }
+  function roda(ev) {
+    ev.preventDefault();
+    if (!podeInteragir() || e.modo) return;
+    const d = ev.deltaY || ev.deltaX;
+    if (d) ajusteFino(Math.sign(d) * (ev.shiftKey ? 0.01 : 0.1));
+  }
+
+  function ligar() {
+    tela.addEventListener('pointerdown', down);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    tela.addEventListener('contextmenu', ev => ev.preventDefault());
+    tela.addEventListener('wheel', roda, { passive: false });
+    window.addEventListener('keydown', tecla);
+    window.addEventListener('blur', soltarTudo);
+  }
+  return { e, ligar, soltarTudo, branca };
+})();
+
+// =====================================================================
+// 9. TELAS E ESTADOS: menu, partida (treino), pausa, aviso de girar
+// =====================================================================
+const el = id => document.getElementById(id);
+
+function precisaGirar() { return jogo.tela === 'partida' && jogo.toque && Render.r.ch > Render.r.cw && !jogo.retratoAceito; }
+
+let avisoTimer = 0;
+function aviso(txt, seg = 2.4) {
+  const a = el('aviso');
+  a.textContent = txt; a.classList.add('ver');
+  clearTimeout(avisoTimer);
+  avisoTimer = setTimeout(() => a.classList.remove('ver'), seg * 1000);
+}
+
+const Telas = {
+  atualizar() {
+    let id = null;
+    if (jogo.tela === 'menu') id = 't-menu';
+    else if (precisaGirar()) id = 't-girar';
+    else if (jogo.pausado) id = 't-pausa';
+    document.querySelectorAll('.tela').forEach(t => t.classList.toggle('ativa', t.id === id));
+    el('telas').classList.toggle('ativo', !!id);
+    el('hud').hidden = jogo.tela !== 'partida';
+  },
+  alternarPausa() {
+    if (jogo.tela !== 'partida') return;
+    jogo.pausado = !jogo.pausado;
+    Entrada.soltarTudo();
+    if (jogo.pausado) Telas.montarOpcoes();
+    Telas.atualizar();
+  },
+  // Opções da pausa: variantes do modo + configurações visuais
+  montarOpcoes() {
+    const box = el('opcoes');
+    box.innerHTML = '';
+    const sel = (rotulo, opcoes, valor, aoMudar) => {
+      const d = document.createElement('div'); d.className = 'op';
+      const id = 'op-' + Math.random().toString(36).slice(2, 8);
+      d.innerHTML = `<label for="${id}"></label><select id="${id}"></select>`;
+      d.querySelector('label').textContent = rotulo;
+      const s = d.querySelector('select');
+      for (const o of opcoes) { const op = document.createElement('option'); op.value = o.id; op.textContent = o.nome; s.appendChild(op); }
+      s.value = valor;
+      s.addEventListener('change', () => aoMudar(s.value));
+      box.appendChild(d);
+    };
+    const alterna = (rotulo, valor, aoMudar) => {
+      const d = document.createElement('div'); d.className = 'op';
+      d.innerHTML = '<label></label><button class="alterna" type="button"></button>';
+      d.querySelector('label').textContent = rotulo;
+      const b = d.querySelector('button');
+      const pintar = v => { b.setAttribute('aria-pressed', String(v)); b.textContent = v ? 'Ligado' : 'Desligado'; };
+      pintar(valor);
+      b.addEventListener('click', () => { const v = b.getAttribute('aria-pressed') !== 'true'; pintar(v); aoMudar(v); });
+      box.appendChild(d);
+    };
+    const vb = MODOS.treino.variantes.bolas;
+    sel(vb.nome, vb.opcoes, jogo.config.bolas, v => { jogo.config.bolas = v; Salvar.config(); Jogo.arrumar(); });
+    sel('Mira', Object.entries(NIVEIS).map(([id, n]) => ({ id, nome: n.nome })), jogo.config.mira,
+        v => { jogo.config.mira = v; jogo.miraCache = null; Salvar.config(); });
+    sel('Feltro', Object.entries(FELTROS).map(([id, f]) => ({ id, nome: f.nome })), jogo.config.feltro,
+        v => { jogo.config.feltro = v; Salvar.config(); Jogo.refazerCena(); });
+    alterna('Rastro das bolas', jogo.config.rastro, v => { jogo.config.rastro = v; Salvar.config(); });
+    if (jogo.toque && navigator.vibrate) alterna('Vibrar na tacada', jogo.config.vibrar, v => { jogo.config.vibrar = v; Salvar.config(); });
+  },
+};
+
+// Ações dos botões das telas e do HUD
+function acao(a) {
+  if (a === 'treino') Jogo.iniciarTreino();
+  else if (a === 'jogos') voltarAosJogos();
+  else if (a === 'continuar') Telas.alternarPausa();
+  else if (a === 'arrumar') { Jogo.arrumar(); if (jogo.pausado) Telas.alternarPausa(); }
+  else if (a === 'menu') Jogo.irParaMenu();
+  else if (a === 'retrato') { jogo.retratoAceito = true; Telas.atualizar(); }
+  else if (a === 'controles') {
+    const c = el('controles'), b = document.querySelector('[data-acao="controles"]');
+    c.hidden = !c.hidden; b.setAttribute('aria-expanded', String(!c.hidden));
+  }
+}
+let saindo = false;
+function voltarAosJogos() { saindo = true; location.href = '../'; }
+
+// Tela cheia em aparelhos de toque, pedida no fim de um toque nas telas (o Chrome não aceita no início)
+function pedirTelaCheia() {
+  if (saindo || document.fullscreenElement || document.webkitFullscreenElement) return;
+  const d = document.documentElement;
+  try {
+    const p = d.requestFullscreen ? d.requestFullscreen({ navigationUI: 'hide' }) : d.webkitRequestFullscreen && d.webkitRequestFullscreen();
+    if (p && p.then) p.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (err) {} }).catch(() => {});
+  } catch (err) {}
+}
+
+// Texto do HUD (só reescreve o que mudou)
+const hudCache = {};
+function hudTexto(id, txt) { if (hudCache[id] !== txt) { hudCache[id] = txt; el(id).textContent = txt; } }
+function atualizarHUD() {
+  if (jogo.tela !== 'partida') return;
+  const graus = ((-jogo.mira.ang * 180 / Math.PI) % 360 + 360) % 360;   // anti-horário, 0° para a direita
+  const ent = Entrada.e;
+  const forca = ent.modo === 'puxar' || ent.modo === 'forca' ? ent.forca : jogo.forcaBarra;
+  const vel = FISICA.velocidadeMaxima * Math.pow(forca, FISICA.curvaForca) / 1000;
+  hudTexto('info-1', `Mira ${U.num(graus, 2)}° · força ${Math.round(forca * 100)}% (${U.num(vel, 1)} m/s)`);
+  const u = jogo.ultima;
+  let l2;
+  if (!u) l2 = jogo.toque ? 'Toque na mesa para mirar. Arraste a barra de força para baixo e solte.'
+                          : 'Mova o mouse para mirar. Segure, puxe para trás e solte para tacar.';
+  else {
+    const g2 = ((-u.angulo * 180 / Math.PI) % 360 + 360) % 360;
+    const nome = id => { const b = jogo.sim.bolas.find(x => x.id === id); return b ? (b.tipo === 'branca' ? 'branca' : String(b.num)) : '?'; };
+    const caiu = u.encacapadas.map(x => nome(x.bola)).join(', ');
+    l2 = `Última: ${U.num(u.velocidade / 1000, 2)} m/s a ${U.num(g2, 2)}° · 1ª bola: ${u.primeiraBola === null ? 'nenhuma' : nome(u.primeiraBola)}` +
+         ` · tabelas da branca: ${u.tabelasJogador}` + (caiu ? ` · caiu: ${caiu}` : '');
+  }
+  hudTexto('info-2', l2);
+  // Bandeja das bolas encaçapadas
+  const fora = jogo.sim.bolas.filter(b => b.estado === 'fora' && b.tipo !== 'branca').map(b => b.num).join(',');
+  if (hudCache.bandeja !== fora) {
+    hudCache.bandeja = fora;
+    const box = el('bandeja'); box.innerHTML = '';
+    for (const b of jogo.sim.bolas) {
+      if (b.estado !== 'fora' || b.tipo === 'branca') continue;
+      const s = document.createElement('span'); s.className = 'mini'; s.textContent = b.num;
+      s.style.background = b.tipo === 'listrada'
+        ? `radial-gradient(circle, #f6f2e6 0 30%, transparent 32%), linear-gradient(#f6f2e6 0 24%, ${b.cor} 24% 76%, #f6f2e6 76%)`
+        : `radial-gradient(circle, #f6f2e6 0 30%, ${b.cor} 33%)`;
+      box.appendChild(s);
+    }
+  }
+  el('b-desfazer').disabled = !jogo.desfazer.length || jogo.fase !== 'mirando';
+  el('b-mover').classList.toggle('ativo', jogo.mover);
+}
+
+// Lógica da partida
+const Jogo = {
+  iniciarTreino() {
+    jogo.geo = Fisica.criarGeometria(MODOS.treino.mesaPadrao);
+    jogo.sim = Fisica.criarSim(jogo.geo);
+    jogo.sim.ouvinte = (tipo, d) => Som.evento(tipo, d);
+    jogo.partida = Partida.criar('treino', [{ nome: 'Você', humano: true, nivel: jogo.config.mira }], { bolas: jogo.config.bolas });
+    jogo.partida.regras.montar(jogo.sim, jogo.partida.jogadores, jogo.partida.opcoes);
+    jogo.tela = 'partida'; jogo.fase = 'mirando'; jogo.pausado = false;
+    jogo.desfazer = []; jogo.ultima = null; jogo.bolaNaMao = null; jogo.mover = false;
+    jogo.mira.ang = 0; jogo.taco.alfa = 0; jogo.miraCache = null;
+    Render.r.rastros.clear();
+    layout(); Jogo.refazerCena();
+    Telas.atualizar(); atualizarHUD();
+  },
+  irParaMenu() {
+    jogo.tela = 'menu'; jogo.pausado = false;
+    Entrada.soltarTudo();
+    Jogo.cenaDoMenu();
+    Telas.atualizar();
+  },
+  // Mesa arrumada atrás do menu
+  cenaDoMenu() {
+    jogo.geo = Fisica.criarGeometria('clube');
+    jogo.sim = Fisica.criarSim(jogo.geo);
+    Rack.arrumarPool(jogo.sim, '15', 7);
+    jogo.taco.alfa = 0;
+    layout(); Jogo.refazerCena();
+  },
+  refazerCena() {
+    const cor = FELTROS[jogo.config.feltro]?.cor || FELTROS.verde.cor;
+    Render.definirFeltro(cor);
+    Render.construirCena(jogo.geo, cor, jogo.geo.mesa.madeira);
+    Render.invalidarBolas(jogo.sim);
+  },
+  darTacada(forca) {
+    if (jogo.tela !== 'partida' || jogo.fase !== 'mirando' || jogo.pausado) return;
+    const br = Entrada.branca();
+    if (!br || br.estado !== 'mesa' || forca < 0.02) return;
+    jogo.desfazer.push(Fisica.fotografar(jogo.sim));
+    if (jogo.desfazer.length > 200) jogo.desfazer.shift();
+    const t = jogo.taco;
+    t.forca = forca; t.r0 = Math.max(t.recuo, 30); t.prog = 0;
+    const vTaco = Math.max(900, FISICA.velocidadeMaxima * Math.pow(forca, FISICA.curvaForca) * 0.8);
+    t.dur = U.clamp(t.r0 / vTaco, 0.04, 0.22);
+    jogo.fase = 'tacando';
+    jogo.bolaNaMao = null;
+    Render.r.rastros.clear();
+  },
+  // A ponta do taco chegou na bola
+  golpear() {
+    const t = jogo.taco;
+    Fisica.tacar(jogo.sim, Entrada.branca().id, jogo.mira.ang, t.forca, { x: 0, y: 0 });
+    jogo.fase = 'rolando'; jogo.acum = 0;
+    jogo.partida.tacadas++;
+    t.recuo = 0;
+    if (jogo.toque && jogo.config.vibrar && navigator.vibrate) { try { navigator.vibrate(12 + Math.round(t.forca * 18)); } catch (err) {} }
+  },
+  fimDaJogada() {
+    const sim = jogo.sim;
+    Fisica.parar(sim);
+    const reg = Fisica.fecharRegistro(sim);
+    jogo.ultima = reg;
+    const res = jogo.partida.regras.validarJogada(reg, jogo.partida);
+    Jogo.aplicar(res);
+    jogo.fase = 'mirando';
+    jogo.miraCache = null;
+    atualizarHUD();
+  },
+  aplicar(res) {
+    const sim = jogo.sim, br = Entrada.branca();
+    if (res.bolaNaMao && br.estado !== 'mesa') {
+      // Branca de volta: no ponto de cima, ou no lugar livre mais perto dele
+      const geo = sim.geo;
+      br.estado = 'mesa'; br.prof = 0; br.cacapa = -1; br.qd = null;
+      outer: for (let raio = 0; raio < geo.hx; raio += geo.R) {
+        for (let a = 0; a < Math.PI * 2; a += raio ? geo.R / raio : 7) {
+          const x = -geo.hx / 2 + Math.cos(a) * raio, y = Math.sin(a) * raio;
+          if (Fisica.posicaoValida(sim, br, x, y, res.bolaNaMao)) { br.x = x; br.y = y; break outer; }
+        }
+      }
+      jogo.bolaNaMao = res.bolaNaMao;
+    }
+    if (res.mensagemDica) aviso(res.mensagemDica, 3.2);
+    else if (!sim.bolas.some(b => b.tipo !== 'branca' && b.estado === 'mesa') && sim.bolas.length > 1)
+      aviso('Mesa limpa! Toque em △ para arrumar de novo.', 3);
+  },
+  desfazer() {
+    if (jogo.tela !== 'partida' || jogo.fase !== 'mirando' || !jogo.desfazer.length) return;
+    Fisica.restaurar(jogo.sim, jogo.desfazer.pop());
+    jogo.ultima = null; jogo.bolaNaMao = null; jogo.miraCache = null;
+    Render.r.rastros.clear();
+    aviso('Tacada desfeita', 1.2);
+    atualizarHUD();
+  },
+  arrumar() {
+    if (jogo.tela !== 'partida' || jogo.fase !== 'mirando') return;
+    jogo.desfazer.push(Fisica.fotografar(jogo.sim));
+    jogo.partida.opcoes.bolas = jogo.config.bolas;
+    jogo.partida.regras.montar(jogo.sim, jogo.partida.jogadores, jogo.partida.opcoes);
+    // as bolas novas não estão na fotografia: o desfazer só vale para a nova arrumação
+    jogo.desfazer = [];
+    jogo.ultima = null; jogo.bolaNaMao = null; jogo.mira.ang = 0; jogo.miraCache = null;
+    Render.r.rastros.clear();
+    atualizarHUD();
+  },
+  alternarMover() {
+    if (jogo.tela !== 'partida') return;
+    jogo.mover = !jogo.mover;
+    aviso(jogo.mover ? 'Mover bolas: arraste qualquer bola. ✥ de novo para voltar.' : 'Modo de mover desligado', 2.2);
+    atualizarHUD();
+  },
+};
+
+// =====================================================================
+// 10. SALVAMENTO (localStorage, sempre com try/catch). Chaves com o prefixo "sinuca-".
+//     Etapas seguintes: sinuca-progresso (campeonato), sinuca-estatisticas, sinuca-regras-casa.
+// =====================================================================
+const Salvar = {
+  ler(chave, padrao) {
+    try { const v = localStorage.getItem(PREFIXO + chave); return v ? JSON.parse(v) : padrao; } catch (err) { return padrao; }
+  },
+  gravar(chave, valor) { try { localStorage.setItem(PREFIXO + chave, JSON.stringify(valor)); } catch (err) {} },
+  config() { Salvar.gravar('config', jogo.config); },
+  carregar() {
+    const c = Salvar.ler('config', {});
+    for (const k in CONFIG_PADRAO) if (c && typeof c[k] === typeof CONFIG_PADRAO[k]) jogo.config[k] = c[k];
+    if (!MODOS.treino.variantes.bolas.opcoes.some(o => o.id === jogo.config.bolas)) jogo.config.bolas = CONFIG_PADRAO.bolas;
+    if (!NIVEIS[jogo.config.mira]) jogo.config.mira = CONFIG_PADRAO.mira;
+    if (!FELTROS[jogo.config.feltro]) jogo.config.feltro = CONFIG_PADRAO.feltro;
+  },
+};
+
+// =====================================================================
+// 11. LOOP PRINCIPAL: layout, atualização e desenho
+// =====================================================================
+
+// Distribui a tela: mesa no maior espaço possível, barra de força à direita, anel de ajuste fino
+// (toque) à esquerda ou embaixo. Em retrato a mesa gira 90°.
+function layout() {
+  const R_ = Render.r;
+  R_.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  R_.cw = Math.max(1, window.innerWidth); R_.ch = Math.max(1, window.innerHeight);
+  tela.width = Math.round(R_.cw * R_.dpr); tela.height = Math.round(R_.ch * R_.dpr);
+  tela.style.width = R_.cw + 'px'; tela.style.height = R_.ch + 'px';
+  const cs = getComputedStyle(document.documentElement);
+  for (const k in seguro) seguro[k] = parseFloat(cs.getPropertyValue('--seguro-' + k)) || 0;
+  if (!jogo.geo) return;
+  const cw = R_.cw, ch = R_.ch, geo = jogo.geo;
+  jogo.girar = ch > cw;
+  const compacto = ch < 560 && !jogo.girar;
+  el('hud').classList.toggle('compacto', compacto);
+  const emJogo = jogo.tela === 'partida';
+  let topo = (emJogo ? (compacto ? 6 : 62) : 16) + seguro.topo;
+  let esq = (emJogo && compacto ? 64 : 12) + seguro.esq;
+  if (emJogo && jogo.toque && !jogo.girar) esq = Math.max(esq, 98 + seguro.esq);
+  const dir = (emJogo ? (compacto ? 84 : 92) : 16) + seguro.dir;
+  const baixo = (emJogo && jogo.toque && jogo.girar ? 110 : 8) + seguro.baixo;
+  const aw = Math.max(50, cw - esq - dir), ah = Math.max(50, ch - topo - baixo);
+  const oL = 2 * geo.ex, oW = 2 * geo.ey;
+  const s = jogo.girar ? Math.min(aw / oW, ah / oL) : Math.min(aw / oL, ah / oW);
+  const cx = esq + aw / 2, cy = topo + ah / 2;
+  R_.view = jogo.girar ? { a: 0, b: s, c: -s, d: 0, e: cx, f: cy, s } : { a: s, b: 0, c: 0, d: s, e: cx, f: cy, s };
+  jogo.lay.s = s;
+  const bh = U.clamp(ah * 0.8, 170, 440);
+  jogo.lay.barra = { x: cw - dir + (dir - seguro.dir - 56) / 2, y: topo + (ah - bh) / 2, w: 56, h: bh };
+  jogo.lay.anel = jogo.girar ? { x: 70 + seguro.esq, y: ch - seguro.baixo - 56, r: 40 }
+                             : { x: seguro.esq + 50, y: ch - seguro.baixo - 54, r: 40 };
+}
+
+let refazer = 0;
+function aoRedimensionar() {
+  cancelAnimationFrame(refazer);
+  refazer = requestAnimationFrame(() => { layout(); if (jogo.geo) Jogo.refazerCena(); Telas.atualizar(); });
+}
+
+// Mira calculada para o ângulo atual (refeita só quando algo muda)
+function calcularMira() {
+  const sim = jogo.sim, br = Entrada.branca();
+  if (!br || br.estado !== 'mesa') return null;
+  const c = jogo.miraCache;
+  if (c && c.ang === jogo.mira.ang && c.x === br.x && c.y === br.y && c.nivel === jogo.config.mira) return c.res;
+  const nivel = NIVEIS[jogo.config.mira];
+  let ox = br.x, oy = br.y, dx = Math.cos(jogo.mira.ang), dy = Math.sin(jogo.mira.ang), ric = nivel.mira.ricochetes;
+  const res = { pts: [{ x: ox, y: oy }], fantasma: null, alvo: null, branca: null };
+  for (let k = 0; k < 4; k++) {
+    const h = Fisica.lancarRaio(sim, ox, oy, dx, dy, br.id);
+    if (!h) break;
+    const px = ox + dx * h.t, py = oy + dy * h.t;
+    res.pts.push({ x: px, y: py });
+    if (h.tipo === 'bola') {
+      res.fantasma = { x: px, y: py };
+      const b = h.bola;
+      let nx = b.x - px, ny = b.y - py; const nl = Math.hypot(nx, ny); nx /= nl; ny /= nl;
+      const ha = Fisica.lancarRaio(sim, b.x, b.y, nx, ny, [b.id, br.id]);
+      res.alvo = { x0: b.x, y0: b.y, dx: nx, dy: ny, t: ha ? ha.t : 0, tipo: ha ? ha.tipo : null };
+      // Branca sai pela tangente (tacada sem efeito, no instante do choque)
+      const dot = dx * nx + dy * ny;
+      let tx = dx - dot * nx, ty = dy - dot * ny; const tl = Math.hypot(tx, ty);
+      if (tl > 0.03) {
+        tx /= tl; ty /= tl;
+        const hb = Fisica.lancarRaio(sim, px, py, tx, ty, [br.id, b.id]);
+        res.branca = { x0: px, y0: py, dx: tx, dy: ty, t: hb ? hb.t : 0 };
+      }
+      break;
+    }
+    if (h.tipo === 'cacapa') break;
+    if (ric > 0) {
+      ric--;
+      const dn = dx * h.nx + dy * h.ny;
+      dx -= 2 * dn * h.nx; dy -= 2 * dn * h.ny;
+      ox = px; oy = py;
+      continue;
+    }
+    res.fantasma = { x: px, y: py };
+    break;
+  }
+  jogo.miraCache = { ang: jogo.mira.ang, x: br.x, y: br.y, nivel: jogo.config.mira, res };
+  return res;
+}
+
+function atualizar(dt) {
+  if (jogo.tela !== 'partida' || jogo.pausado) return;
+  const t = jogo.taco, ent = Entrada.e;
+  if (jogo.fase === 'tacando') {
+    t.prog += dt / t.dur;
+    if (t.prog >= 1) Jogo.golpear();
+    else t.recuo = t.r0 * (1 - U.easeIn(t.prog));
+  } else if (jogo.fase === 'rolando') {
+    const h = 1 / FISICA.hz;
+    jogo.acum += Math.min(dt, 0.1);
+    while (jogo.acum >= h) { Fisica.passo(jogo.sim, h); jogo.acum -= h; }
+    if (jogo.config.rastro) Render.gravarRastros(jogo.sim);
+    // o taco acompanha um pouco e some
+    t.recuo = Math.max(-12 - 30 * t.forca, t.recuo - dt * 900);
+    t.alfa = Math.max(0, t.alfa - dt * 2.8);
+    if (!Fisica.emMovimento(jogo.sim)) Jogo.fimDaJogada();
+  } else {
+    const br = Entrada.branca();
+    const visivel = br && br.estado === 'mesa' && ent.modo !== 'arrastar';
+    t.alfa = visivel ? Math.min(1, t.alfa + dt * 4) : Math.max(0, t.alfa - dt * 6);
+    const f = ent.modo === 'puxar' || ent.modo === 'forca' ? ent.forca : 0;
+    const alvo = 22 + f * 260;
+    t.recuo += (alvo - t.recuo) * Math.min(1, dt * 18);
+  }
+  atualizarHUD();
+}
+
+function desenhar() {
+  const R_ = Render.r, c = ctx;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  if (R_.cena) c.drawImage(R_.cena, 0, 0);
+  if (!jogo.sim) return;
+  const px = 1 / R_.view.s, sim = jogo.sim, R = sim.geo.R, ent = Entrada.e;
+  Render.vista(c);
+  if (jogo.config.rastro && jogo.tela === 'partida') Render.desenharRastros(c, sim, px);
+  const br = Entrada.branca();
+  const mirando = jogo.tela === 'partida' && jogo.fase === 'mirando' && ent.modo !== 'arrastar' && br && br.estado === 'mesa';
+  const verTaco = jogo.tela === 'partida' && br && (br.estado === 'mesa' || jogo.fase !== 'mirando');
+  // Mira por baixo das bolas
+  if (mirando) { const m = calcularMira(); if (m) Render.desenharMira(c, sim, m, NIVEIS[jogo.config.mira], px); }
+  Render.desenharBolas(c, sim);
+  // Branca arrastável (bola na mão) e posição recusada
+  if (jogo.tela === 'partida' && jogo.fase === 'mirando' && br && br.estado === 'mesa' && (jogo.bolaNaMao || ent.modo === 'arrastar')) {
+    const b = ent.modo === 'arrastar' ? ent.bola : br;
+    c.save(); c.setLineDash([5 * px, 4 * px]); c.lineWidth = 1.5 * px; c.strokeStyle = 'rgba(255,255,255,0.75)';
+    c.beginPath(); c.arc(b.x, b.y, R * 1.35, 0, Math.PI * 2); c.stroke(); c.restore();
+  }
+  if (ent.modo === 'arrastar' && ent.invalido) {
+    const p = ent.invalido;
+    c.save(); c.lineWidth = 2 * px; c.strokeStyle = 'rgba(255,90,70,0.9)'; c.fillStyle = 'rgba(255,90,70,0.15)';
+    c.beginPath(); c.arc(p.x, p.y, R, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
+  }
+  // Taco: depois da tacada fica onde a branca estava, acompanha um pouco e some
+  if (verTaco && jogo.taco.alfa > 0) {
+    if (jogo.fase !== 'rolando') jogo.taco.pos = { x: br.x, y: br.y };
+    const p = jogo.taco.pos;
+    if (p) Render.desenharTaco(c, p.x, p.y, jogo.mira.ang, jogo.taco.recuo, jogo.taco.alfa, R);
+  }
+  // Controles da tela
+  c.setTransform(R_.dpr, 0, 0, R_.dpr, 0, 0);
+  if (jogo.tela === 'partida') {
+    const ativa = ent.modo === 'forca' || ent.modo === 'puxar';
+    Render.desenharBarra(c, jogo.lay.barra, ativa ? ent.forca : jogo.forcaBarra, ativa, ent.modo === 'forca' && ent.fora);
+    if (jogo.toque) Render.desenharAnel(c, jogo.lay.anel, ent.anelGiro, ent.modo === 'anel');
+  }
+}
+
+let ultimo = 0;
+function quadro(ts) {
+  const dt = ultimo ? Math.min(0.1, (ts - ultimo) / 1000) : 0;
+  ultimo = ts;
+  atualizar(dt);
+  desenhar();
+  requestAnimationFrame(quadro);
+}
+
+// ---- Início ----
+Salvar.carregar();
+document.querySelectorAll('[data-acao]').forEach(b => b.addEventListener('click', () => acao(b.dataset.acao)));
+el('b-menu').addEventListener('click', () => Telas.alternarPausa());
+el('b-desfazer').addEventListener('click', () => Jogo.desfazer());
+el('b-mover').addEventListener('click', () => Jogo.alternarMover());
+el('b-arrumar').addEventListener('click', () => Jogo.arrumar());
+// Toques nas telas e no HUD pedem tela cheia (no fim do toque)
+document.addEventListener('pointerup', ev => {
+  if (ev.pointerType === 'touch') { jogo.toque = true; if (ev.target.closest && ev.target.closest('#telas, #hud-botoes')) pedirTelaCheia(); }
+});
+window.addEventListener('resize', aoRedimensionar);
+document.addEventListener('fullscreenchange', aoRedimensionar);
+document.addEventListener('webkitfullscreenchange', aoRedimensionar);
+// Pausa automática quando a aba some: o loop para e, na volta, não recupera o tempo perdido
+document.addEventListener('visibilitychange', () => { if (document.hidden) { Entrada.soltarTudo(); ultimo = 0; } });
+Entrada.ligar();
+Jogo.cenaDoMenu();
+Telas.atualizar();
+requestAnimationFrame(quadro);
+})();
+</script>
+</body>
+</html>

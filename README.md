@@ -9,6 +9,7 @@ Página inicial e jogos, publicados no GitHub Pages: https://jusgador.github.io/
 | Asas de Aço | `asas/` |
 | Bruce Lee 64 - A Fortaleza | `fortaleza/` |
 | Poker Texas Hold'em | `poker/` |
+| Sinuca de Bico | `sinuca/` |
 
 Cada jogo é desenvolvido direto na sua pasta, num único `index.html`. Os jogos começaram em repositórios próprios, e o histórico de cada um veio junto (`git log --follow asas/index.html`).
 
@@ -57,6 +58,7 @@ Roteiro para uma sessão aberta em `D:\dev\jogos` para criar um jogo novo, do co
   | `asasDeAco.` | Asas de Aço |
   | `bl64_` | Bruce Lee 64 - A Fortaleza |
   | `poker-` | Poker Texas Hold'em |
+  | `sinuca-` | Sinuca de Bico |
 
 ### 2. O arquivo do jogo
 
