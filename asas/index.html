@@ -87,14 +87,14 @@ const fmt = n => Math.floor(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
    Moedas, upgrades comprados, fases liberadas, estrelas e recordes.
    ===================================================================== */
 const SAVE_KEY = 'asasDeAco.save.v1';
-const save = { coins: 0, up: {}, unlocked: 1, stars: [0,0,0,0,0,0,0,0], best: [0,0,0,0,0,0,0,0], muted: false, done: false, diff: 'normal' };
+const save = { coins: 0, up: {}, unlocked: 1, stars: [0,0,0,0,0,0,0,0], best: [0,0,0,0,0,0,0,0], medal: [0,0,0,0,0,0,0,0], muted: false, done: false, diff: 'normal' };
 function loadSave() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
     if (s && typeof s === 'object') {
       Object.assign(save, s);
       save.up = Object.assign({}, s.up || {});
-      for (const k of ['stars', 'best']) {
+      for (const k of ['stars', 'best', 'medal']) {
         const a = Array.isArray(s[k]) ? s[k].slice(0, 8) : [];
         while (a.length < 8) a.push(0);
         save[k] = a;
@@ -104,7 +104,9 @@ function loadSave() {
   } catch (e) { /* armazenamento indisponível: segue sem salvar */ }
 }
 function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
-const upLvl = id => save.up[id] || 0;
+const upOwned = id => save.up[id] || 0;
+// nível que vale na fase em andamento (o Profissional limita os upgrades)
+const upLvl = id => Math.min(upOwned(id), G ? G.diff.upCap : 99);
 
 /* =====================================================================
    3. TABELAS DE DADOS (edite à vontade)
@@ -129,16 +131,26 @@ const upDesc = (u, lvl) => Array.isArray(u.desc) ? u.desc[Math.min(lvl, u.desc.l
 
 // ---- Níveis de dificuldade: multiplicam os valores de cada fase (STAGES) ----
 // hp: vida dos inimigos; fire: frequência dos tiros; bullet: velocidade dos tiros; gap: intervalo entre ondas;
-// boss: vida e ritmo de ataque dos chefes; drop: chance de power-up; inv: invencibilidade após levar dano;
-// lives: vidas por partida; reward: moedas e pontos
+// tgt: vida dos alvos da meta; bossHp/bossRate: vida e ritmo de ataque dos chefes; drop: chance de power-up;
+// inv: invencibilidade após levar dano; hit: dano de cada acerto; lead: quanto os inimigos miram à frente do avião;
+// lives: vidas por partida; cont: continues por fase; req: o que a fase exige além do chefe
+// ('' nada, 'meta' as metas, 'reféns' todos os reféns e a meta de alvos, 'tudo' todos os alvos e reféns);
+// lifeRescue: refém pode dar vida extra; upCap: nível máximo de upgrade que vale na fase; reward: moedas e pontos
 const DIFFS = {
-  easy:   { label: 'Fácil',   color: '#2bb24c', hp: 1,    fire: 1,    bullet: 1,    gap: 1,    boss: 1,    drop: 1,    inv: 1,    lives: 3, reward: 1,
-            desc: 'Para aprender: inimigos atiram pouco' },
-  normal: { label: 'Normal',  color: '#e08a1e', hp: 1.35, fire: 1.5,  bullet: 1.12, gap: 0.85, boss: 1.25, drop: 0.8,  inv: 0.8,  lives: 3, reward: 1.25,
-            desc: 'Inimigos mais fortes e agressivos • moedas ×1,25' },
-  hard:   { label: 'Difícil', color: '#c0392b', hp: 1.75, fire: 2.1,  bullet: 1.25, gap: 0.72, boss: 1.55, drop: 0.6,  inv: 0.65, lives: 2, reward: 1.6,
-            desc: 'Chuva de tiros e só 2 vidas • moedas e pontos ×1,6' },
+  easy:   { label: 'Fácil',   color: '#2bb24c', hp: 1,   fire: 1,   bullet: 1,    gap: 1,    tgt: 1,    bossHp: 1,   bossRate: 1,   drop: 1,    inv: 1,
+            hit: 1, lead: 0,    lives: 3, cont: Infinity, req: '',      lifeRescue: true,  upCap: 9, reward: 1,
+            rule: 'Basta vencer o chefe: metas valem estrelas', desc: 'Para aprender • continues à vontade' },
+  normal: { label: 'Normal',  color: '#e08a1e', hp: 1.5, fire: 1.8, bullet: 1.15, gap: 0.8,  tgt: 1.1,  bossHp: 1.4, bossRate: 1.4, drop: 0.7,  inv: 0.7,
+            hit: 1, lead: 0.3,  lives: 3, cont: 2,        req: 'meta',  lifeRescue: true,  upCap: 9, reward: 1.3,
+            rule: 'Metas de alvos e resgates obrigatórias', desc: '2 continues por fase • moedas e pontos ×1,3' },
+  hard:   { label: 'Difícil', color: '#c0392b', hp: 2,   fire: 2.5, bullet: 1.3,  gap: 0.66, tgt: 1.2,  bossHp: 1.8, bossRate: 1.8, drop: 0.5,  inv: 0.55,
+            hit: 1, lead: 0.6,  lives: 2, cont: 1,        req: 'reféns', lifeRescue: false, upCap: 9, reward: 1.7,
+            rule: 'Resgate TODOS os reféns e cumpra a meta de alvos', desc: '2 vidas • 1 continue • reféns não dão vida • ×1,7' },
+  pro:    { label: 'Profissional', short: 'PRO', color: '#8e44ad', hp: 2.4, fire: 2.8, bullet: 1.42, gap: 0.56, tgt: 1.25, bossHp: 2, bossRate: 2.3, drop: 0.35, inv: 0.45,
+            hit: 2, lead: 0.9,  lives: 2, cont: 0,        req: 'tudo',  lifeRescue: false, upCap: 2, reward: 2.5,
+            rule: 'TODOS os alvos e TODOS os reféns, sem continue', desc: 'Dano dobrado • tiros miram à frente • upgrades até NV 2 • ×2,5' },
 };
+const DIFF_KEYS = Object.keys(DIFFS);
 
 // ---- Power-ups soltos pelos inimigos. w = peso no sorteio ----
 const POWERUPS = {
@@ -1787,21 +1799,25 @@ function buildTimeline(st, idx) {
 function newGame(idx) {
   const base = STAGES[idx], D = DIFFS[save.diff];
   const st = Object.assign({}, base, { hpMul: base.hpMul * D.hp, fireMul: base.fireMul * D.fire, bulletMul: base.bulletMul * D.bullet,
-    coinMul: base.coinMul * D.reward, waveGap: base.waveGap.map(g => g * D.gap), groundGap: base.groundGap.map(g => g * D.gap) });
+    coinMul: base.coinMul * D.reward, waveGap: base.waveGap.map(g => g * D.gap), groundGap: base.groundGap.map(g => g * D.gap),
+    tgtMul: base.hpMul * D.tgt });
+  // nos níveis mais altos a meta passa a ser todos os reféns (e todos os alvos, no Profissional)
+  const nT = base.targets.reduce((a, t) => a + t[1], 0);
+  st.goal = { t: D.req === 'tudo' ? nT : base.goal.t, r: D.req === 'tudo' || D.req === 'reféns' ? base.hostages : base.goal.r };
   G = {
-    idx, st, diff: D, theme: THEMES[st.theme], themeKey: st.theme, assets: themeAssets(st.theme),
+    idx, st, diff: D, diffKey: save.diff, theme: THEMES[st.theme], themeKey: st.theme, assets: themeAssets(st.theme),
     time: 0, stageTime: 0, ev: buildTimeline(st, idx), evi: 0, later: [], uid: 0,
     bgY: 0, scroll: st.scroll, decor: [], strips: [], clouds: [], rain: [], decorDist: 0, cloudDist: 0,
     enemies: [], ground: [], targets: [], hostages: [], pickups: [], decals: [], floaters: [],
     boss: null, miniActive: false, bossPhase: false, warnT: 0, cleared: false, clearT: 0, overT: 0, coinRain: false,
     score: 0, stats: { kills: 0, targets: 0, rescued: 0, deaths: 0, coins: 0, continues: 0,
-      targetsTotal: st.targets.reduce((a, t) => a + t[1], 0), rescueTotal: st.hostages },
+      targetsTotal: nT, rescueTotal: st.hostages, lostT: 0, lostR: 0 },
     shake: 0, bombFlash: 0, bombCd: 0, hurtT: 0, lightning: 0, banner: null, hint: null, cmsg: null,
-    rng: mulberry32(idx * 131 + 7), dmgMul: 1, pDrop: 0, told: {}, goalT: false, goalR: false,
+    rng: mulberry32(idx * 131 + 7), dmgMul: 1, pDrop: 0, told: {}, goalT: false, goalR: false, failed: null,
   };
   PB.clear(); EB.clear(); PT.clear();
   initBackground(); initPlayer();
-  G.banner = { title: 'FASE ' + (idx + 1), sub: st.name.toUpperCase(), sub2: `Meta: ${st.goal.t} alvos e ${st.goal.r} resgates • ${D.label}`, t: 4 };
+  G.banner = { title: 'FASE ' + (idx + 1), sub: st.name.toUpperCase(), sub2: `${D.req ? 'Obrigatório' : 'Meta'}: ${st.goal.t} alvos e ${st.goal.r} resgates • ${D.label}`, t: 4 };
 }
 function later(d, fn) { G.later.push({ t: G.time + d, fn }); }
 
@@ -1850,7 +1866,7 @@ function applyUpgrades(p) {
   while (p.drones.length < nd) p.drones.push({ x: p.x, y: p.y });
 }
 function initPlayer() {
-  const p = G.player = { x: W / 2, y: H + 60, px: W / 2, r: 4, alive: true, entering: 1.3, tilt: 0,
+  const p = G.player = { x: W / 2, y: H + 60, px: W / 2, py: H + 60, vx: 0, vy: 0, r: 4, alive: true, entering: 1.3, tilt: 0,
     maxHp: 5, hp: 5, maxShield: 1, shield: 1, shRegen: 0, lives: G.diff.lives, inv: 2.5, bombs: 2 + upLvl('bombs'),
     weapon: 1, fireT: 0, cycle: 0, missT: 0.6, laserT: 0.4, droneT: 0.2, magT: 0, respawnT: 0, speed: 250, drones: [] };
   applyUpgrades(p);
@@ -1858,7 +1874,7 @@ function initPlayer() {
 }
 function respawn() {
   const p = G.player;
-  p.alive = true; p.x = W / 2; p.y = H + 50; p.px = p.x; p.entering = 1.1; p.inv = 3; p.tilt = 0;
+  p.alive = true; p.x = W / 2; p.y = H + 50; p.px = p.x; p.py = p.y; p.vx = p.vy = 0; p.entering = 1.1; p.inv = 3; p.tilt = 0;
   p.hp = p.maxHp; p.shield = p.maxShield; p.bombs = Math.max(p.bombs, 2 + upLvl('bombs'));
   for (const d of p.drones) { d.x = p.x; d.y = p.y; }
 }
@@ -1878,7 +1894,8 @@ function updatePlayer(dt) {
     p.x += mx * p.speed * dt; p.y += my * p.speed * dt;
   }
   if (!G.cleared) { p.x = clamp(p.x, 18, W - 18); if (p.entering <= 0) p.y = clamp(p.y, 84, H - 28); }
-  const vx = (p.x - p.px) / dt; p.px = p.x;
+  const vx = (p.x - p.px) / dt, vy = (p.y - p.py) / dt; p.px = p.x; p.py = p.y;
+  const kv = Math.min(1, dt * 8); p.vx = lerp(p.vx, vx, kv); p.vy = lerp(p.vy, p.entering > 0 ? 0 : vy, kv);
   p.tilt = lerp(p.tilt, clamp(vx / 280, -1, 1), Math.min(1, dt * 10));
   const shl = upLvl('shield');
   if (shl > 0 && p.shield < p.maxShield) { p.shRegen += dt; if (p.shRegen >= 18 - 3 * shl) { p.shRegen = 0; p.shield++; SFX.shield(); } }
@@ -2019,7 +2036,14 @@ function eshot(x, y, a, spd, kind = 0) {
   const s = spd * G.st.bulletMul;
   b.x = x; b.y = y; b.vx = Math.cos(a) * s; b.vy = Math.sin(a) * s; b.kind = kind; b.r = EB_R[kind]; b.t = 0;
 }
-function aimShot(x, y, spd, kind) { const p = G.player; eshot(x, y, angTo(x, y, p.x, p.y), spd, kind); }
+// ângulo até o avião; nos níveis altos mira onde ele vai estar quando o tiro chegar
+function aimAng(x, y, spd) {
+  const p = G.player, L = G.diff.lead;
+  if (!L) return angTo(x, y, p.x, p.y);
+  const t = Math.min(1.2, Math.hypot(p.x - x, p.y - y) / (spd * G.st.bulletMul)) * L;
+  return angTo(x, y, clamp(p.x + p.vx * t, 10, W - 10), clamp(p.y + p.vy * t, 60, H - 10));
+}
+function aimShot(x, y, spd, kind) { eshot(x, y, aimAng(x, y, spd), spd, kind); }
 function fanShot(x, y, a, n, spread, spd, kind) { for (let i = 0; i < n; i++) { const t = n === 1 ? 0 : i / (n - 1) - 0.5; eshot(x, y, a + t * spread, spd, kind); } }
 function ringShot(x, y, n, spd, off, kind) { for (let i = 0; i < n; i++) eshot(x, y, off + i / n * TAU, spd, kind); }
 function spawnMissile(x, y, a) { spawnEnemy('missile', { x, y, move: 'homing', vx: Math.cos(a) * 120, vy: Math.sin(a) * 120, spd: 190 * G.st.bulletMul, turn: 1.7, hp: 2, ang: a }); }
@@ -2028,7 +2052,7 @@ function enemyFire(e, f) {
   switch (f.k) {
     case 'aim': aimShot(x, y, f.spd, 0); break;
     case 'burst': e.burst = f.n; e.burstT = 0; break;
-    case 'fan': fanShot(x, y, angTo(x, y, p.x, p.y), f.n, f.spread, f.spd, 1); break;
+    case 'fan': fanShot(x, y, aimAng(x, y, f.spd), f.n, f.spread, f.spd, 1); break;
     case 'ring': ringShot(x, y, f.n, f.spd, rand(0, TAU), 2); break;
     case 'spiral':
       e.spin += 0.35; ringShot(x, y, f.n, f.spd, e.spin, 2);
@@ -2104,9 +2128,8 @@ function updateGround(dt) {
     g.y += (G.scroll + g.vy) * dt; g.x += g.vx * dt;
     if ((g.type === 'boat' || g.type === 'gunboat') && ((g.x < 30 && g.vx < 0) || (g.x > W - 30 && g.vx > 0))) { g.vx = -g.vx; g.bang = g.vx > 0 ? 0 : Math.PI; }
     if (g.flash > 0) g.flash -= dt;
-    const ta = angTo(g.x, g.y, p.x, p.y);
+    const f = g.d.fire, ta = aimAng(g.x, g.y, f.spd || 190);
     g.ang = turnToward(g.ang, ta, 2.5 * dt);
-    const f = g.d.fire;
     if (p.alive && !quiet && !G.cleared && g.y > 40 && g.y < H - 170) {
       g.fireT -= dt;
       if (g.fireT <= 0) {
@@ -2126,7 +2149,7 @@ function updateGround(dt) {
 }
 
 function spawnTarget(type, x) {
-  const d = TARGETS[type], hp = d.hp * G.st.hpMul;
+  const d = TARGETS[type], hp = d.hp * G.st.tgtMul;
   const t = { type, d, x, y: -80, hp, maxHp: hp, r: d.r, dead: false, id: ++G.uid, flash: 0, smokeT: 0, key: 't_' + type + '_' + G.themeKey };
   if (type === 'bridge' && G.assets.decor.river) spawnDecor(t.y + G.assets.decor.river[0].lh / 2, 'river');
   G.targets.push(t);
@@ -2135,6 +2158,7 @@ function spawnTarget(type, x) {
 function updateTargets(dt) {
   for (const t of G.targets) {
     t.y += G.scroll * dt; if (t.flash > 0) t.flash -= dt;
+    if (!t.dead && !t.lost && t.y - t.r > H) { t.lost = true; G.stats.lostT++; checkMission(); }
     if (t.dead) { t.smokeT -= dt; if (t.smokeT <= 0 && t.y < H) { t.smokeT = 0.18; part(1, t.x + rand(-20, 20), t.y + rand(-16, 16), rand(-8, 8), rand(-30, -14), 1.4, 8, '#4a4a4a', 22, true); } }
   }
   G.targets = G.targets.filter(t => t.y < H + 120);
@@ -2150,13 +2174,29 @@ function updateHostages(dt) {
     if (h.kind === 'para') { h.y += (G.scroll * 0.6 + 20) * dt; h.x += Math.sin(G.time * 1.4 + h.ph) * 16 * dt; }
     else { h.y += G.scroll * dt; if (h.kind === 'astro') h.x += Math.sin(G.time * 0.8 + h.ph) * 10 * dt; }
     if (!h.done && p.alive && d2(h.x, h.y, p.x, p.y) < 36 * 36) rescue(h);
+    if (!h.done && !h.lost && h.y > H + 10) { h.lost = true; G.stats.lostR++; checkMission(); }
   }
   G.hostages = G.hostages.filter(h => !h.done && h.y < H + 40);
+}
+// Com metas obrigatórias, a missão fracassa assim que não dá mais para cumpri-las
+function checkMission() {
+  const s = G.stats, g = G.st.goal;
+  if (!G.diff.req || G.failed || G.cleared) return;
+  let why = null;
+  if (s.rescueTotal - s.lostR < g.r) why = g.r === s.rescueTotal ? 'UM REFÉM FICOU PARA TRÁS' : 'REFÉNS DEMAIS FICARAM PARA TRÁS';
+  else if (s.targetsTotal - s.lostT < g.t) why = g.t === s.targetsTotal ? 'UM ALVO ESCAPOU' : 'ALVOS DEMAIS ESCAPARAM';
+  if (why) failMission(why);
+}
+function failMission(why) {
+  G.failed = why;
+  G.banner = { title: 'MISSÃO FRACASSADA', sub: why, t: 3, warn: true };
+  SFX.alert(); MUSIC.stop();
+  if (!(G.overT > 0)) G.overT = 2.8;
 }
 function rescue(h) {
   const p = G.player;
   h.done = true; G.stats.rescued++; G.score += 1000;
-  let k = pickW(RESCUE_REWARDS); if (k === 'life' && p.lives >= 6) k = 'coins';
+  let k = pickW(RESCUE_REWARDS); if (k === 'life' && (p.lives >= 6 || !G.diff.lifeRescue)) k = 'shield';
   let msg;
   if (k === 'life') { p.lives++; msg = '+1 VIDA!'; SFX.oneup(); }
   else if (k === 'shield') { p.shield = Math.min(p.maxShield + 1, p.shield + 2); msg = 'ESCUDO!'; SFX.shield(); }
@@ -2172,7 +2212,7 @@ function rescue(h) {
    13. CHEFES: ATAQUES, FASES E DESTRUIÇÃO
    ===================================================================== */
 function spawnBoss(id, mini) {
-  const d = BOSSES[id], s = d.scale || 1, hpMul = (mini ? STAGES[G.idx].hpMul : 1) * G.diff.boss;
+  const d = BOSSES[id], s = d.scale || 1, hpMul = (mini ? STAGES[G.idx].hpMul : 1) * G.diff.bossHp;
   const b = { id, d, s, mini, isBoss: true, dead: false, x: W / 2, y: -260 * s, ty: d.y, hp: d.hp * hpMul, maxHp: d.hp * hpMul,
     phase: 0, t: 0, state: 'enter', flash: 0, rot: 0, coreAtk: [], rate: 1, deathT: 0, boomT: 0, leaveT: mini ? 40 : 0, smokeT: 0,
     parts: d.parts.map(p => ({ id: p.id, kind: p.kind, lx: p.x, ly: p.y, orbit: p.orbit || 0, a0: p.a0 || 0, r: p.r,
@@ -2217,7 +2257,7 @@ function updateBoss(dt) {
     b.x = W / 2 + Math.sin(b.t * (d.swaySpd || 0.5)) * sw;
     b.y = b.ty + Math.sin(b.t * 1.1) * 10;
     if (G.player.alive && !G.cleared) {
-      const dm = G.diff.boss;
+      const dm = G.diff.bossRate;
       for (const a of b.coreAtk) runAtk(a, b.x + (a.ox || 0) * b.s, b.y + (a.oy || 0) * b.s, dt, dm, b, null);
       for (const q of b.parts) if (!q.dead && q.atk) runAtk(q.atk, q.x, q.y, dt, b.rate * dm, b, q);
     }
@@ -2255,8 +2295,8 @@ function runAtk(a, x, y, dt, mul, b, q) {
 function atkStart(a, x, y, b, q) {
   const p = G.player;
   switch (a.p) {
-    case 'aim': fanShot(x, y, angTo(x, y, p.x, p.y), a.n || 1, a.spread || 0.2, a.spd, 0); break;
-    case 'fan': fanShot(x, y, a.aim ? angTo(x, y, p.x, p.y) : Math.PI / 2, a.n, a.spread, a.spd, 1); break;
+    case 'aim': fanShot(x, y, aimAng(x, y, a.spd), a.n || 1, a.spread || 0.2, a.spd, 0); break;
+    case 'fan': fanShot(x, y, a.aim ? aimAng(x, y, a.spd) : Math.PI / 2, a.n, a.spread, a.spd, 1); break;
     case 'ring': a.ang += 0.17; ringShot(x, y, a.n, a.spd, a.ang, 2); break;
     case 'spiral': a.run = a.dur; a.st = 0; break;
     case 'burst': a.run = a.n * (a.step || 0.1); a.st = 0; break;
@@ -2276,7 +2316,7 @@ function atkStart(a, x, y, b, q) {
 }
 function atkStep(a, x, y) {
   if (a.p === 'spiral') { const n = a.arms || 2; for (let k = 0; k < n; k++) eshot(x, y, a.ang + k * TAU / n, a.spd, 2); a.ang += a.spin; }
-  else { const p = G.player; eshot(x, y, angTo(x, y, p.x, p.y) + rand(-0.05, 0.05), a.spd, 0); }
+  else eshot(x, y, aimAng(x, y, a.spd) + rand(-0.05, 0.05), a.spd, 0);
 }
 function damageBossPart(b, q, dmg) {
   q.hp -= dmg; q.flash = 0.06;
@@ -2476,7 +2516,7 @@ function hurtPlayer(dmg) {
     part(4, p.x, p.y, 0, 0, 0.4, 20, '#7fd4ff', 140); G.shake = Math.max(G.shake, 4);
     return;
   }
-  p.hp -= dmg; p.inv = 1.5 * G.diff.inv; SFX.hurt(); G.shake = Math.max(G.shake, 7); G.hurtT = 0.35;
+  p.hp -= dmg * G.diff.hit; p.inv = 1.5 * G.diff.inv; SFX.hurt(); G.shake = Math.max(G.shake, 7); G.hurtT = 0.35;
   for (let i = 0; i < 10; i++) part(2, p.x, p.y, rand(-200, 200), rand(-200, 200), 0.3, 2, '#ffb0a0');
   if (p.hp <= 0) killPlayer();
 }
@@ -2581,6 +2621,9 @@ function updatePlay(dt) {
 function finishStage() {
   const st = G.st, s = G.stats, i = G.idx;
   const tGoal = s.targets >= st.goal.t, rGoal = s.rescued >= st.goal.r, nod = s.deaths === 0;
+  if (G.failed || (G.diff.req && !(tGoal && rGoal))) { // chefe vencido sem as metas obrigatórias
+    G.failed = G.failed || 'METAS NÃO CUMPRIDAS'; setState('gameover'); return;
+  }
   const bonus = { kills: s.kills * 50, targets: s.targets * 500 + (tGoal ? 5000 : 0), rescues: s.rescued * 500 + (rGoal ? 5000 : 0), nodeath: nod ? 10000 : 0 };
   const D = G.diff, coinsBonus = Math.round(((tGoal ? 25 + 5 * i : 0) + (rGoal ? 25 + 5 * i : 0) + (nod ? 20 : 0)) * D.reward);
   const sub = G.score + bonus.kills + bonus.targets + bonus.rescues + bonus.nodeath, diffBonus = Math.round(sub * (D.reward - 1));
@@ -2588,6 +2631,7 @@ function finishStage() {
   const stars = 1 + (tGoal ? 1 : 0) + (rGoal ? 1 : 0);
   save.coins += coinsBonus;
   save.stars[i] = Math.max(save.stars[i], stars);
+  save.medal[i] = Math.max(save.medal[i], DIFF_KEYS.indexOf(G.diffKey) + 1);
   const rec = total > save.best[i];
   save.best[i] = Math.max(save.best[i], total);
   save.unlocked = Math.max(save.unlocked, Math.min(8, i + 2));
@@ -3025,7 +3069,9 @@ function setState(s) {
   if (s === 'pause' && prev === 'play') writeSave();
 }
 function startStage(i) { newGame(i); setState('play'); MUSIC.play('stage', TRANS[i], true); }
+const contLeft = () => G.failed ? 0 : G.diff.cont - G.stats.continues;
 function continueGame() {
+  if (contLeft() <= 0) return;
   const p = G.player;
   applyUpgrades(p); p.lives = G.diff.lives; G.score = 0; G.stats.continues++; G.overT = 0;
   respawn(); setState('play');
@@ -3042,7 +3088,7 @@ function shopNextStage() {
   return Math.min(save.unlocked - 1, 7);
 }
 function buy(u) {
-  const lvl = upLvl(u.id);
+  const lvl = upOwned(u.id);
   if (lvl >= u.max) { SFX.deny(); return; }
   const c = u.cost[lvl];
   if (save.coins < c) { SFX.deny(); ui.shopMsg = { text: 'Moedas insuficientes', t: 1.4 }; return; }
@@ -3109,10 +3155,11 @@ function drawHelp() {
     ['S  H  B  M', 'Escudo, vida, bomba e ímã de moedas'],
     ['Reféns', 'Voe por cima: vida extra, escudo ou moedas'],
     ['Alvos', 'Colchetes vermelhos: contam para a meta'],
+    ['Dificuldade', 'Do Normal em diante as metas são obrigatórias'],
     ['Chefes', 'Destrua canhões e asas para enfraquecê-los'],
     ['Loja', 'Upgrades permanentes salvos no navegador'],
   ];
-  lines.forEach(([a, b], i) => { const ly = y + 74 + i * 33; txt(a, x + 22, ly, 14, '#7fd4ff', 'left'); fitTxt(b, x + 128, ly, w - 146, 14, '#ffffff'); });
+  lines.forEach(([a, b], i) => { const ly = y + 72 + i * 30; txt(a, x + 22, ly, 14, '#7fd4ff', 'left'); fitTxt(b, x + 128, ly, w - 146, 14, '#ffffff'); });
   button('ENTENDI', W / 2 - 90, y + h - 70, 180, 50, () => { ui.help = false; }, { color: '#2bb24c' });
 }
 let prewarmI = 0;
@@ -3126,7 +3173,7 @@ function drawSelect() {
   drawMenuBg();
   txt('SELECIONE A FASE', W / 2, 34, 26, '#ffd34d');
   ICON.coin(W - 74, 34, 7.5); txt(fmt(save.coins), W - 62, 34, 15, '#ffe066', 'left');
-  const cw = 212, gap = 12, gx = (W - cw * 2) / 3, top = 128, ch = Math.min(132, (H - top - 90) / 4 - gap);
+  const cw = 212, gap = 12, gx = (W - cw * 2) / 3, top = 146, ch = Math.min(132, (H - top - 90) / 4 - gap);
   for (let i = 0; i < 8; i++) {
     const st = STAGES[i], locked = i >= save.unlocked, x = gx + (i % 2) * (cw + gx), y = top + (i >> 1) * (ch + gap);
     const hov = area(x, y, cw, ch, () => startStage(i), locked) && !locked;
@@ -3148,6 +3195,12 @@ function drawSelect() {
     else {
       for (let k = 0; k < 3; k++) ICON.star(x + 22 + k * 24, y + ch - 22, 9, k < save.stars[i] ? '#ffd34d' : 'rgba(255,255,255,0.18)', k < save.stars[i] ? '#5a3d00' : 'rgba(0,0,0,0.4)');
       if (save.best[i]) txt(fmt(save.best[i]), x + cw - 12, y + ch - 22, 13, '#fff', 'right');
+      const m = save.medal[i] && DIFFS[DIFF_KEYS[save.medal[i] - 1]];
+      if (m) { // maior dificuldade em que a fase foi concluída
+        const ml = (m.short || m.label).toUpperCase();
+        ctx.font = `bold 10px ${FONT}`; const mw = ctx.measureText(ml).width + 12;
+        RR(ctx, x + cw - 10 - mw, y + 52, mw, 16, 8, m.color, 'rgba(0,0,0,0.5)', 1.5); txt(ml, x + cw - 10 - mw / 2, y + 60.5, 10, '#fff');
+      }
     }
     ctx.restore();
   }
@@ -3155,15 +3208,17 @@ function drawSelect() {
   button('VOLTAR', 20, by, 150, 52, () => setState('menu'), { color: '#5a6478' });
   button('LOJA', 190, by, W - 210, 52, () => openShop('select'), { color: '#e08a1e' });
   // dificuldade: registrada por último para o teclado começar na fase 1
-  const keys = Object.keys(DIFFS), sw = (W - 2 * gx - 16) / 3;
-  keys.forEach((k, i) => {
+  const n = DIFF_KEYS.length, sw = (W - 2 * gx - 8 * (n - 1)) / n;
+  DIFF_KEYS.forEach((k, i) => {
     const D = DIFFS[k], on = save.diff === k;
-    button(D.label.toUpperCase(), gx + i * (sw + 8), 56, sw, 38, () => { save.diff = k; writeSave(); },
+    button((D.short || D.label).toUpperCase(), gx + i * (sw + 8), 56, sw, 38, () => { save.diff = k; writeSave(); },
       { color: on ? D.color : '#3a4458', size: on ? 17 : 15 });
     if (on) RR(ctx, gx + i * (sw + 8) + 4, 56 + 38 + 5, sw - 8, 4, 2, '#ffffff');
   });
-  RR(ctx, gx, 104, W - 2 * gx, 20, 10, 'rgba(5,12,30,0.55)');
-  fitTxt(DIFFS[save.diff].desc, W / 2, 114, W - 2 * gx - 16, 13, '#cfe8ff', 'center');
+  const D = DIFFS[save.diff];
+  RR(ctx, gx, 104, W - 2 * gx, 36, 10, 'rgba(5,12,30,0.62)');
+  fitTxt((D.short ? D.label + ': ' : '') + D.rule, W / 2, 114, W - 2 * gx - 16, 13, '#ffd34d', 'center', 'bold');
+  fitTxt(D.desc, W / 2, 130, W - 2 * gx - 16, 12, '#cfe8ff', 'center');
 }
 function drawShop() {
   drawMenuBg();
@@ -3174,7 +3229,7 @@ function drawShop() {
   const cw = 222, gx = (W - cw * 2) / 3, top = 90, ch = Math.min(90, (H - top - 84) / 6 - 8);
   UPGRADES.forEach((u, i) => {
     const x = gx + (i % 2) * (cw + gx), y = top + Math.floor(i / 2) * (ch + 8);
-    const lvl = upLvl(u.id), max = lvl >= u.max, cost = max ? 0 : u.cost[lvl], can = !max && save.coins >= cost;
+    const lvl = upOwned(u.id), max = lvl >= u.max, cost = max ? 0 : u.cost[lvl], can = !max && save.coins >= cost;
     const hov = area(x, y, cw, ch, () => buy(u));
     const fl = ui.flash[u.id] > 0 ? ui.flash[u.id] : 0;
     RR(ctx, x, y, cw, ch, 12, hov ? 'rgba(40,70,120,0.95)' : 'rgba(18,32,62,0.93)', max ? '#3ddc84' : can ? '#ffd34d' : 'rgba(255,255,255,0.25)', hov ? 3 : 2);
@@ -3209,12 +3264,21 @@ function drawPause() {
 }
 function drawGameOver() {
   ctx.fillStyle = 'rgba(25,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
-  txt('ABATIDO!', W / 2, H * 0.18, 50, '#ff5a4a');
-  txt(`Fase ${G.idx + 1}: ${G.st.name}`, W / 2, H * 0.18 + 48, 18, '#ffffff');
+  const left = contLeft();
+  if (G.failed) {
+    txt('MISSÃO FRACASSADA', W / 2, H * 0.18, 38, '#ff5a4a');
+    fitTxt(G.failed, W / 2, H * 0.18 + 44, W - 40, 18, '#ffd34d', 'center', 'bold');
+  } else {
+    txt('ABATIDO!', W / 2, H * 0.18, 50, '#ff5a4a');
+    txt(`Fase ${G.idx + 1}: ${G.st.name} • ${G.diff.label}`, W / 2, H * 0.18 + 48, 18, '#ffffff');
+  }
   txt('Seus upgrades e moedas continuam salvos.', W / 2, H * 0.18 + 76, 14, '#cfe8ff');
   const bw = 290, x = W / 2 - bw / 2; let y = H * 0.36;
-  button('CONTINUAR AQUI', x, y, bw, 56, continueGame, { color: '#2bb24c', size: 21 });
-  txt(`(${G.diff.lives} vidas novas, pontos da fase zerados)`, W / 2, y + 70, 12, '#cfe8ff'); y += 92;
+  if (left > 0) {
+    button('CONTINUAR AQUI', x, y, bw, 56, continueGame, { color: '#2bb24c', size: 21 });
+    const resta = left === Infinity ? '' : left === 1 ? ' • último continue' : ` • restam ${left} continues`;
+    txt(`(${G.diff.lives} vidas novas, pontos zerados${resta})`, W / 2, y + 70, 12, '#cfe8ff'); y += 92;
+  } else if (!G.failed) { txt(`Sem continues no ${G.diff.label}: recomece a fase`, W / 2, y + 10, 14, '#ffb3b3'); y += 40; }
   button('REINICIAR FASE', x, y, bw, 54, () => startStage(G.idx), { color: '#e08a1e' }); y += 68;
   button('LOJA DE UPGRADES', x, y, bw, 54, () => openShop('gameover'), { color: '#2f80ed' }); y += 68;
   button('MENU', x, y, bw, 54, () => { G = null; setState('menu'); }, { color: '#5a6478' }); y += 68;
