@@ -67,8 +67,8 @@ Cada modo é um objeto em `REGRAS`, com a mesma interface: `montar(sim, estado)`
 - Contagem: se a mesa acabar antes de alguém chegar a 61, vence quem tem mais pontos. Na variante "pontos para o próximo", ele ganha o valor da menor bola da mesa.
 - Mata-mata: as bolas que sobram no sorteio não são de ninguém, mas derrubá-las dá a vez de novo. Vidas: quando todas as bolas de um jogador caem, ele perde uma vida e as bolas dele voltam à mesa. As mensagens não dizem de quem era a bola, só quem saiu ou perdeu uma vida. Não tocar em nada só passa a vez.
 - Três jogadores: o primeiro a encaçapar na caçapa cantada (fora da abertura) escolhe o grupo; os outros dois ficam com os grupos que sobram, na ordem da vez.
-- Sinuca brasileira: as bolas ficam nas marcas do snooker (amarela, marrom e verde na meia-lua; azul no centro; rosa no ponto do pé; vermelha logo atrás dela; preta perto da tabela do pé). Bolas que caem fora da regra voltam às marcas sem valer pontos. Empate com a mesa vazia: a preta volta e decide. No Aprendiz, o balão explica o "golpe de 20" (com só a rosa e a preta, uma sequência faz no máximo 20) e o "golpe de 27" (a um ponto dos 28).
-- Bola 9: a 9 que cai numa falta volta à marca. Na sinuca de bar, a falta vale 4 pontos e errar a livre não dá pontos.
+- Sinuca brasileira: as bolas ficam nas marcas do snooker (amarela, marrom e verde na meia-lua; azul no centro; rosa no ponto do pé; vermelha logo atrás dela; preta perto da tabela do pé). Bolas que caem fora da regra voltam às marcas sem valer pontos. Empate com a mesa vazia: a preta volta e decide. Na sinuca de bar, a falta vale 4 pontos e errar a livre não dá pontos. No Aprendiz, o balão explica o "golpe de 20" (com só a rosa e a preta, uma sequência faz no máximo 20) e o "golpe de 27" (a um ponto dos 28).
+- Bola 9: a 9 que cai numa falta volta à marca.
 
 ## Etapas
 
