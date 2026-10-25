@@ -1,6 +1,6 @@
 # Sinuca de Bico
 
-Sinuca e bilhar de bar em visão de cima, num único arquivo HTML ([index.html](index.html)), com Canvas 2D e JavaScript puro. A mesa, as bolas e o taco são desenhados por código; não há imagens nem áudios externos. O jogo está sendo feito em etapas (lista no fim).
+Sinuca e bilhar de bar em visão de cima, num único arquivo HTML ([index.html](index.html)), com Canvas 2D e JavaScript puro. A mesa, as bolas e o taco são desenhados por código; não há imagens nem áudios externos. O jogo foi feito em 7 etapas (lista no fim).
 
 ## Como jogar
 
@@ -14,8 +14,10 @@ Abra pelo servidor de teste da raiz (ver o README de lá), em `http://localhost:
   - **Sinuca brasileira**: tradicional ou "sinuca de bar".
   - **Bola 9**, com push out no Profissional.
   - **Carambola**: livre ou três tabelas, na mesa sem caçapas.
+  - **Snooker internacional**: 2 jogadores, na mesa oficial, com 15, 10 ou 6 vermelhas e bola livre opcional.
 - **Mesas:** de bar (2,00 × 1,00 m, bolas de 54 mm, caçapas largas, feltro mais lento e meia-lua), de clube (pool de 9 pés), oficial de sinuca (3,57 × 1,78 m, caçapas justas) e de carambola. Cada modo oferece as mesas que fazem sentido para ele.
 - **Campeonato:** você e 7 adversários do computador (ver abaixo).
+- **Desafios:** 11 posições montadas, cada uma com objetivo, extra e nota de 1 a 3 estrelas (ver abaixo).
 - **Treino livre:** sem regras, em qualquer mesa, com as bolas que você escolher no menu (na carambola, as três bolas).
 - **Estatísticas:** por jogador humano (pelo nome): partidas, vitórias (no total e por modo), acerto, maior sequência, aberturas com bola encaçapada e os troféus dos campeonatos vencidos.
 - **Como jogar:** as regras de cada modo, com diagramas e a lista de variantes.
@@ -40,9 +42,27 @@ Abra pelo servidor de teste da raiz (ver o README de lá), em `http://localhost:
 | Noite do Mata-mata | mesas | duas mesas de 4; os 2 primeiros de cada vão à mesa final, e o último vivo dela é o campeão | 7 sorteados |
 | Torneio Brasileiro | chave | Sinuca brasileira tradicional, mesa oficial | 7 sorteados |
 | Circuito Misto | chave | quartas Bola 8, semifinal Bola 9, final Sinuca brasileira | 7 sorteados |
-| Grand Slam Profissional | chave | nível Profissional obrigatório; Bola 9, Sinuca brasileira na mesa oficial e final em Carambola três tabelas (a 5 pontos; o Snooker entra como opção na etapa 7) | os 7 mais fortes |
+| Grand Slam Profissional | chave | nível Profissional obrigatório; Bola 9, Sinuca brasileira na mesa oficial e final, à escolha, em Carambola três tabelas (a 5 pontos) ou Snooker de 6 vermelhas | os 7 mais fortes |
 
 Na chave, quartas, semifinal e final são séries de melhor de 3 ou de 5, à escolha; quem abre alterna a cada jogo. As séries entre adversários do computador são simuladas jogo a jogo, com a chance de cada um tirada dos atributos (mira pesa mais; na carambola, o efeito também) e do modo favorito; nas mesas do Mata-mata, sai um de cada vez, com chance maior para os mais fracos. A tela do campeonato mostra a chave (ou as mesas) com os resultados e o troféu, desenhado em canvas: apagado enquanto está em jogo, dourado para quem vence. O progresso fica salvo entre os jogos: dá para sair e continuar depois (um jogo interrompido recomeça). Se você cai, o resto é simulado até o campeão.
+
+### Desafios de tacada
+
+| # | Desafio | Objetivo | Extra |
+|---|---|---|---|
+| 1 | Bola reta | encaçapar a 1 no canto de cima, à direita | a branca para perto de onde bateu (tacada seca) |
+| 2 | Puxeta | encaçapar a 5 no meio de cima | a branca volta até o círculo |
+| 3 | Siga | encaçapar a 3 no canto de baixo, à direita | a branca segue e para no círculo |
+| 4 | Corte fino | encaçapar a 2 num corte fino | a branca termina no círculo, à esquerda |
+| 5 | Bola de tabela | encaçapar a 8 depois de ela bater numa tabela | ela cai no meio de baixo |
+| 6 | Combinação | bater na 2 e fazer a 2 mandar a 9 para o canto | só a 9 cai |
+| 7 | Defesa | tocar a 1 sem falta e deixar a branca a mais de 1,5 m dela | a branca para no círculo, perto do canto |
+| 8 | De tabela | com duas bolas no caminho, acertar a 6 batendo antes numa tabela | a 6 cai |
+| 9 | Posição | encaçapar a 7 no meio de cima | a branca para no círculo, de frente para a 8 |
+| 10 | Abertura certeira | abrir o losango de 9 e encaçapar alguma bola | caem duas ou mais |
+| 11 | Três tabelas | fazer um ponto de três tabelas, na mesa de carambola | a primeira bola tocada é a amarela |
+
+Cada desafio tem 3 tentativas. Cumprir o objetivo vale ★; cumprir também o extra, ★★; tudo isso na primeira tentativa, ★★★. O círculo dourado na mesa mostra onde a branca deve parar. O nível (Aprendiz, Clube ou Profissional) é escolhido na lista e muda a mira, como nas partidas; não há relógio nem desfazer. A melhor nota de cada desafio fica salva, e a lista mostra o total de estrelas. Os desafios não entram nas estatísticas.
 
 ### Adversários do computador
 
@@ -64,7 +84,7 @@ Cada um tem avatar desenhado em canvas, frases de vitória e de derrota (na tela
 - **Computador:** mova o mouse para mirar. Segure o botão e puxe para trás: o taco recua; solte para tacar (puxar de volta até o começo cancela). A barra de força à direita também taca: arraste para baixo e solte.
 - **Teclas:** ← → ou a roda do mouse fazem o ajuste fino da mira, de 0,1° (com Shift, 0,01°). ↑ ↓ mudam a força da barra; Espaço ou Enter tacam com ela (o taco recua e avança). W, S, A e D movem o ponto do efeito; C o centraliza. Z desfaz, M liga o modo de mover bolas, R arruma as bolas, Esc abre o menu.
 - **Efeito:** no computador, o seletor fica acima da barra de força: arraste o ponto vermelho na bola (duplo clique centraliza). Em cima dá siga, embaixo puxeta, dos lados efeito lateral. Fora do círculo tracejado o taco pode escorregar (miscue).
-- **Celular:** toque ou arraste na mesa para mirar. Ajuste fino: gire o anel do canto ou arraste com dois dedos. Força: arraste a barra da direita para baixo e solte; arrastar para fora dela cancela. O efeito abre num painel ao tocar no ícone da branca, acima da barra; tocar fora do painel o fecha. Em retrato, o jogo pede para girar o aparelho, mas dá para jogar assim mesmo, com a mesa em pé.
+- **Celular:** toque ou arraste na mesa para mirar. Ajuste fino: gire o anel do canto ou arraste com dois dedos. Força: arraste a barra da direita para baixo e solte; arrastar para fora dela cancela. O efeito abre num painel ao tocar no ícone da branca, acima da barra; tocar fora do painel o fecha. Em retrato, o jogo pede para girar o aparelho, mas dá para jogar assim mesmo, com a mesa em pé e o placar à direita dos botões. Se o jogo perde o foco no meio da partida (troca de aplicativo, tela apagada), ele abre a pausa. Se um quadro passa de 14 ms de média por 3 segundos, a resolução do desenho cai (densidade de pixels 2 → 1,5 → 1) para manter os 60 quadros.
 - **Bolas:** no treino, a branca pode ser arrastada para qualquer lugar livre e, com ✥ ligado, qualquer bola. Na partida, só com bola na mão (na abertura, atrás da linha de saída).
 - **Cantar caçapa:** quando a regra pede, toque na caçapa onde a bola vai cair; ela fica dourada.
 - **Penalidade "tira uma bola dele":** o jogador da vez toca numa bola sua, marcada com um anel, para tirá-la da mesa.
@@ -83,7 +103,7 @@ Ao fim de cada tacada, a física entrega ao motor de regras o registro da jogada
 
 ## Dados salvos
 
-No `localStorage`, com o prefixo `sinuca-`: `sinuca-config` (bolas, nível e mesa do treino, feltro, rastro, vibração, som e volumes, tempo do Profissional, tela entre as vezes), `sinuca-preparo` (o último preparo de cada modo: jogadores humanos ou adversários, nomes, nível, mesa, feltro, variantes), `sinuca-regras-casa` (as regras da casa salvas), `sinuca-campeonato` (o campeonato atual, com a chave e os resultados) e `sinuca-estatisticas` (as estatísticas de cada jogador humano).
+No `localStorage`, com o prefixo `sinuca-`: `sinuca-config` (bolas, nível e mesa do treino, feltro, rastro, vibração, som e volumes, tempo do Profissional, tela entre as vezes), `sinuca-preparo` (o último preparo de cada modo: jogadores humanos ou adversários, nomes, nível, mesa, feltro, variantes), `sinuca-regras-casa` (as regras da casa salvas), `sinuca-campeonato` (o campeonato atual, com a chave e os resultados), `sinuca-desafios` (a melhor nota de cada desafio) e `sinuca-estatisticas` (as estatísticas de cada jogador humano).
 
 ## Inteligência artificial
 
@@ -111,6 +131,8 @@ Cada modo é um objeto em `REGRAS`, com a mesma interface: `montar(sim, estado)`
 - Três jogadores: o primeiro a encaçapar na caçapa cantada (fora da abertura) escolhe o grupo; os outros dois ficam com os grupos que sobram, na ordem da vez.
 - Sinuca brasileira: as bolas ficam nas marcas do snooker (amarela, marrom e verde na meia-lua; azul no centro; rosa no ponto do pé; vermelha logo atrás dela; preta perto da tabela do pé). Bolas que caem fora da regra voltam às marcas sem valer pontos. Empate com a mesa vazia: a preta volta e decide. Na sinuca de bar, a falta vale 4 pontos e errar a livre não dá pontos. No Aprendiz, o balão explica o "golpe de 20" (com só a rosa e a preta, uma sequência faz no máximo 20) e o "golpe de 27" (a um ponto dos 28).
 - Bola 9: a 9 que cai numa falta volta à marca.
+- Snooker: as vermelhas são as bolas 1 a 15 e as coloridas, 16 a 21 (valem o número menos 14). Depois de uma vermelha, a colorida escolhida é a primeira tocada, sem precisar cantar. A falta vale o maior entre 4 e o valor da bola da vez, da primeira tocada e das encaçapadas; coloridas que caem numa falta voltam à marca (ocupada: a marca livre de maior valor). Com branca na caçapa, o adversário joga da meia-lua e não há bola livre. A bola livre é decidida por linhas retas até as bordas das bolas da vez. Não há a regra do "miss" nem a escolha de devolver a tacada ao faltoso. Empate com a mesa vazia: a preta volta à marca e decide.
+- Desafios: o motor `REGRAS.desafios` monta a posição a partir da tabela `DESAFIOS` (frações da mesa) e julga a tacada com um ajudante (`caiu`, `semFalta`, `primeira`, `tabelasAntes`, `naZona`, `distancia`, `pontoTresTabelas`…). Uma tentativa que falha remonta a posição (`reiniciar`).
 
 ## Etapas
 
@@ -120,10 +142,13 @@ Cada modo é um objeto em `REGRAS`, com a mesma interface: `montar(sim, estado)`
 4. **Modos brasileiros, multijogador e mesas** (pronta): Mata-mata com sorteio secreto e tela de privacidade, Três jogadores, Sinuca brasileira tradicional e de bar, Bola 9 com push out, Carambola livre e três tabelas; mesas de bar, oficial e de carambola, com escolha de mesa e de feltro por partida.
 5. **Inteligência artificial** (pronta): IA em todos os modos, multijogador e bolas secretas incluídos; os 8 adversários com avatar, modo favorito e frases; "pensando…"; botão Dica do Aprendiz; partidas mistas de humanos e computador.
 6. **Campeonato e progresso** (pronta): os 6 campeonatos, com chave em séries ou mesas do Mata-mata; simulação entre os adversários do computador; troféu em canvas; estatísticas por jogador; progresso salvo para continuar depois.
-7. Snooker, desafios de tacada e revisão para celular.
+7. **Snooker, desafios e celular** (pronta): Snooker internacional com bola livre e variantes de 15, 10 ou 6 vermelhas (também na final do Grand Slam); 11 desafios de tacada com estrelas; pausa ao perder o foco, qualidade de desenho adaptativa, placar no retrato e botões de toque com 44 px ou mais.
 
-### Pendências conhecidas
+### Bugs conhecidos
 
+- Snooker: não há a regra do "miss" nem a opção de devolver a tacada a quem fez a falta; com a branca na caçapa, o próximo joga da meia-lua sem direito a bola livre, mesmo sinucado.
+- Snooker: a IA não procura sinucar o adversário de propósito; as defesas dela só deixam a branca longe.
+- Desafios: o "Três tabelas" e o "De tabela" são difíceis no Profissional, porque lá a mira só mostra a linha até o contato.
 - A IA nunca declara push out na Bola 9 (mas decide bem quando o adversário declara).
 - No três tabelas a IA acerta pouco, como gente: as soluções são estreitas e o erro de mira as estraga.
 - Numa partida só de computadores, cada tacada leva o tempo de pensar mais o das bolas rolando.
@@ -137,3 +162,13 @@ Cada modo é um objeto em `REGRAS`, com a mesma interface: `montar(sim, estado)`
 - A altura da borracha não entra no cálculo: siga e puxeta não mudam a saída da tabela, só o rolamento depois dela.
 - O ângulo de corte sai até 0,2° mais aberto que o da bola fantasma, por causa da duração do contato.
 - Em retrato, a luz das bolas gira junto com a mesa.
+- A qualidade adaptativa só desce: depois de um trecho pesado, a resolução fica menor até recarregar a página.
+
+### Sugestões de ajuste
+
+- `FISICA.restituicaoBola` (0,95; testar 0,92–0,97) e a força máxima do taco, para a abertura encaçapar um pouco mais.
+- `FISICA.atritoTabela` (0,2), se o lateral na tabela parecer forte demais (testar 0,10–0,25).
+- `ESCALA_FORCA` dos campeonatos (40; testar 25–60): menor deixa as séries entre computadores mais imprevisíveis.
+- Limite da qualidade adaptativa (14 ms por 180 quadros; testar 12–16 ms): mais baixo protege celulares fracos e reduz a nitidez antes.
+- Raio das zonas dos desafios (110–260 mm, no campo `zona` de cada um): aumentar facilita o ★★.
+- Snooker: começar pelas 6 vermelhas para aprender; a partida de 15 leva umas 130 tacadas entre computadores.
