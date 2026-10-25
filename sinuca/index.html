@@ -148,6 +148,15 @@
   #hud.compacto #placar { top: calc(1px + var(--seguro-topo)); }
   #hud.compacto .mini { width: 13px; height: 13px; font-size: 7px; }
 
+  #acoes { display: flex; gap: 6px; }
+  .bt-acao { pointer-events: auto; min-height: 44px; padding: 0 14px; border-radius: 9px; border: 2px solid var(--latao); cursor: pointer;
+    background: linear-gradient(180deg, #5d3219, #3b1d0d); color: var(--latao-claro); font-size: 15px; box-shadow: 0 3px 10px rgba(0,0,0,.5); }
+  .bt-acao.ativo { background: linear-gradient(180deg, #2c7a4a, #17502e); color: #fff; }
+  #vez-bolas { display: flex; justify-content: center; align-items: center; gap: 8px; margin: 4px 0 10px; }
+  #vez-bolas .mini { width: 34px; height: 34px; font-size: 15px; }
+  #vez-bolas .vidas { color: #ff7a6a; font-size: 20px; margin-left: 6px; }
+  #fim-revela .op .bolas { display: flex; gap: 3px; }
+
   /* Balão de dica */
   #balao { position: fixed; left: 50%; bottom: calc(14px + var(--seguro-baixo)); transform: translate(-50%, 12px);
     max-width: min(520px, 80vw); padding: 10px 36px 10px 16px; font-size: 15px; opacity: 0; pointer-events: none;
@@ -171,7 +180,7 @@
     <button class="bh" id="b-som" title="Som" aria-label="Som">🔊</button>
   </div>
   <div id="hud-info" class="placa"><div id="info-1"></div><div id="info-2"></div><div id="bandeja"></div></div>
-  <div id="placar" hidden><div id="lados"></div><div id="vezinfo" class="placa"></div></div>
+  <div id="placar" hidden><div id="lados"></div><div id="vezinfo" class="placa"></div><div id="acoes"></div></div>
 </div>
 
 <div id="aviso" class="placa"></div>
@@ -192,7 +201,7 @@
         <button class="bt fraco" data-acao="config">Configurações</button>
       </div>
       <button class="bt fraco" data-acao="jogos">Jogos</button>
-      <p class="nota">Em construção: por enquanto, Bola 8, Par × Ímpar e Contagem de pontos, no mesmo aparelho. Os outros modos, os adversários do computador e o campeonato chegam nas próximas versões.</p>
+      <p class="nota">Em construção: todos jogam no mesmo aparelho. Os adversários do computador, o campeonato, o snooker e os desafios chegam nas próximas versões.</p>
     </div>
   </section>
 
@@ -262,9 +271,11 @@
 
   <section class="tela" id="t-vez">
     <div class="placa">
-      <p class="sub">Passe o aparelho para</p>
+      <p class="sub" id="vez-sub">Passe o aparelho para</p>
       <h2 id="vez-nome"></h2>
-      <button class="bt" data-acao="vez-ok">Toque para começar</button>
+      <div id="vez-bolas" hidden></div>
+      <button class="bt fraco" data-acao="ver-bolas" id="vez-ver" hidden>👁 Ver minhas bolas</button>
+      <button class="bt" data-acao="vez-ok" id="vez-ok">Toque para começar</button>
     </div>
   </section>
 
@@ -273,6 +284,7 @@
       <h2 id="fim-titulo"></h2>
       <p class="sub" id="fim-motivo"></p>
       <table id="fim-tabela"></table>
+      <div id="fim-revela"></div>
       <div class="linha">
         <button class="bt fraco" data-acao="menu">Menu principal</button>
         <button class="bt" data-acao="de-novo">Jogar de novo</button>
@@ -344,7 +356,7 @@ const MESAS = {
     bocaCanto: 124, bocaMeio: 134, anguloCanto: 140, anguloMeio: 104,
     recuoCanto: 68, recuoMeio: 44, raioCanto: 64, raioMeio: 64,
     larguraTabela: 46, larguraMadeira: 120, feltro: 'verde', madeira: 'imbuia',
-    restituicaoTabela: 0.74, velocidadeFeltro: 0.8, linhaSaida: 500, raioMeiaLua: 0,
+    restituicaoTabela: 0.74, velocidadeFeltro: 0.8, linhaSaida: 500, raioMeiaLua: 160,
   },
   clube: {
     nome: 'Mesa de clube', L: 2540, W: 1270, diametroBola: 57.15, cacapas: 6,
@@ -448,7 +460,32 @@ const MODOS = {
       },
     },
   },
-  mataMata:   { nome: 'Mata-mata', resumo: 'Bolas secretas sorteadas; quem tiver as bolas encaçapadas sai.', min: 2, max: 6, duplas: false, secretas: true, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'pool', etapa: 4, variantes: {} },
+  mataMata: {
+    nome: 'Mata-mata', resumo: 'Sorteio secreto de bolas: quem tiver as suas encaçapadas sai; vence o último vivo. De 2 a 6 jogadores.',
+    min: 2, max: 6, duplas: false, secretas: true, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'pool', etapa: 4,
+    variantes: {
+      bolas: {
+        nome: 'Bolas por jogador', padrao: '1', opcoes: [{ id: '1', nome: '1 bola' }, { id: '2', nome: '2 bolas' }, { id: '3', nome: '3 bolas' }],
+        texto: 'Quantas bolas cada um recebe no sorteio (com muitos jogadores, cai para caber nas 15). As que sobram não são de ninguém.',
+      },
+      ordem: {
+        nome: 'Ordem', padrao: 'numerica', opcoes: [{ id: 'numerica', nome: 'Numérica (a menor primeiro)' }, { id: 'livre', nome: 'Livre' }],
+        texto: 'Numérica: a primeira bola tocada tem de ser a menor da mesa; se não for, as bolas que caírem voltam e a vez passa.',
+      },
+      propria: {
+        nome: 'Quem encaçapa a própria bola', padrao: 'eliminado', opcoes: [{ id: 'eliminado', nome: 'É eliminado' }, { id: 'nada', nome: 'Nada acontece' }],
+        texto: 'Com "nada acontece", a bola volta à mesa e a vez passa.',
+      },
+      falta: {
+        nome: 'Branca na caçapa', padrao: 'devolve', opcoes: [{ id: 'devolve', nome: 'Devolve uma bola' }, { id: 'vez', nome: 'Só perde a vez' }, { id: 'eliminado', nome: 'É eliminado' }],
+        texto: 'Devolve: a última bola que o faltoso derrubou volta à mesa (e o dono, se tinha saído por ela, volta ao jogo). Em todos os casos o próximo fica com a bola na mão.',
+      },
+      vidas: {
+        nome: 'Vidas', padrao: '1', opcoes: [{ id: '1', nome: '1 vida' }, { id: '2', nome: '2 vidas' }, { id: '3', nome: '3 vidas' }],
+        texto: 'Quando todas as bolas de um jogador caem, ele perde uma vida e as bolas dele voltam à mesa; sem vidas, está fora.',
+      },
+    },
+  },
   contagem: {
     nome: 'Contagem de pontos ("61")', resumo: 'Cada bola vale o seu número. Quem fizer 61 pontos primeiro vence. De 2 a 4 jogadores.',
     min: 2, max: 4, duplas: false, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'pool', etapa: 3,
@@ -465,14 +502,66 @@ const MODOS = {
       },
     },
   },
-  tresJog:    { nome: 'Três jogadores', resumo: 'Grupos 1–5, 6–10 e 11–15; cada um derruba as bolas dos outros.', min: 3, max: 3, duplas: false, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'pool', etapa: 4, variantes: {} },
-  brasileira: { nome: 'Sinuca brasileira', resumo: 'Vermelha, amarela, verde, marrom, azul, rosa e preta, valendo de 1 a 7.', min: 2, max: 2, duplas: false, secretas: false, mesas: ['bar', 'oficial'], mesaPadrao: 'oficial', bolas: 'brasileira', etapa: 4, variantes: {} },
-  bola9:      { nome: 'Bola 9', resumo: 'Sempre a menor bola primeiro; vence quem encaçapar a 9.', min: 2, max: 2, duplas: false, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'clube', bolas: 'pool', etapa: 4, variantes: {} },
-  carambola:  { nome: 'Carambola', resumo: 'Três bolas, mesa sem caçapas: ponto quando a sua bola toca as outras duas.', min: 2, max: 2, duplas: false, secretas: false, mesas: ['carambola'], mesaPadrao: 'carambola', bolas: 'carambola', etapa: 4, variantes: {} },
+  tresJog: {
+    nome: 'Três jogadores', resumo: 'Grupos 1–5, 6–10 e 11–15: cada um derruba as bolas dos outros, e vence quem ainda tiver bola na mesa.',
+    min: 3, max: 3, duplas: false, secretas: false, mesas: ['bar', 'clube'], mesaPadrao: 'bar', bolas: 'pool', etapa: 4,
+    variantes: {
+      propria: {
+        nome: 'Encaçapar bola do próprio grupo', padrao: 'falta', opcoes: [{ id: 'falta', nome: 'É falta' }, { id: 'livre', nome: 'Não é falta' }],
+        texto: 'A bola fica fora de qualquer jeito; como falta, o próximo ainda ganha a bola na mão.',
+      },
+    },
+  },
+  brasileira: {
+    nome: 'Sinuca brasileira', resumo: 'Vermelha, amarela, verde, marrom, azul, rosa e preta, valendo de 1 a 7; a bola da vez e a livre.',
+    min: 2, max: 2, duplas: false, secretas: false, mesas: ['oficial', 'bar'], mesaPadrao: 'oficial', bolas: 'brasileira', etapa: 4,
+    variantes: {
+      estilo: {
+        nome: 'Regra', padrao: 'tradicional', opcoes: [{ id: 'tradicional', nome: 'Tradicional' }, { id: 'bar', nome: 'Sinuca de bar (regra livre)' }],
+        texto: 'Na sinuca de bar não há limite de vantagem, a falta vale sempre 4 pontos e errar a livre não dá pontos ao adversário.',
+      },
+      falta: {
+        nome: 'Valor da falta', padrao: 'min4', opcoes: [{ id: 'min4', nome: 'Bola em jogo, mínimo 4' }, { id: 'sete', nome: '7 pontos' }, { id: 'vez', nome: 'Valor da bola da vez' }],
+        texto: 'Pontos que o adversário ganha a cada falta, na regra tradicional. A bola em jogo é a da vez ou, na livre, a que foi tocada.',
+      },
+      vantagem: {
+        nome: 'Vantagem que encerra', padrao: '28', opcoes: [{ id: '28', nome: '28 pontos' }, { id: '35', nome: '35 pontos' }, { id: 'sem', nome: 'Sem limite' }],
+        texto: 'A partida termina quando alguém abre essa vantagem, ou quando a mesa acaba. Sem limite, só quando a mesa acaba.',
+      },
+      recolocar: {
+        nome: 'Recolocação das bolas', padrao: 'marca', opcoes: [{ id: 'marca', nome: 'Marca livre de maior valor' }, { id: 'perto', nome: 'O mais perto da marca' }],
+        texto: 'Onde fica a bola que volta quando a marca dela está ocupada: na marca livre da bola de maior valor, ou o mais perto possível da própria marca.',
+      },
+    },
+  },
+  bola9: {
+    nome: 'Bola 9', resumo: 'Losango de 9 bolas: sempre a menor primeiro, e vence quem encaçapar a 9.',
+    min: 2, max: 2, duplas: false, secretas: false, mesas: ['clube', 'bar'], mesaPadrao: 'clube', bolas: 'pool', etapa: 4,
+    variantes: {
+      abertura9: {
+        nome: 'A 9 na abertura', padrao: 'vence', opcoes: [{ id: 'vence', nome: 'Vence a partida' }, { id: 'volta', nome: 'Volta à marca' }],
+        texto: 'Se a 9 cai numa abertura sem falta, quem abriu vence, ou ela volta à marca e o jogo segue.',
+      },
+    },
+  },
+  carambola: {
+    nome: 'Carambola', resumo: 'Três bolas, mesa sem caçapas: ponto quando a sua bola toca as outras duas.',
+    min: 2, max: 2, duplas: false, secretas: false, mesas: ['carambola'], mesaPadrao: 'carambola', bolas: 'carambola', etapa: 4,
+    variantes: {
+      meta: {
+        nome: 'Pontos para vencer', padrao: '50', opcoes: [{ id: '10', nome: '10 pontos' }, { id: '25', nome: '25 pontos' }, { id: '50', nome: '50 pontos (padrão de bar)' }, { id: '100', nome: '100 pontos' }],
+        texto: 'Quem chegar primeiro a esse número de pontos vence.',
+      },
+      estilo: {
+        nome: 'Modalidade', padrao: 'livre', opcoes: [{ id: 'livre', nome: 'Livre (tocar as duas)' }, { id: 'tres', nome: 'Três tabelas' }],
+        texto: 'No três tabelas, a sua bola precisa tocar pelo menos 3 tabelas antes de chegar à última bola.',
+      },
+    },
+  },
   snooker:    { nome: 'Snooker internacional', resumo: '15 vermelhas e 6 coloridas, alternando.', min: 2, max: 2, duplas: false, secretas: false, mesas: ['oficial'], mesaPadrao: 'oficial', bolas: 'snooker', etapa: 7, variantes: {} },
   treino: {
     nome: 'Treino livre', resumo: 'Sem regras: arrume as bolas e treine as tacadas.', min: 1, max: 1, duplas: false, secretas: false,
-    mesas: ['clube'], mesaPadrao: 'clube', bolas: 'pool', etapa: 1,
+    mesas: ['clube', 'bar', 'oficial', 'carambola'], mesaPadrao: 'clube', bolas: 'pool', etapa: 1,
     variantes: {
       bolas: {
         nome: 'Bolas na mesa', padrao: '15',
@@ -486,8 +575,6 @@ const MODOS = {
   },
   desafios:   { nome: 'Desafios de tacada', resumo: 'Posições montadas, com objetivo e nota de 1 a 3 estrelas.', min: 1, max: 1, duplas: false, secretas: false, mesas: ['clube'], mesaPadrao: 'clube', bolas: 'pool', etapa: 7, variantes: {} },
 };
-// Mesas já prontas nesta etapa (as outras chegam na etapa 4)
-const MESAS_PRONTAS = ['clube'];
 // Cores dos avatares dos jogadores, na ordem
 const CORES_JOGADORES = ['#b8342a', '#2a62a8', '#c79a1a', '#6d3a93', '#2c8250', '#c0641f'];
 
@@ -507,6 +594,7 @@ const CONFIG_PADRAO = {
   som: true, volGeral: 0.8, volEfeitos: 0.9, volAmbiente: 0.5, ambiente: false,
   tempoPro: 45,            // segundos por tacada no nível Profissional
   telaVez: 'secretas',     // tela "Vez de…" entre jogadores: 'secretas' (só com bolas secretas) ou 'sempre'
+  mesaTreino: 'clube',     // mesa do treino livre
 };
 
 // Prefixo das chaves do localStorage (os jogos dividem o domínio)
@@ -1172,7 +1260,7 @@ const Rack = (() => {
     pos.forEach((p, i) => { const b = Fisica.criarBola(i + 1, descPool(nums[i])); b.x = p.x; b.y = p.y; bolas.push(b); });
     for (const b of bolas) b.q = orientar(rnd);
     bolas[0].x = -geo.hx / 2; bolas[0].y = 0;
-    sim.bolas = bolas; sim.contatos.clear();
+    sim.bolas = bolas; sim.contatos.clear(); sim.conjunto = 'pool';
   }
   // Recoloca uma bola encaçapada: na marca do pé, ou no primeiro lugar livre na linha dela,
   // indo para a tabela do pé (e, se não couber, para o outro lado)
@@ -1189,7 +1277,68 @@ const Rack = (() => {
     }
     b.x = x0; b.y = 0;
   }
-  return { descPool, orientar, arrumarPool, recolocar };
+  // Descrição de uma bola de qualquer jogo: 'pool', 'brasileira' (1 vermelha … 7 preta) ou 'carambola'
+  // (0 branca, 1 amarela, 2 vermelha, sem números)
+  function desc(conjunto, num) {
+    if (conjunto === 'brasileira') return num === 0 ? descPool(0) : { num, tipo: 'lisa', cor: CORES_BOLAS.brasileira[num], numerada: true };
+    if (conjunto === 'carambola') {
+      const c = CORES_BOLAS.carambola;
+      return [{ num: 0, tipo: 'branca', cor: c.branca, numerada: false }, { num: 1, tipo: 'lisa', cor: c.amarela, numerada: false },
+              { num: 2, tipo: 'lisa', cor: c.vermelha, numerada: false }][num];
+    }
+    return descPool(num);
+  }
+  // Marcas da sinuca brasileira, como no snooker: amarela, verde e marrom na linha de saída (nas pontas e
+  // no meio da meia-lua), azul no centro, rosa no ponto do pé, preta perto da tabela do pé e a vermelha logo atrás da rosa
+  function marcasBrasileira(geo) {
+    const m = geo.mesa, xs = -geo.hx + m.linhaSaida, rD = m.raioMeiaLua || geo.W * 0.164;
+    return {
+      1: [geo.hx / 2 + 2 * geo.R + 1.5, 0], 2: [xs, rD], 3: [xs, -rD], 4: [xs, 0],
+      5: [0, 0], 6: [geo.hx / 2, 0], 7: [geo.hx - geo.L * 0.0908, 0],
+    };
+  }
+  function arrumarBrasileira(sim, semente) {
+    const geo = sim.geo, rnd = U.rng(semente), mc = marcasBrasileira(geo);
+    const bolas = [Fisica.criarBola(0, desc('brasileira', 0))];
+    for (let n = 1; n <= 7; n++) { const b = Fisica.criarBola(n, desc('brasileira', n)); b.x = mc[n][0]; b.y = mc[n][1]; bolas.push(b); }
+    for (const b of bolas) b.q = orientar(rnd);
+    const xs = -geo.hx + geo.mesa.linhaSaida, rD = geo.mesa.raioMeiaLua || geo.W * 0.164;
+    bolas[0].x = xs - rD * 0.5; bolas[0].y = rD * 0.3;
+    sim.bolas = bolas; sim.contatos.clear(); sim.conjunto = 'brasileira';
+  }
+  // Recoloca uma bola da sinuca brasileira na marca dela; ocupada, na marca livre de maior valor ('marca')
+  // ou no lugar livre mais perto da própria marca ('perto')
+  function recolocarBrasileira(sim, num, modo) {
+    const b = sim.bolas.find(x => x.num === num && x.tipo !== 'branca');
+    if (!b) return;
+    const geo = sim.geo, mc = marcasBrasileira(geo);
+    Object.assign(b, { estado: 'mesa', prof: 0, vz: 0, cacapa: -1, qd: null, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0, movendo: false });
+    const livre = (x, y) => Fisica.posicaoValida(sim, b, x, y);
+    const [x0, y0] = mc[num];
+    if (livre(x0, y0)) { b.x = x0; b.y = y0; return; }
+    if (modo !== 'perto') {
+      for (let n = 7; n >= 1; n--) if (livre(mc[n][0], mc[n][1])) { b.x = mc[n][0]; b.y = mc[n][1]; return; }
+    }
+    for (let raio = geo.R; raio < geo.hx; raio += geo.R * 0.5) {
+      for (let a = 0; a < Math.PI * 2; a += geo.R * 0.5 / raio) {
+        const x = x0 + Math.cos(a) * raio, y = y0 + Math.sin(a) * raio;
+        if (livre(x, y)) { b.x = x; b.y = y; return; }
+      }
+    }
+  }
+  // Carambola: vermelha no ponto do pé, a bola de quem não abre no ponto de cima e a de quem abre
+  // na mesma linha, 152 mm para o lado. Bola 0 (branca) é do lado 0; bola 1 (amarela), do lado 1.
+  function arrumarCarambola(sim, quemAbre, semente) {
+    const geo = sim.geo, rnd = U.rng(semente);
+    const bolas = [0, 1, 2].map(n => Fisica.criarBola(n, desc('carambola', n)));
+    const abre = bolas[quemAbre ? 1 : 0], outra = bolas[quemAbre ? 0 : 1];
+    bolas[2].x = geo.hx / 2; bolas[2].y = 0;
+    outra.x = -geo.hx / 2; outra.y = 0;
+    abre.x = -geo.hx / 2; abre.y = 152;
+    for (const b of bolas) b.q = orientar(rnd);
+    sim.bolas = bolas; sim.contatos.clear(); sim.conjunto = 'carambola';
+  }
+  return { descPool, desc, orientar, arrumarPool, recolocar, marcasBrasileira, arrumarBrasileira, recolocarBrasileira, arrumarCarambola };
 })();
 
 // Utilitários comuns às regras. "E" é o estado da partida (Partida.criar): lados, vez, m (estado
@@ -1243,7 +1392,11 @@ const REGRAS = {
     textoRegras: ['Sem regras e sem faltas. Arraste a branca para onde quiser; com o modo de mover (✥) ligado, arraste qualquer bola.',
                   'Depois de cada tacada aparecem a velocidade, o ângulo, a primeira bola tocada e as tabelas da branca. O nível muda a mira e liga o throw.'],
     diagramas: [],
-    montar(sim, E) { Rack.arrumarPool(sim, E.variantes.bolas, (Math.random() * 1e9) | 0); E.bolaNaMaoInicial = null; },
+    montar(sim, E) {
+      const sem = (Math.random() * 1e9) | 0;
+      if (sim.geo.mesa.cacapas === 0) Rack.arrumarCarambola(sim, 0, sem); else Rack.arrumarPool(sim, E.variantes.bolas, sem);
+      E.bolaNaMaoInicial = null;
+    },
     bolaDaVez() { return ''; },
     precisaCantar() { return false; },
     validarJogada(reg) {
@@ -1548,6 +1701,481 @@ const REGRAS = {
     },
     pontuacaoHUD(E, i) { return { linha: `${E.lados[i].pontos} pontos`, bolas: [] }; },
   },
+
+  // ---------------- MATA-MATA ----------------
+  // E.m.donos: número da bola → lado dono (as sem dono são neutras); E.m.vidas por lado;
+  // E.m.mortes: bolas derrubadas, em ordem ({ atirador, num }), para a falta "devolve uma bola".
+  mataMata: {
+    id: 'mataMata',
+    textoRegras: [
+      'De 2 a 6 jogadores. No sorteio, cada um recebe em segredo uma ou mais bolas numeradas: só ele sabe quais são. Antes da partida, cada jogador vê as suas, e depois pode conferir no botão 👁 Minhas bolas.',
+      'Encaçapar uma bola "mata" o dono dela; quando todas as bolas de um jogador caem, ele está fora (ou perde uma vida, se houver vidas). Vence o último vivo. Bola sem dono não mata ninguém, mas dá a vez de novo.',
+      'Na ordem numérica, a primeira bola tocada tem de ser a menor da mesa. Branca na caçapa é falta, e o próximo fica com a bola na mão.',
+      'O placar mostra quem está vivo e quantas bolas tem, nunca quais. No fim, a tela revela de quem era cada bola.',
+    ],
+    diagramas: [
+      { titulo: 'Sorteio', bolas: RACK_DIAGRAMA.map(b => Object.assign({}, b, { apagada: ![4, 11].includes(b.num) })).concat([{ num: 0, x: -0.5, y: 0 }]),
+        aneis: RACK_DIAGRAMA.filter(b => [4, 11].includes(b.num)).map(b => [b.x, b.y]),
+        legenda: 'Ana tirou a 4 e a 11: se as duas caírem, ela está fora.' },
+      { titulo: 'Ordem numérica', bolas: [{ num: 0, x: -0.6, y: 0.2 }, { num: 3, x: 0.2, y: -0.1 }, { num: 9, x: 0.05, y: 0.3 }, { num: 5, x: 0.55, y: 0.25 }],
+        linhas: [{ pts: [[-0.6, 0.2], [0.08, -0.08]], tracejada: true, seta: true }], aneis: [[0.2, -0.1]],
+        legenda: 'Na ordem numérica, a primeira bola tocada é a menor da mesa.' },
+    ],
+    montar(sim, E) {
+      Rack.arrumarPool(sim, '15', (Math.random() * 1e9) | 0);
+      const n = E.lados.length, k = Math.min(+E.variantes.bolas, Math.floor(15 / n));
+      const nums = U.embaralhar([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], Math.random), donos = {};
+      E.lados.forEach((l, i) => { for (let j = 0; j < k; j++) donos[nums[i * k + j]] = i; });
+      E.m = { donos, vidas: E.lados.map(() => +E.variantes.vidas), mortes: [] };
+      E.bolaNaMaoInicial = 'atras';
+      E.sorteio = true;
+    },
+    bolasDe(E, i) { return Object.keys(E.m.donos).map(Number).filter(n => E.m.donos[n] === i).sort((a, b) => a - b); },
+    minhasBolas(E, i) { return this.bolasDe(E, i); },
+    bolaDaVez(E) {
+      if (E.variantes.ordem !== 'numerica') return 'livre';
+      const n = RU.naMesa(E.sim);
+      return n.length ? 'a ' + Math.min(...n) : '';
+    },
+    precisaCantar() { return false; },
+    podeRetirar() { return false; },
+    depoisDeRetirar() { return null; },
+    acoes() { return [{ id: 'ver', rotulo: '👁 Minhas bolas' }]; },
+    executarAcao(E, id) {
+      if (id !== 'ver') return {};
+      const i = E.vez, nm = E.lados[i].nome, b = this.bolasDe(E, i), naMesa = RU.naMesa(E.sim);
+      const txt = b.map(n => naMesa.includes(n) ? String(n) : `${n} (já caiu)`).join(', ');
+      return { balao: ['Só para ' + nm, `Suas bolas: ${txt}.` + (E.m.vidas[i] > 1 ? ` Vidas: ${E.m.vidas[i]}.` : '')], mantemDesfazer: true };
+    },
+    validarJogada(reg, E) {
+      const sim = E.sim, v = E.variantes, m = E.m, eu = E.vez, r = RU.resultado();
+      const nome = i => E.lados[i].nome, proximo = nome(Partida.proximo(E));
+      const enc = reg.encacapadas.filter(x => x.num !== 0).map(x => x.num);
+      const menor = E.antes.length ? Math.min(...E.antes) : 0;
+      if (RU.brancaFora(reg)) {
+        r.recolocar = enc.slice(); r.bolaNaMao = 'mesa';
+        let conseq = `${proximo} fica com a bola na mão.`;
+        if (v.falta === 'devolve') {
+          const naMesa = RU.naMesa(sim);
+          let k = m.mortes.length - 1;
+          while (k >= 0 && (m.mortes[k].atirador !== eu || naMesa.includes(m.mortes[k].num))) k--;
+          if (k >= 0) {
+            const num = m.mortes[k].num, dono = m.donos[num];
+            m.mortes.splice(k, 1);
+            r.recolocar.push(num);
+            const volta = dono !== undefined && E.lados[dono].eliminado;
+            if (volta) { r.revividos = [dono]; m.vidas[dono] = 1; }
+            conseq = `a ${num}, a última que você derrubou, volta à mesa` + (volta ? ` e ${nome(dono)} volta ao jogo` : '') + `. ${proximo} fica com a bola na mão.`;
+          }
+        } else if (v.falta === 'eliminado') { r.eliminados.push(eu); conseq = `você está fora! ${proximo} fica com a bola na mão.`; }
+        RU.falta(r, reg.brancaCaiu ? 'A branca caiu na caçapa.' : 'A branca saiu da mesa.', conseq);
+        return this.fecharSeUmVivo(E, r);
+      }
+      if (reg.tempoEsgotado) { r.mensagemCurta = r.mensagemDica = 'O tempo acabou: a vez passa.'; return r; }
+      if (reg.primeiraBola === null) { r.mensagemCurta = r.mensagemDica = 'A branca não tocou em nenhuma bola: a vez passa.'; return r; }
+      if (v.ordem === 'numerica') {
+        const pn = RU.num(sim, reg.primeiraBola);
+        if (pn !== menor) {
+          r.recolocar = enc.slice();
+          return RU.falta(r, `Você bateu primeiro na ${pn}; a bola da vez era a ${menor}.`, (enc.length ? 'as bolas que caíram voltam à mesa e ' : '') + 'a vez passa.');
+        }
+      }
+      const msgs = [];
+      let matou = false;
+      for (const n of enc) {
+        const o = m.donos[n];
+        if (o === undefined) { matou = true; continue; }
+        if (o === eu) {
+          if (v.propria === 'eliminado') { if (!r.eliminados.includes(eu)) { r.eliminados.push(eu); msgs.push(`A ${n} era sua: você está fora!`); } }
+          else { r.recolocar.push(n); msgs.push(`A ${n} era sua: ela volta à mesa.`); }
+          continue;
+        }
+        m.mortes.push({ atirador: eu, num: n });
+        matou = true;
+      }
+      // Quem ficou sem bolas perde uma vida (e as bolas voltam) ou sai
+      const finais = new Set(RU.naMesa(sim).concat(r.recolocar));
+      E.lados.forEach((l, i) => {
+        if (l.eliminado || r.eliminados.includes(i)) return;
+        const minhas = this.bolasDe(E, i);
+        if (!minhas.length || minhas.some(n => finais.has(n))) return;
+        if (m.vidas[i] > 1) {
+          m.vidas[i]--;
+          for (const n of minhas) if (!r.recolocar.includes(n)) r.recolocar.push(n);
+          msgs.push(`${nome(i)} perdeu uma vida (resta${m.vidas[i] > 1 ? 'm' : ''} ${m.vidas[i]}); as bolas dele voltam à mesa.`);
+        } else { m.vidas[i] = 0; r.eliminados.push(i); msgs.push(`${nome(i)} está fora!`); }
+      });
+      r.continuaJogando = matou && !r.eliminados.includes(eu);
+      if (msgs.length) r.mensagemCurta = r.mensagemDica = msgs.join(' ');
+      else if (enc.length) r.mensagemDica = (enc.length > 1 ? `Caíram a ${enc.join(', a ')}` : `Caiu a ${enc[0]}`) + '. Ninguém saiu.';
+      return this.fecharSeUmVivo(E, r);
+    },
+    fecharSeUmVivo(E, r) {
+      const vivos = E.lados.map((l, i) => i)
+        .filter(i => (r.revividos || []).includes(i) || (!E.lados[i].eliminado && !r.eliminados.includes(i)));
+      if (vivos.length === 1) {
+        const antes = r.mensagemDica;
+        RU.fim(r, vivos[0], `${E.lados[vivos[0]].nome} é o último vivo e venceu!`);
+        if (antes) r.mensagemDica = antes + ' ' + r.mensagemDica;
+      }
+      return r;
+    },
+    pontuacaoHUD(E, i) {
+      if (E.lados[i].eliminado) return { linha: 'fora', bolas: [] };
+      const naMesa = RU.naMesa(E.sim), n = this.bolasDe(E, i).filter(x => naMesa.includes(x)).length;
+      const vidas = +E.variantes.vidas > 1 ? ' · ' + '♥'.repeat(E.m.vidas[i]) : '';
+      return { linha: `vivo · ${n} bola${n !== 1 ? 's' : ''}${vidas}`, bolas: [] };
+    },
+    revelar(E) { return E.lados.map((l, i) => ({ nome: l.nome, bolas: this.bolasDe(E, i) })); },
+  },
+
+  // ---------------- TRÊS JOGADORES ----------------
+  tresJog: {
+    id: 'tresJog',
+    GR: { g1: { nome: '1 a 5', bolas: [1, 2, 3, 4, 5] }, g2: { nome: '6 a 10', bolas: [6, 7, 8, 9, 10] }, g3: { nome: '11 a 15', bolas: [11, 12, 13, 14, 15] } },
+    textoRegras: [
+      'Exatamente três jogadores. As 15 bolas formam três grupos: 1 a 5, 6 a 10 e 11 a 15.',
+      'Os grupos ainda não têm dono: o primeiro que encaçapar uma bola na caçapa cantada (fora da abertura) escolhe o seu, e os outros dois ficam com os grupos que sobram, na ordem da vez.',
+      'Depois disso, cada um tenta derrubar as bolas dos outros, e continua jogando enquanto derrubar. Quem ficar sem bolas na mesa está fora; vence o último com bolas.',
+      'É falta pôr a branca na caçapa ou não tocar em nenhuma bola: o próximo fica com a bola na mão. Encaçapar bola do próprio grupo pode ser falta também (variante).',
+    ],
+    diagramas: [
+      { titulo: 'Grupos', bolas: RACK_DIAGRAMA.concat([{ num: 0, x: -0.5, y: 0 }]),
+        legenda: 'Grupos de 1 a 5, de 6 a 10 e de 11 a 15. Derrube os dos outros; quem ficar sem bolas sai.' },
+    ],
+    montar(sim, E) { Rack.arrumarPool(sim, '15', (Math.random() * 1e9) | 0); E.m = { grupos: null, escolhendo: null }; E.bolaNaMaoInicial = 'atras'; },
+    grupo(E, i) { return E.m.grupos ? E.m.grupos[i] : null; },
+    bolaDaVez(E) {
+      if (E.m.escolhendo != null) return 'escolha o grupo';
+      if (!E.m.grupos) return E.abertura ? 'abertura' : 'cante a caçapa';
+      return 'as dos outros';
+    },
+    precisaCantar(E) { return !E.m.grupos && E.m.escolhendo == null && !E.abertura; },
+    bloqueio(E) { return E.m.escolhendo != null ? 'Antes, escolha o seu grupo nos botões.' : null; },
+    podeRetirar() { return false; },
+    depoisDeRetirar() { return null; },
+    acoes(E) {
+      if (E.m.escolhendo == null) return [];
+      return Object.entries(this.GR).map(([id, g]) => ({ id, rotulo: 'Fico com ' + g.nome }));
+    },
+    executarAcao(E, id) {
+      const eu = E.m.escolhendo;
+      if (eu == null || !this.GR[id]) return {};
+      const resto = Object.keys(this.GR).filter(g => g !== id);
+      E.m.grupos = [];
+      E.m.grupos[eu] = id;
+      let i = eu;
+      for (const g of resto) { i = (i + 1) % E.lados.length; E.m.grupos[i] = g; }
+      E.m.escolhendo = null;
+      return { aviso: E.lados.map((l, k) => `${l.nome}: ${this.GR[E.m.grupos[k]].nome}`).join(' · ') };
+    },
+    validarJogada(reg, E) {
+      const sim = E.sim, v = E.variantes, eu = E.vez, r = RU.resultado();
+      const nomeEu = E.lados[eu].nome, proximo = E.lados[Partida.proximo(E)].nome;
+      const enc = reg.encacapadas.filter(x => x.num !== 0);
+      const fora = RU.brancaFora(reg);
+      let falta = null;
+      if (reg.tempoEsgotado) falta = 'O tempo da tacada acabou.';
+      else if (fora) falta = reg.brancaCaiu ? 'A branca caiu na caçapa.' : 'A branca saiu da mesa.';
+      else if (reg.primeiraBola === null) falta = 'A branca não tocou em nenhuma bola.';
+      if (!E.m.grupos) {
+        if (falta) { r.bolaNaMao = 'mesa'; return RU.falta(r, falta, `${proximo} fica com a bola na mão.`); }
+        const cantada = !E.abertura && enc.find(x => x.cacapa === E.cantada);
+        if (cantada) {
+          E.m.escolhendo = eu; r.continuaJogando = true;
+          r.mensagemCurta = r.mensagemDica = `A ${cantada.num} caiu na caçapa cantada: ${nomeEu} escolhe o grupo.`;
+        } else {
+          r.continuaJogando = E.abertura && enc.length > 0;
+          if (enc.length && !E.abertura) r.mensagemDica = 'A bola caiu fora da caçapa cantada: não escolhe grupo, e a vez passa.';
+        }
+        return r;
+      }
+      const g = this.GR[this.grupo(E, eu)];
+      const minhas = enc.filter(x => g.bolas.includes(x.num)), dosOutros = enc.filter(x => !g.bolas.includes(x.num));
+      if (!falta && minhas.length && v.propria === 'falta') falta = `A ${minhas[0].num} é do seu grupo (${g.nome}).`;
+      if (falta) { r.bolaNaMao = 'mesa'; RU.falta(r, falta, `${proximo} fica com a bola na mão.`); }
+      else r.continuaJogando = dosOutros.length > 0;
+      // Quem ficou sem bolas sai
+      const naMesa = RU.naMesa(sim), msgs = [];
+      E.lados.forEach((l, i) => {
+        if (l.eliminado) return;
+        if (!this.GR[E.m.grupos[i]].bolas.some(n => naMesa.includes(n))) { r.eliminados.push(i); msgs.push(`${l.nome} ficou sem bolas e está fora!`); }
+      });
+      if (r.eliminados.includes(eu)) r.continuaJogando = false;
+      if (msgs.length) { r.mensagemCurta = (r.mensagemCurta ? r.mensagemCurta + ' ' : '') + msgs.join(' '); r.mensagemDica += (r.mensagemDica ? ' ' : '') + msgs.join(' '); }
+      const vivos = E.lados.map((l, i) => i).filter(i => !E.lados[i].eliminado && !r.eliminados.includes(i));
+      if (vivos.length === 1) return RU.fim(r, vivos[0], `${E.lados[vivos[0]].nome} é o último com bolas na mesa e venceu!`);
+      return r;
+    },
+    pontuacaoHUD(E, i) {
+      const gi = this.grupo(E, i);
+      if (!gi) return { linha: E.m.escolhendo === i ? 'escolhendo o grupo' : 'sem grupo', bolas: [] };
+      const naMesa = RU.naMesa(E.sim), g = this.GR[gi];
+      return { linha: E.lados[i].eliminado ? 'fora' : g.nome, bolas: g.bolas.map(n => ({ num: n, fora: !naMesa.includes(n) })) };
+    },
+  },
+
+  // ---------------- SINUCA BRASILEIRA ----------------
+  // E.m.livre: depois de encaçapar a bola da vez, a próxima tacada vale em qualquer bola;
+  // E.m.desempate: a mesa acabou empatada e só a preta voltou.
+  brasileira: {
+    id: 'brasileira',
+    NOMES: { 1: 'vermelha', 2: 'amarela', 3: 'verde', 4: 'marrom', 5: 'azul', 6: 'rosa', 7: 'preta' },
+    textoRegras: [
+      'Dois jogadores, a branca e sete bolas: vermelha (1), amarela (2), verde (3), marrom (4), azul (5), rosa (6) e preta (7), cada uma na sua marca. A branca começa na meia-lua.',
+      'A bola da vez é a de menor valor na mesa, e a primeira bola tocada tem de ser ela. Encaçapada, ela sai da mesa e vale os seus pontos. Na abertura, a vermelha tem de ser tocada e não pode cair.',
+      'Depois de encaçapar a bola da vez vem a livre: o jogador pode tentar qualquer bola. Se encaçapar, ganha os pontos dela, ela volta à marca e o jogo segue na bola da vez; se errar, os pontos dela vão para o adversário (na regra tradicional).',
+      'Bolas que caem fora da regra voltam às marcas. Falta (branca na caçapa, não tocar em nada, tocar primeiro a bola errada) dá pontos ao adversário; com a branca na caçapa, ele joga da meia-lua.',
+      'A partida termina quando alguém abre 28 pontos de vantagem (variante) ou quando a mesa acaba; empate na mesa vazia: a preta volta, e quem a encaçapar vence.',
+    ],
+    diagramas: [
+      { titulo: 'Marcas', conjunto: 'brasileira', meiaLua: true,
+        bolas: [{ num: 2, x: -0.587, y: 0.164 }, { num: 3, x: -0.587, y: -0.164 }, { num: 4, x: -0.587, y: 0 }, { num: 5, x: 0, y: 0 },
+                { num: 6, x: 0.5, y: 0 }, { num: 1, x: 0.566, y: 0 }, { num: 7, x: 0.818, y: 0 }, { num: 0, x: -0.72, y: 0.1 }],
+        legenda: 'As marcas: amarela, marrom e verde na linha da meia-lua; azul no centro; rosa, vermelha e preta para o lado do pé.' },
+      { titulo: 'Bola da vez e livre', conjunto: 'brasileira', meiaLua: true,
+        bolas: [{ num: 0, x: -0.3, y: 0.15 }, { num: 1, x: 0.45, y: 0.32 }, { num: 0, x: 0.42, y: 0.05, apagada: true }, { num: 7, x: 0.8, y: -0.35 }],
+        linhas: [{ pts: [[-0.3, 0.15], [0.38, 0.3]], tracejada: true }, { pts: [[0.45, 0.32], [0.93, 0.46]], cor: '#ffe68a', seta: true },
+                 { pts: [[0.38, 0.28], [0.42, 0.05]], tracejada: true, cor: 'rgba(255,255,255,0.45)' },
+                 { pts: [[0.42, 0.05], [0.75, -0.31]], tracejada: true, cor: 'rgba(170,215,255,0.9)' }, { pts: [[0.8, -0.35], [0.95, -0.46]], cor: '#ffe68a', seta: true }],
+        legenda: 'Primeiro a bola da vez (a vermelha); depois a livre: a preta vale 7 e volta à marca.' },
+    ],
+    montar(sim, E) {
+      Rack.arrumarBrasileira(sim, (Math.random() * 1e9) | 0);
+      E.m = { livre: false, desempate: false };
+      E.bolaNaMaoInicial = 'meiaLua';
+      for (const l of E.lados) l.pontos = 0;
+    },
+    nomeBola(n) { return `${this.NOMES[n]} (${n})`; },
+    bar(E) { return E.variantes.estilo === 'bar'; },
+    valorFalta(E, emJogo) {
+      if (this.bar(E)) return 4;
+      const f = E.variantes.falta;
+      return f === 'sete' ? 7 : f === 'vez' ? emJogo : Math.max(4, emJogo);
+    },
+    recolocarBola(E, num) { Rack.recolocarBrasileira(E.sim, num, E.variantes.recolocar); },
+    bolaDaVez(E) {
+      if (E.m.livre) return 'livre (qualquer bola)';
+      const n = RU.naMesa(E.sim);
+      return n.length ? this.nomeBola(Math.min(...n)) : '';
+    },
+    precisaCantar() { return false; },
+    podeRetirar() { return false; },
+    depoisDeRetirar() { return null; },
+    // O máximo que dá para fazer numa sequência com estas bolas: cada uma, mais uma livre na preta entre elas
+    maximo(nums) { return nums.reduce((s, n) => s + n, 0) + 7 * Math.max(0, nums.length - 1); },
+    validarJogada(reg, E) {
+      const sim = E.sim, m = E.m, eu = E.vez, outro = Partida.proximo(E), r = RU.resultado();
+      const lado = E.lados[eu], adv = E.lados[outro], bar = this.bar(E);
+      const enc = reg.encacapadas.filter(x => x.num !== 0).map(x => x.num);
+      const vez = E.antes.length ? Math.min(...E.antes) : 7;
+      const pn = reg.primeiraBola !== null ? RU.num(sim, reg.primeiraBola) : null;
+      const livre = m.livre, alvo = livre && pn !== null ? pn : vez;
+      m.livre = false;
+      let falta = null;
+      if (reg.tempoEsgotado) falta = 'O tempo da tacada acabou.';
+      else if (RU.brancaFora(reg)) falta = reg.brancaCaiu ? 'A branca caiu na caçapa.' : 'A branca saiu da mesa.';
+      else if (pn === null) falta = 'A branca não tocou em nenhuma bola.';
+      else if (!livre && pn !== vez) falta = `Você bateu primeiro na ${this.nomeBola(pn)}; a bola da vez era a ${this.nomeBola(vez)}.`;
+      else if (E.abertura && enc.includes(1)) falta = 'Na abertura, a vermelha não pode cair.';
+      if (falta) {
+        const val = this.valorFalta(E, alvo);
+        adv.pontos += val;
+        r.recolocar = enc.slice();
+        r.bolaNaMao = RU.brancaFora(reg) ? 'meiaLua' : null;
+        RU.falta(r, falta, `${adv.nome} ganha ${val} pontos` + (r.bolaNaMao ? ' e joga com a branca na meia-lua.' : '.') +
+                           (enc.length ? ' As bolas que caíram voltam às marcas.' : ''));
+        return this.conferirFim(E, r);
+      }
+      if (alvo === vez) {
+        if (enc.includes(vez)) {
+          lado.pontos += vez; r.pontos = vez;
+          r.recolocar = enc.filter(n => n !== vez);
+          const resta = RU.naMesa(sim).concat(r.recolocar);
+          r.continuaJogando = true;
+          m.livre = resta.length > 0 && !m.desempate;
+          r.mensagemDica = `+${vez}: a ${this.NOMES[vez]} saiu da mesa.` +
+            (m.livre ? ` Agora é a livre: tente qualquer bola; se cair, vale os pontos dela e ela volta à marca${bar ? '' : '; se errar, os pontos dela vão para o adversário'}.` : '');
+        } else {
+          r.recolocar = enc.slice();
+          if (enc.length) r.mensagemDica = 'A bola da vez não caiu; as outras que caíram voltam às marcas.';
+        }
+      } else if (enc.includes(alvo)) {
+        lado.pontos += alvo; r.pontos = alvo;
+        r.recolocar = enc.slice();
+        r.continuaJogando = true;
+        r.mensagemDica = `+${alvo} na livre: a ${this.NOMES[alvo]} volta à marca. Agora de novo a bola da vez, a ${this.NOMES[vez]}.`;
+      } else {
+        r.recolocar = enc.slice();
+        if (!bar) {
+          adv.pontos += alvo;
+          r.mensagemCurta = r.mensagemDica = `Errou a livre na ${this.NOMES[alvo]}: ${adv.nome} ganha ${alvo} pontos.`;
+        } else r.mensagemDica = 'Errou a livre: a vez passa.';
+      }
+      return this.conferirFim(E, r);
+    },
+    conferirFim(E, r) {
+      const [a, b] = E.lados, dif = a.pontos - b.pontos;
+      const resta = [...new Set(RU.naMesa(E.sim).concat(r.recolocar))].sort((x, y) => x - y);
+      const vant = this.bar(E) || E.variantes.vantagem === 'sem' ? Infinity : +E.variantes.vantagem;
+      const lider = dif > 0 ? 0 : 1;
+      if (Math.abs(dif) >= vant) return RU.fim(r, lider, `${E.lados[lider].nome} abriu ${Math.abs(dif)} pontos de vantagem e venceu!`);
+      if (!resta.length) {
+        if (dif !== 0) return RU.fim(r, lider, `A mesa acabou: ${E.lados[lider].nome} vence por ${E.lados[lider].pontos} a ${E.lados[1 - lider].pontos}.`);
+        r.recolocar.push(7); E.m.desempate = true; E.m.livre = false;
+        r.mensagemCurta = 'Empate com a mesa vazia: a preta volta à marca, e quem a encaçapar vence.';
+        r.mensagemDica = (r.mensagemDica ? r.mensagemDica + ' ' : '') + r.mensagemCurta;
+        return r;
+      }
+      // Situações de fim de partida (dicas do Aprendiz)
+      if (resta.length === 2 && resta[0] === 6 && resta[1] === 7) {
+        const d = Math.abs(dif), lt = E.lados[lider].nome;
+        let dica = '';
+        if (d === 27 && vant === 28) dica = `Golpe de 27: com a rosa e a preta na mesa, ${lt} está a um ponto dos 28 que encerram a partida; qualquer ponto de ${lt} ou falta do adversário decide.`;
+        else if (d > 20) dica = `Golpe de 20: com só a rosa e a preta, o máximo numa sequência é 20 pontos (6, mais 7 na livre, mais 7). Quem está mais de 20 atrás só vira com faltas de ${lt}.`;
+        if (dica) r.mensagemDica = r.mensagemDica ? r.mensagemDica + ' ' + dica : dica;
+      }
+      return r;
+    },
+    pontuacaoHUD(E, i) { return { linha: `${E.lados[i].pontos} pontos`, bolas: [] }; },
+  },
+
+  // ---------------- BOLA 9 ----------------
+  // E.m.pushDisponivel: a primeira tacada depois da abertura pode ser um push out (só no Profissional);
+  // E.m.push: o push out foi declarado; E.m.escolha: depois do push, quem está na vez escolhe jogar ou devolver.
+  bola9: {
+    id: 'bola9',
+    textoRegras: [
+      'Dois jogadores e nove bolas em losango, com a 1 na frente e a 9 no meio. A abertura é feita de trás da linha de saída.',
+      'A primeira bola tocada tem de ser sempre a menor da mesa. Quem encaçapa continua; vale combinar (bater a menor numa outra). Vence quem encaçapar a 9 numa tacada sem falta, a qualquer hora.',
+      'É falta pôr a branca na caçapa, não tocar em nenhuma bola, tocar primeiro outra que não a menor, ou nenhuma bola ir à tabela depois do contato (sem cair nenhuma). O adversário fica com a bola na mão; a 9 que cai numa falta volta à marca.',
+      'No nível Profissional, a primeira tacada depois da abertura pode ser um push out: ela não precisa tocar a menor bola (só a branca na caçapa é falta), e o adversário escolhe se joga dali ou devolve a vez.',
+    ],
+    diagramas: [
+      { titulo: 'Losango', bolas: (() => {
+          const nums = [1, 2, 3, 4, 9, 5, 6, 7, 8], pos = [];
+          let k = 0;
+          [1, 2, 3, 2, 1].forEach((n, i) => { for (let j = 0; j < n; j++) pos.push({ num: nums[k++], x: 0.42 + i * 0.105, y: (j - (n - 1) / 2) * 0.122 }); });
+          return pos.concat([{ num: 0, x: -0.5, y: 0 }]);
+        })(),
+        legenda: 'A 1 na frente, a 9 no meio.' },
+      { titulo: 'Combinação', bolas: [{ num: 0, x: -0.5, y: 0.1 }, { num: 2, x: 0.25, y: 0.05 }, { num: 9, x: 0.6, y: 0.3 }, { num: 5, x: 0.1, y: -0.3 }],
+        linhas: [{ pts: [[-0.5, 0.1], [0.13, 0.04]], tracejada: true }, { pts: [[0.25, 0.05], [0.52, 0.25]], cor: 'rgba(255,255,255,0.7)', tracejada: true },
+                 { pts: [[0.6, 0.3], [0.93, 0.46]], cor: '#ffe68a', seta: true }], aneis: [[0.25, 0.05]],
+        legenda: 'A menor da mesa é a 2: tocando nela primeiro, vale mandar a 9 para a caçapa e vencer.' },
+    ],
+    montar(sim, E) { Rack.arrumarPool(sim, '9', (Math.random() * 1e9) | 0); E.m = { pushDisponivel: false, push: false, escolha: null }; E.bolaNaMaoInicial = 'atras'; },
+    bolaDaVez(E) { const n = RU.naMesa(E.sim); return n.length ? 'a ' + Math.min(...n) : ''; },
+    precisaCantar() { return false; },
+    podeRetirar() { return false; },
+    depoisDeRetirar() { return null; },
+    bloqueio(E) { return E.m.escolha ? 'Antes, escolha: jogar daqui ou devolver a vez.' : null; },
+    acoes(E) {
+      if (E.m.escolha) return [{ id: 'jogar', rotulo: 'Jogar daqui' }, { id: 'devolver', rotulo: 'Devolver a vez' }];
+      if (E.m.pushDisponivel) return [{ id: 'push', rotulo: E.m.push ? '✓ Push out' : 'Push out', ativo: E.m.push }];
+      return [];
+    },
+    executarAcao(E, id) {
+      const nm = E.lados[E.vez].nome;
+      if (id === 'push' && E.m.pushDisponivel) {
+        E.m.push = !E.m.push;
+        return { aviso: E.m.push ? 'Push out: esta tacada não precisa tocar a menor bola.' : 'Push out cancelado.', mantemDesfazer: true };
+      }
+      if (id === 'jogar' && E.m.escolha) { E.m.escolha = null; return { aviso: `${nm} joga daqui.` }; }
+      if (id === 'devolver' && E.m.escolha) { E.m.escolha = null; return { aviso: `${nm} devolveu a vez.`, passarVez: true }; }
+      return {};
+    },
+    validarJogada(reg, E) {
+      const sim = E.sim, m = E.m, eu = E.vez, outro = Partida.proximo(E), r = RU.resultado();
+      const nomeEu = E.lados[eu].nome, nomeOutro = E.lados[outro].nome;
+      const push = m.push;
+      m.push = false; m.pushDisponivel = false;
+      const enc = reg.encacapadas.filter(x => x.num !== 0).map(x => x.num), e9 = enc.includes(9);
+      const menor = E.antes.length ? Math.min(...E.antes) : 9;
+      let falta = null;
+      if (reg.tempoEsgotado) falta = 'O tempo da tacada acabou.';
+      else if (RU.brancaFora(reg)) falta = reg.brancaCaiu ? 'A branca caiu na caçapa.' : 'A branca saiu da mesa.';
+      else if (!push) {
+        const pn = reg.primeiraBola !== null ? RU.num(sim, reg.primeiraBola) : null;
+        if (pn === null) falta = 'A branca não tocou em nenhuma bola.';
+        else if (pn !== menor) falta = `Você bateu primeiro na ${pn}; a menor bola da mesa era a ${menor}.`;
+        else if (!enc.length && !reg.tabelaAposContato && !E.abertura) falta = 'Depois do contato, nenhuma bola foi à tabela e nenhuma caiu.';
+      }
+      if (falta) {
+        if (e9) r.recolocar.push(9);
+        r.bolaNaMao = 'mesa';
+        return RU.falta(r, falta, `${nomeOutro} fica com a bola na mão.` + (e9 ? ' A 9 volta à marca.' : ''));
+      }
+      if (push) {
+        if (e9) r.recolocar.push(9);
+        m.escolha = 'aberta';
+        r.mensagemCurta = r.mensagemDica = `Push out feito. ${nomeOutro} escolhe: jogar daqui ou devolver a vez.`;
+        return r;
+      }
+      if (e9) {
+        if (E.abertura && E.variantes.abertura9 === 'volta') { r.recolocar.push(9); r.mensagemDica = 'A 9 caiu na abertura e voltou à marca.'; }
+        else return RU.fim(r, eu, `${nomeEu} encaçapou a 9 e venceu!`);
+      }
+      r.continuaJogando = enc.length > 0;
+      if (E.abertura && E.nivel === 'profissional') m.pushDisponivel = true;
+      return r;
+    },
+    pontuacaoHUD(E, i) { return { linha: E.lados[i].faltas ? `${E.lados[i].faltas} falta${E.lados[i].faltas > 1 ? 's' : ''}` : '', bolas: [] }; },
+  },
+
+  // ---------------- CARAMBOLA ----------------
+  // Mesa sem caçapas. E.m.bolas: a bola de cada lado (0 branca, 1 amarela); a 2 (vermelha) é de todos.
+  carambola: {
+    id: 'carambola',
+    textoRegras: [
+      'Dois jogadores e três bolas, numa mesa sem caçapas: a branca é de um, a amarela do outro, e a vermelha dos dois.',
+      'Cada um taca a própria bola. Faz um ponto quando ela toca as outras duas na mesma tacada, e quem pontua continua jogando. Vence quem chegar primeiro aos pontos combinados.',
+      'No três tabelas, a sua bola tem de tocar pelo menos três tabelas antes de chegar à última bola.',
+    ],
+    diagramas: [
+      { titulo: 'Ponto', conjunto: 'carambola', semCacapas: true,
+        bolas: [{ num: 0, x: -0.5, y: 0.15 }, { num: 1, x: 0.1, y: -0.12 }, { num: 2, x: 0.55, y: 0.2 }],
+        linhas: [{ pts: [[-0.5, 0.15], [-0.01, -0.07], [0.45, 0.17]], tracejada: true, seta: true }],
+        legenda: 'Ponto: a sua bola toca as outras duas.' },
+      { titulo: 'Três tabelas', conjunto: 'carambola', semCacapas: true,
+        bolas: [{ num: 0, x: -0.6, y: 0.1 }, { num: 1, x: -0.35, y: -0.25 }, { num: 2, x: 0.4, y: 0.25 }],
+        linhas: [{ pts: [[-0.6, 0.1], [-0.42, -0.2], [-0.05, -0.44], [0.94, -0.1], [0.75, 0.44], [0.47, 0.3]], tracejada: true, seta: true }],
+        legenda: 'Três tabelas: depois da primeira bola, a sua bola toca três tabelas antes da última.' },
+    ],
+    montar(sim, E) {
+      Rack.arrumarCarambola(sim, E.vez, (Math.random() * 1e9) | 0);
+      E.m = { bolas: [0, 1] };
+      E.bolaNaMaoInicial = null;
+      for (const l of E.lados) l.pontos = 0;
+    },
+    meta(E) { return +E.variantes.meta; },
+    bolaDoJogador(E) { return E.m.bolas[E.vez]; },
+    bolaDaVez(E) { return 'sua bola: ' + (E.m.bolas[E.vez] === 0 ? 'branca' : 'amarela'); },
+    precisaCantar() { return false; },
+    podeRetirar() { return false; },
+    depoisDeRetirar() { return null; },
+    validarJogada(reg, E) {
+      const eu = E.vez, lado = E.lados[eu], r = RU.resultado(), tres = E.variantes.estilo === 'tres';
+      if (reg.tempoEsgotado) { r.mensagemCurta = r.mensagemDica = 'O tempo acabou: a vez passa.'; return r; }
+      const tocadas = [];
+      let tabelasNaUltima = 0;
+      for (const c of reg.contatosJogador) {
+        if (tocadas.includes(c.bola)) continue;
+        tocadas.push(c.bola);
+        if (tocadas.length === 2) tabelasNaUltima = c.tabelasAntes;
+      }
+      if (tocadas.length >= 2 && (!tres || tabelasNaUltima >= 3)) {
+        lado.pontos++; r.pontos = 1; r.continuaJogando = true;
+        r.mensagemDica = `Ponto! ${lado.nome} tem ${lado.pontos}.`;
+        if (lado.pontos >= this.meta(E)) return RU.fim(r, eu, `${lado.nome} chegou a ${lado.pontos} pontos e venceu!`);
+      } else if (tocadas.length >= 2) {
+        r.mensagemDica = `Tocou as duas, mas com ${tabelasNaUltima} tabela${tabelasNaUltima !== 1 ? 's' : ''} antes da última: no três tabelas precisa de 3. A vez passa.`;
+        r.mensagemCurta = 'Faltaram tabelas: a vez passa.';
+      } else r.mensagemDica = tocadas.length ? 'Tocou só uma bola: a vez passa.' : 'Não tocou em nenhuma bola: a vez passa.';
+      return r;
+    },
+    pontuacaoHUD(E, i) { return { linha: `${E.lados[i].pontos} de ${this.meta(E)}`, bolas: [{ num: E.m.bolas[i], fora: false }] }; },
+  },
 };
 
 // Gerenciador da partida: lados (um jogador ou uma dupla), vez, rodízio dentro da dupla,
@@ -1567,6 +2195,7 @@ const Partida = {
       modo: P.modo, M: MODOS[P.modo], regras: REGRAS[P.modo], nivel: P.nivel, variantes: Object.assign({}, P.variantes),
       duplas: !!P.duplas, lados, vez: (P.inicio || 0) % lados.length, m: {}, abertura: true, cantada: null, pendente: null,
       fim: null, tacadas: 0, relogio: 0, antes: [], sim, preparo: P, bolaNaMaoInicial: null,
+      mesa: P.mesa, feltro: P.feltro, sorteio: false,
     };
   },
   // Treino: um lado só, sem relógio nem regras
@@ -1738,9 +2367,19 @@ const Render = (() => {
     g.addColorStop(1, 'rgba(0,0,0,0.42)');
     c.fillStyle = g; c.fillRect(-bx * 1.2, -bx * 1.2, bx * 2.4, bx * 2.4);
     c.restore();
-    // Marcas do ponto de cima e do ponto de saída
+    // Marcas do ponto de cima e do ponto do pé (na carambola, também a do centro)
     c.fillStyle = 'rgba(255,255,255,0.28)';
-    for (const x of [-hx / 2, hx / 2]) { c.beginPath(); c.arc(x, 0, 3.2, 0, Math.PI * 2); c.fill(); }
+    const pontos = [-hx / 2, hx / 2].concat(geo.cacapas.length ? [] : [0]);
+    for (const x of pontos) { c.beginPath(); c.arc(x, 0, 3.2, 0, Math.PI * 2); c.fill(); }
+    // Mesas com meia-lua (bar e oficial): linha de saída, meia-lua e as marcas das bolas da sinuca brasileira
+    if (geo.mesa.raioMeiaLua > 0) {
+      const xs = -hx + geo.mesa.linhaSaida, rD = geo.mesa.raioMeiaLua;
+      c.strokeStyle = 'rgba(255,255,255,0.32)'; c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(xs, -hy); c.lineTo(xs, hy); c.stroke();
+      c.beginPath(); c.arc(xs, 0, rD, Math.PI / 2, Math.PI * 1.5); c.stroke();
+      const mc = Rack.marcasBrasileira(geo);
+      for (const n in mc) { c.beginPath(); c.arc(mc[n][0], mc[n][1], 2.6, 0, Math.PI * 2); c.fill(); }
+    }
     // Sombra interna das tabelas no feltro
     for (const a of geo.almofadas) {
       const [A, B] = a.pts, n = a.n, w = 26;
@@ -2262,9 +2901,18 @@ const Render = (() => {
     const gf = c.createRadialGradient(W / 2, H / 2, 10, W / 2, H / 2, W * 0.6);
     gf.addColorStop(0, '#24804b'); gf.addColorStop(1, '#155532');
     c.fillStyle = gf; c.fillRect(m, m, tw, th);
-    c.fillStyle = '#050505';
-    for (const [x, y] of [[-1, -0.5], [0, -0.5], [1, -0.5], [-1, 0.5], [0, 0.5], [1, 0.5]]) {
-      c.beginPath(); c.arc(X(x), Y(y), rb * 1.45, 0, Math.PI * 2); c.fill();
+    if (d.conjunto === 'carambola') { c.fillStyle = '#1d4f8a'; c.fillRect(m, m, tw, th); }
+    if (!d.semCacapas) {
+      c.fillStyle = '#050505';
+      for (const [x, y] of [[-1, -0.5], [0, -0.5], [1, -0.5], [-1, 0.5], [0, 0.5], [1, 0.5]]) {
+        c.beginPath(); c.arc(X(x), Y(y), rb * 1.45, 0, Math.PI * 2); c.fill();
+      }
+    }
+    if (d.meiaLua) {
+      const xs = X(-0.587), rD = 0.164 * th;
+      c.strokeStyle = 'rgba(255,255,255,0.4)'; c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(xs, m); c.lineTo(xs, m + th); c.stroke();
+      c.beginPath(); c.arc(xs, Y(0), rD, Math.PI / 2, Math.PI * 1.5); c.stroke();
     }
     c.lineCap = 'round';
     for (const l of d.linhas || []) {
@@ -2281,7 +2929,7 @@ const Render = (() => {
         c.lineTo(px - 9 * Math.cos(a + 0.4), py - 9 * Math.sin(a + 0.4)); c.closePath(); c.fill();
       }
     }
-    for (const b of d.bolas || []) bolaPlana(c, X(b.x), Y(b.y), rb, b.num, b.apagada);
+    for (const b of d.bolas || []) bolaPlana(c, X(b.x), Y(b.y), rb, b.num, b.apagada, d.conjunto);
     c.lineWidth = 2;
     for (const [x, y] of d.aneis || []) { c.strokeStyle = '#ffe68a'; c.beginPath(); c.arc(X(x), Y(y), rb * 1.7, 0, Math.PI * 2); c.stroke(); }
     for (const [x, y] of d.xs || []) {
@@ -2291,14 +2939,14 @@ const Render = (() => {
     }
   }
   // Bola desenhada de forma simples (diagramas): cor, listra, número e um brilho
-  function bolaPlana(c, x, y, r, num, apagada) {
-    const d = Rack.descPool(num);
+  function bolaPlana(c, x, y, r, num, apagada, conjunto) {
+    const d = Rack.desc(conjunto || 'pool', num);
     c.save();
     c.globalAlpha = apagada ? 0.3 : 1;
     c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2);
     c.fillStyle = d.tipo === 'listrada' ? '#f4efe1' : d.cor; c.fill();
     if (d.tipo === 'listrada') { c.save(); c.clip(); c.fillStyle = d.cor; c.fillRect(x - r, y - r * 0.55, 2 * r, r * 1.1); c.restore(); }
-    if (num) {
+    if (num && d.numerada) {
       c.beginPath(); c.arc(x, y, r * 0.52, 0, Math.PI * 2); c.fillStyle = '#f4efe1'; c.fill();
       c.fillStyle = '#111'; c.font = `bold ${Math.round(r * 0.78)}px Arial, sans-serif`;
       c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(num), x, y + 0.5);
@@ -2538,6 +3186,7 @@ const jogo = {
   modosPara: 'jogar',      // a lista de modos abre o preparo ('jogar') ou as regras ('regras')
   regrasVer: null,         // { modo, variantes, ativas } da tela "Como jogar"
   podeDesfazerLado: null,  // lado que pode desfazer a própria última tacada
+  fila: null,              // sorteio das bolas secretas: lados que ainda vão ver as suas
   fase: 'mirando',         // 'mirando' | 'tacando' | 'rolando'
   pausado: false,          // menu de pausa aberto
   geo: null, sim: null, partida: null,
@@ -2575,7 +3224,13 @@ const Entrada = (() => {
     suspensa: null,        // mira presa depois de ajuste fino: ponto do mouse onde foi presa
     mouse: null,
   };
-  const branca = () => jogo.sim && jogo.sim.bolas.find(b => b.tipo === 'branca');
+  // Bola que o jogador da vez taca: a branca, ou a bola dele (carambola)
+  const branca = () => {
+    const s = jogo.sim, p = jogo.partida;
+    if (!s) return null;
+    const id = p && p.regras.bolaDoJogador ? p.regras.bolaDoJogador(p) : null;
+    return id != null ? s.bolas.find(b => b.id === id) : s.bolas.find(b => b.tipo === 'branca');
+  };
   const podeInteragir = () => jogo.tela === 'partida' && !jogo.pausado && jogo.fase === 'mirando' && !precisaGirar() && !jogo.partida.fim;
 
   function dentro(r, x, y, folga = 0) { return x >= r.x - folga && x <= r.x + r.w + folga && y >= r.y - folga && y <= r.y + r.h + folga; }
@@ -2585,7 +3240,7 @@ const Entrada = (() => {
     let melhor = null, dm = R * (jogo.toque ? 1.8 : 1.15);
     for (const b of sim.bolas) {
       if (b.estado !== 'mesa') continue;
-      const ok = b.tipo === 'branca' ? (jogo.partida.modo === 'treino' || !!jogo.bolaNaMao) : jogo.mover && !emPartida();
+      const ok = b === branca() ? (jogo.partida.modo === 'treino' || !!jogo.bolaNaMao) : jogo.mover && !emPartida();
       if (!ok) continue;
       const d = Math.hypot(b.x - p.x, b.y - p.y);
       if (d < dm) { dm = d; melhor = b; }
@@ -2958,7 +3613,17 @@ const Telas = {
     else if (id === 't-config') Telas.montarConfig();
     else if (id === 't-pausa') Telas.montarPausa();
     else if (id === 't-fim') Telas.montarFim();
-    else if (id === 't-vez') el('vez-nome').textContent = Partida.jogador(jogo.partida).nome;
+    else if (id === 't-vez') Telas.montarVez();
+  },
+
+  // Tela "Passe o aparelho": no sorteio, cada jogador vê as suas bolas; na partida, protege as bolas secretas
+  montarVez() {
+    const p = jogo.partida, sorteio = jogo.fila && jogo.fila.length, i = sorteio ? jogo.fila[0] : p.vez;
+    el('vez-sub').textContent = sorteio ? 'Sorteio das bolas: passe o aparelho para' : 'Passe o aparelho para';
+    el('vez-nome').textContent = sorteio ? p.lados[i].nome : Partida.jogador(p).nome;
+    el('vez-bolas').hidden = true; el('vez-bolas').innerHTML = '';
+    el('vez-ver').hidden = !p.regras.minhasBolas;
+    el('vez-ok').textContent = sorteio ? (jogo.fila.length > 1 ? 'Esconder e passar' : 'Esconder e começar') : 'Toque para começar';
   },
 
   // Lista de modos: para jogar ou só para ler as regras
@@ -3014,6 +3679,9 @@ const Telas = {
     Campo.sel(box, 'Nível', Object.entries(NIVEIS).map(([id, x]) => ({ id, nome: x.nome })), P.nivel,
       v => { P.nivel = v; Telas.montarPreparo(); }, Telas.textoNivel(P.nivel));
     void nv;
+    Campo.secao(box, 'Mesa');
+    Campo.sel(box, 'Mesa', M.mesas.map(id => ({ id, nome: MESAS[id].nome })), P.mesa, v => { P.mesa = v; P.feltro = MESAS[v].feltro; Telas.montarPreparo(); });
+    Campo.sel(box, 'Feltro', Object.entries(FELTROS).map(([id, f]) => ({ id, nome: f.nome })), P.feltro, v => { P.feltro = v; });
     Campo.secao(box, 'Regras');
     const casas = Salvar.regrasCasa().filter(r => r.modo === P.modo);
     Campo.sel(box, 'Regra da casa', [{ id: '', nome: 'Padrão do jogo' }].concat(casas.map(r => ({ id: r.nome, nome: r.nome }))), P.regraCasa || '', v => {
@@ -3111,6 +3779,8 @@ const Telas = {
       Campo.sel(box, vb.nome, vb.opcoes, jogo.config.bolas, v => { jogo.config.bolas = v; Salvar.config(); Jogo.arrumar(); });
       Campo.sel(box, 'Nível (mira e throw)', Object.entries(NIVEIS).map(([id, n]) => ({ id, nome: n.nome })), jogo.config.nivel,
         v => { jogo.config.nivel = v; jogo.sim.throw = NIVEIS[v].throw; jogo.miraCache = null; Salvar.config(); });
+      Campo.sel(box, 'Mesa', MODOS.treino.mesas.map(id => ({ id, nome: MESAS[id].nome })), jogo.config.mesaTreino,
+        v => { jogo.config.mesaTreino = v; Salvar.config(); Jogo.iniciarTreino(); });
     }
   },
 
@@ -3126,6 +3796,9 @@ const Telas = {
               `<td>${l.encacapadas}</td><td>${l.faltas}</td><td>${l.tacadas}</td></tr>`;
     });
     el('fim-tabela').innerHTML = html;
+    const rev = p.regras.revelar ? p.regras.revelar(p) : null;
+    el('fim-revela').innerHTML = rev ? '<div class="secao">De quem era cada bola</div>' +
+      rev.map(x => `<div class="op"><span>${esc(x.nome)}</span><span class="bolas">${x.bolas.map(n => miniBola(n, false)).join('')}</span></div>`).join('') : '';
   },
 };
 
@@ -3144,7 +3817,23 @@ function acao(a) {
   else if (a === 'arrumar') { Telas.fechar(); Jogo.arrumar(); }
   else if (a === 'menu') Jogo.irParaMenu();
   else if (a === 'de-novo') { const P = jogo.partida.preparo; P.inicio = ((P.inicio || 0) + 1) % jogo.partida.lados.length; Jogo.iniciarPartida(P); }
-  else if (a === 'vez-ok') Telas.fechar();
+  else if (a === 'vez-ok') {
+    // No sorteio, passa para o próximo jogador ver as bolas; depois, começa a partida
+    if (jogo.fila && jogo.fila.length) {
+      jogo.fila.shift();
+      if (jogo.fila.length) { Telas.montarVez(); return; }
+      jogo.fila = null;
+      Telas.montarVez();
+      return;
+    }
+    Telas.fechar();
+  } else if (a === 'ver-bolas') {
+    const p = jogo.partida, i = jogo.fila && jogo.fila.length ? jogo.fila[0] : p.vez;
+    const naMesa = RU.naMesa(jogo.sim);
+    el('vez-bolas').innerHTML = p.regras.minhasBolas(p, i).map(n => miniBola(n, !naMesa.includes(n))).join('') +
+      (p.m.vidas && +p.variantes.vidas > 1 ? `<span class="vidas">${'♥'.repeat(p.m.vidas[i])}</span>` : '');
+    el('vez-bolas').hidden = false;
+  }
   else if (a === 'retrato') { jogo.retratoAceito = true; Telas.atualizar(); }
   else if (a === 'controles') {
     const c = el('controles'), b = document.querySelector('[data-acao="controles"]');
@@ -3171,11 +3860,11 @@ function hudHtml(id, html) { if (hudCache[id] === html) return false; hudCache[i
 function escapar(t) { return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 // Bolinha da bandeja e do placar (CSS)
 function miniBola(num, fora) {
-  const d = Rack.descPool(num);
-  const fundo = d.tipo === 'listrada'
+  const d = Rack.desc(jogo.sim ? jogo.sim.conjunto : 'pool', num);
+  const fundo = !d.numerada ? `radial-gradient(circle at 35% 30%, #fff8 0 12%, ${d.cor} 40%)` : d.tipo === 'listrada'
     ? `radial-gradient(circle, #f6f2e6 0 30%, transparent 32%), linear-gradient(#f6f2e6 0 24%, ${d.cor} 24% 76%, #f6f2e6 76%)`
     : `radial-gradient(circle, #f6f2e6 0 30%, ${d.cor} 33%)`;
-  return `<span class="mini${fora ? ' fora' : ''}" style="background:${fundo}">${num}</span>`;
+  return `<span class="mini${fora ? ' fora' : ''}" style="background:${fundo}">${d.numerada ? num : ''}</span>`;
 }
 function textoEfeito() {
   const ef = jogo.efeito, pct = v => Math.round(Math.abs(v) / FISICA.efeitoMaximo * 100) + '%', partes = [];
@@ -3234,15 +3923,19 @@ function hudPartida() {
   let vez = '';
   if (!p.fim) {
     const j = Partida.jogador(p), bv = p.regras.bolaDaVez(p), partes = [`Vez de ${escapar(j.nome)}`];
-    if (bv) partes.push(`bola da vez: ${escapar(bv)}`);
+    if (bv) partes.push(bv.includes(':') ? escapar(bv) : `bola da vez: ${escapar(bv)}`);
     if (p.pendente) partes.push('toque numa bola sua para tirá-la da mesa');
     else if (Partida.precisaCantar(p)) partes.push(p.cantada == null ? 'cante a caçapa (toque nela)' : 'caçapa: ' + jogo.geo.cacapas[p.cantada].nome);
-    if (jogo.bolaNaMao && jogo.fase === 'mirando') partes.push(jogo.bolaNaMao === 'atras' ? 'bola na mão, atrás da linha' : 'bola na mão');
+    if (jogo.bolaNaMao && jogo.fase === 'mirando')
+      partes.push(jogo.bolaNaMao === 'atras' ? 'bola na mão, atrás da linha' : jogo.bolaNaMao === 'meiaLua' ? 'bola na mão, na meia-lua' : 'bola na mão');
     if (p.lados[p.vez].extras > 0) partes.push('duas tacadas');
     partes.push('efeito: ' + textoEfeito());
     vez = partes.join(' · ');
   }
   hudHtml('vezinfo', vez);
+  // Botões do modo
+  const acoes = !p.fim && jogo.fase === 'mirando' && p.regras.acoes ? p.regras.acoes(p) : [];
+  hudHtml('acoes', acoes.map(a => `<button class="bt-acao${a.ativo ? ' ativo' : ''}" data-id="${a.id}" type="button">${escapar(a.rotulo)}</button>`).join(''));
   el('vezinfo').hidden = !vez;
 }
 
@@ -3275,6 +3968,8 @@ const Jogo = {
       duplas: M.duplas && !!salvo.duplas,
       nivel: NIVEIS[salvo.nivel] ? salvo.nivel : 'aprendiz',
       regraCasa: Salvar.regrasCasa().some(r => r.modo === modo && r.nome === salvo.regraCasa) ? salvo.regraCasa : '',
+      mesa: M.mesas.includes(salvo.mesa) ? salvo.mesa : M.mesaPadrao,
+      feltro: FELTROS[salvo.feltro] && M.mesas.includes(salvo.mesa) ? salvo.feltro : MESAS[M.mesas.includes(salvo.mesa) ? salvo.mesa : M.mesaPadrao].feltro,
       inicio: 0,
     };
   },
@@ -3298,29 +3993,33 @@ const Jogo = {
     Telas.atualizar(); atualizarHUD();
   },
   iniciarTreino() {
-    Jogo.novaMesa(MODOS.treino.mesaPadrao, jogo.config.nivel);
+    Jogo.novaMesa(MESAS[jogo.config.mesaTreino] ? jogo.config.mesaTreino : 'clube', jogo.config.nivel);
     jogo.partida = Partida.criarTreino(jogo.sim, jogo.config.nivel, jogo.config.bolas);
     jogo.partida.regras.montar(jogo.sim, jogo.partida);
     Jogo.comecar();
   },
   iniciarPartida(P) {
     const salvo = Salvar.ler('preparo', {});
-    salvo[P.modo] = { nomes: P.nomes, quantos: P.quantos, duplas: P.duplas, nivel: P.nivel, variantes: P.variantes, regraCasa: P.regraCasa };
+    salvo[P.modo] = { nomes: P.nomes, quantos: P.quantos, duplas: P.duplas, nivel: P.nivel, variantes: P.variantes, regraCasa: P.regraCasa, mesa: P.mesa, feltro: P.feltro };
     Salvar.gravar('preparo', salvo);
     const M = MODOS[P.modo];
-    Jogo.novaMesa(M.mesas.find(m => MESAS_PRONTAS.includes(m)) || 'clube', P.nivel);
+    Jogo.novaMesa(P.mesa, P.nivel);
     jogo.partida = Partida.criar(P, jogo.sim);
     jogo.partida.regras.montar(jogo.sim, jogo.partida);
     Jogo.comecar();
-    Jogo.anunciarVez(true);
+    // Bolas secretas: antes de tudo, cada jogador vê as suas, um de cada vez
+    if (jogo.partida.sorteio) { jogo.fila = jogo.partida.lados.map((l, i) => i); Telas.abrir('t-vez'); }
+    else Jogo.anunciarVez(true);
   },
   // Troca de vez: tela "Passe o aparelho" (bolas secretas ou se pedido) ou um aviso
   anunciarVez(inicio) {
     const p = jogo.partida, j = Partida.jogador(p);
     if (p.M.secretas || jogo.config.telaVez === 'sempre') Telas.abrir('t-vez');
     else aviso(inicio ? `${j.nome} abre a partida` : `Vez de ${j.nome}`, 1.8);
-    if (inicio && nivelAtual() === 'aprendiz')
-      balao('Abertura', `${j.nome} abre com a branca atrás da linha de saída: arraste a branca se quiser e taque forte no triângulo.`, 7);
+    if (inicio && nivelAtual() === 'aprendiz') {
+      const area = p.bolaNaMaoInicial === 'meiaLua' ? 'com a branca na meia-lua' : p.bolaNaMaoInicial === 'atras' ? 'com a branca atrás da linha de saída' : 'a partida';
+      balao('Abertura', `${j.nome} abre ${area}` + (p.bolaNaMaoInicial ? ': arraste a branca se quiser, e taque.' : '.'), 7);
+    }
   },
   irParaMenu() {
     jogo.tela = 'menu'; jogo.pilha = []; jogo.subtela = 't-menu';
@@ -3338,7 +4037,8 @@ const Jogo = {
     layout(); Jogo.refazerCena();
   },
   refazerCena() {
-    const cor = FELTROS[jogo.config.feltro]?.cor || FELTROS.verde.cor;
+    const f = emPartida() && jogo.partida.feltro ? jogo.partida.feltro : jogo.config.feltro;
+    const cor = FELTROS[f]?.cor || FELTROS.verde.cor;
     Render.definirFeltro(cor);
     Render.construirCena(jogo.geo, cor, jogo.geo.mesa.madeira);
     Render.invalidarBolas(jogo.sim);
@@ -3348,6 +4048,8 @@ const Jogo = {
     const br = Entrada.branca(), p = jogo.partida;
     if (!br || br.estado !== 'mesa' || forca < 0.02 || p.fim) return;
     if (p.pendente) { aviso('Antes, toque numa bola sua para tirá-la da mesa.'); return; }
+    const bl = p.regras.bloqueio && p.regras.bloqueio(p);
+    if (bl) { aviso(bl); return; }
     if (Partida.precisaCantar(p) && p.cantada == null) { aviso('Cante a caçapa: toque na caçapa onde a bola vai cair.'); return; }
     jogo.desfazer.push({ bolas: Fisica.fotografar(jogo.sim), dados: Partida.dados(p), lado: p.vez, bolaNaMao: jogo.bolaNaMao, ultima: jogo.ultima });
     if (jogo.desfazer.length > 200) jogo.desfazer.shift();
@@ -3414,8 +4116,13 @@ const Jogo = {
     if (!reg.tempoEsgotado) lado.tacadas++;
     lado.encacapadas += reg.encacapadas.filter(x => x.num !== 0).length;
     if (res.falta) lado.faltas++;
-    for (const n of res.recolocar) Rack.recolocar(sim, n);
+    for (const n of res.recolocar) { if (p.regras.recolocarBola) p.regras.recolocarBola(p, n); else Rack.recolocar(sim, n); }
     for (const i of res.eliminados) p.lados[i].eliminado = true;
+    for (const i of res.revividos || []) p.lados[i].eliminado = false;
+    if (res.eliminados.length) Som.jingle('eliminacao');
+    // Segurança: um só lado vivo encerra a partida
+    const vivos = p.lados.map((l, i) => i).filter(i => !p.lados[i].eliminado);
+    if (!res.fimDePartida && vivos.length === 1 && p.lados.length > 1) { res.fimDePartida = true; res.vencedor = vivos[0]; res.mensagemCurta = `${p.lados[vivos[0]].nome} venceu!`; }
     p.abertura = false; p.cantada = null; p.tacadas++;
     Jogo.mensagem(res);
     if (res.fimDePartida) {
@@ -3450,14 +4157,31 @@ const Jogo = {
   reporBranca(area) {
     const sim = jogo.sim, br = Entrada.branca(), geo = sim.geo;
     br.estado = 'mesa'; br.prof = 0; br.cacapa = -1; br.qd = null; br.giz = null;
+    const xs = -geo.hx + geo.mesa.linhaSaida, rD = geo.mesa.raioMeiaLua || geo.W * 0.164;
+    const cx = area === 'meiaLua' ? xs - rD * 0.5 : area === 'atras' ? Math.min(-geo.hx / 2, xs - 2 * geo.R) : -geo.hx / 2;
     for (let raio = 0; raio < geo.hx; raio += geo.R) {
       for (let a = 0; a < Math.PI * 2; a += raio ? geo.R / raio : 7) {
-        const x = -geo.hx / 2 + Math.cos(a) * raio, y = Math.sin(a) * raio;
+        const x = cx + Math.cos(a) * raio, y = Math.sin(a) * raio;
         if (Fisica.posicaoValida(sim, br, x, y, area)) { br.x = x; br.y = y; return; }
       }
     }
   },
-  // Cantar caçapa (Bola 8)
+  // Botões do modo (escolher grupo, push out, ver as próprias bolas…)
+  acaoRegra(id) {
+    const p = jogo.partida;
+    if (!emPartida() || p.fim || jogo.fase !== 'mirando' || !p.regras.executarAcao) return;
+    const r = p.regras.executarAcao(p, id) || {};
+    if (!r.mantemDesfazer) jogo.podeDesfazerLado = null;
+    if (r.aviso) aviso(r.aviso, 2.4);
+    if (r.balao) balao(r.balao[0], r.balao[1], 3.5);
+    if (r.passarVez) {
+      Partida.passarVez(p);
+      p.relogio = Partida.tempoTacada(p);
+      Jogo.anunciarVez(false);
+    }
+    atualizarHUD();
+  },
+  // Cantar caçapa (Bola 8, Três jogadores)
   cantar(i) {
     const p = jogo.partida;
     p.cantada = i;
@@ -3817,6 +4541,7 @@ Salvar.carregar();
 document.querySelectorAll('[data-acao]').forEach(b => b.addEventListener('click', () => acao(b.dataset.acao)));
 el('b-menu').addEventListener('click', () => Telas.alternarPausa());
 el('balao-fechar').addEventListener('click', fecharBalao);
+el('acoes').addEventListener('click', ev => { const b = ev.target.closest('.bt-acao'); if (b) Jogo.acaoRegra(b.dataset.id); });
 el('b-desfazer').addEventListener('click', () => Jogo.desfazer());
 el('b-mover').addEventListener('click', () => Jogo.alternarMover());
 el('b-arrumar').addEventListener('click', () => Jogo.arrumar());
