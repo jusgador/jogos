@@ -1676,11 +1676,16 @@ function posicionar() {
   if (!W || !H) return;
   const retrato = H > W * 1.05;
   const hud = $('#hud');
-  const hudLado = !hud.classList.contains('oculto') && !hud.classList.contains('recolhido') && !retrato && W > 1000;
+  const hudLado = !hud.classList.contains('oculto') && !hud.classList.contains('recolhido') && !retrato && W > 700;
   const sEl = assentosEl.querySelector('.assento:not(.humano)'), hEl = assentosEl.querySelector('.assento.humano');
   const sw = sEl ? sEl.offsetWidth : 100, sh = sEl ? sEl.offsetHeight : 90, hh = hEl ? hEl.offsetHeight : 140;
+  // HUD por cima da mesa (celular, tela estreita): reserva a faixa da barra dele no alto, para não cobrir as cartas dos bots
+  const hudFaixa = !hud.classList.contains('oculto') && !hudLado ? hud.offsetTop + $('#hudTopo').offsetHeight + 2 : 0;
+  // cartas reveladas crescem 28% para cima (.cartas.aberta): o assento de cima precisa dessa folga para não sair da área
+  const folga = (sEl ? sEl.querySelector('.cartas').offsetHeight : 40) * 0.28 + 4;
+  const alto = hudFaixa + folga;
   const util = W - (hudLado ? 320 : 0), cx = (hudLado ? 320 : 0) + util / 2;
-  const topo = sh * 0.5 + 4, baixo = hh * 0.62 + 4;
+  const topo = alto + sh * 0.5, baixo = hh * 0.62 + 4;
   const cy = (topo + (H - baixo)) / 2;
   let ry = Math.max(60, (H - baixo - topo) / 2 - 2);
   let rx = retrato ? Math.min(util / 2 - sw * 0.3, ry * 0.78) : Math.min(util / 2 - sw * 0.55, ry * 2.2);
@@ -1694,7 +1699,7 @@ function posicionar() {
     const h = p.humano ? hh : sh;
     if (p.humano) y = H - hh / 2 - 2;
     x = clamp(x, sw / 2 + 2, W - sw / 2 - 2);
-    y = clamp(y, h / 2 + 2, H - h / 2 - 2);
+    y = clamp(y, p.humano ? h / 2 + 2 : alto + h / 2, H - h / 2 - 2);
     const bx = cx + rx * 0.6 * c, by = cy + ry * (p.humano ? 0.56 : 0.6) * s;
     const dx = cx + rx * 0.78 * Math.cos(th + 0.3), dy = cy + ry * 0.74 * Math.sin(th + 0.3);
     const el = assentoEl(p.i);
