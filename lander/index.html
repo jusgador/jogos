@@ -55,13 +55,25 @@ const CFG = {
 const CORES = { branco: '#eef3ff', verde: '#3dff7a' };
 const COR_ALERTA = '#ff3b3b';
 
-// Gravidade por fase: Lua mais fraca, Marte mais forte, sempre crescendo
-const FASES = [
-  { nome: 'LUA', g: 8 }, { nome: 'LUA', g: 9.5 }, { nome: 'MARTE', g: 13 }, { nome: 'MARTE', g: 14.5 },
+// Ciclo de fases: astro, gravidade e relevo. As cinco primeiras mudam o relevo; as
+// cinco seguintes mudam também a forma de jogar (vento, plataformas móveis, rochas,
+// pousos em sequência, túnel). cheio: começa com o tanque cheio. Depois da décima, o
+// ciclo recomeça com gravidade maior e plataformas menores.
+const CICLO = [
+  { nome: 'LUA', g: 8, perfil: perfilPlanicie },
+  { nome: 'LUA', g: 9.5, perfil: perfilCrateras },
+  { nome: 'MARTE', g: 13, perfil: perfilCanions },
+  { nome: 'MARTE', g: 14.5, perfil: perfilMontanhas },
+  { nome: 'PLANETA X', g: 16, perfil: perfilCaverna, cheio: true },
+  { nome: 'TITÃ', g: 10, perfil: perfilMesas, novo: true },
+  { nome: 'EUROPA', g: 7, perfil: perfilMoveis, novo: true },
+  { nome: 'IO', g: 9, perfil: perfilVulcoes, novo: true },
+  { nome: 'CERES', g: 4, perfil: perfilEntrega, novo: true, cheio: true },
+  { nome: 'MERCÚRIO', g: 12, perfil: perfilTunel, novo: true, cheio: true },
 ];
 function dadosFase(n) {
-  if (n <= FASES.length) return FASES[n - 1];
-  return { nome: 'PLANETA X', g: Math.min(24, 14.5 + 1.5 * (n - FASES.length)) };
+  const b = CICLO[(n - 1) % CICLO.length], volta = Math.floor((n - 1) / CICLO.length);
+  return { ...b, volta, g: Math.min(24, b.g * (1 + 0.25 * volta)) };
 }
 // Empuxo do propulsor principal acompanha a gravidade da fase
 const empuxo = g => g * 2.4 + 8;
@@ -80,6 +92,10 @@ const jogo = {
   mudo: false,
   pausado: false,
   fase: 1,
+  faseIni: 1,          // fase em que o jogo começa (escolhida no menu)
+  faseMax: 1,          // maior fase já alcançada (até o fim do primeiro ciclo)
+  mundoT: 0,           // relógio da fase (vento, plataformas móveis, vulcões)
+  aviso: null,         // mensagem passageira durante o voo
   pontos: 0,
   tempo: 0,
   comb: CFG.COMB_MAX,
@@ -92,7 +108,7 @@ const jogo = {
   toque: false,        // mostra controles de toque
   resultado: null,
 };
-let terreno = null, nave = null, destrocos = [], faiscas = [], estrelas = [];
+let terreno = null, nave = null, destrocos = [], faiscas = [], estrelas = [], rochas = [], poeira = [];
 const teclas = {};
 const ponteiros = new Map(); // pointerId -> botão de toque segurado
 
@@ -103,9 +119,16 @@ try {
   if (p.cor) jogo.cor = p.cor;
   jogo.mudo = !!p.mudo;
   jogo.recorde = +localStorage.getItem('lander-recorde') || 0;
+  jogo.faseMax = clamp(+localStorage.getItem('lander-fase-max') || 1, 1, CICLO.length);
+  jogo.faseIni = clamp(+p.faseIni || 1, 1, jogo.faseMax);
 } catch (e) {}
 function salvarPrefs() {
-  try { localStorage.setItem('lander-prefs', JSON.stringify({ modo: jogo.modo, cor: jogo.cor, mudo: jogo.mudo })); } catch (e) {}
+  try { localStorage.setItem('lander-prefs', JSON.stringify({ modo: jogo.modo, cor: jogo.cor, mudo: jogo.mudo, faseIni: jogo.faseIni })); } catch (e) {}
+}
+function registrarFase(n) {
+  if (n <= jogo.faseMax || jogo.faseMax >= CICLO.length) return;
+  jogo.faseMax = Math.min(n, CICLO.length);
+  try { localStorage.setItem('lander-fase-max', String(jogo.faseMax)); } catch (e) {}
 }
 function salvarRecorde() {
   if (jogo.pontos <= jogo.recorde) return;
@@ -436,8 +459,8 @@ function perfilMontanhas(dif, larg) {
 // --- Perfil 5: caverna. Um poço de paredes irregulares com saliências alternadas dos
 // dois lados: a nave desce em zigue-zague, de lado e depois para baixo, até o fundo.
 // A linha do terreno volta para trás sob as saliências (não é mais uma altura por x).
-function perfilCaverna(dif, larg) {
-  const L = CFG.MUNDO_L, A = CFG.MUNDO_A, volta = Math.floor(dif / PERFIS.length);
+function perfilCaverna(dif, larg, volta) {
+  const L = CFG.MUNDO_L, A = CFG.MUNDO_A;
   const sup = A * aleat(0.26, 0.31), fundo = A * 0.95, rug = 4 + volta;
   const c = aleat(L * 0.38, L * 0.62), S = Math.max(340, aleat(440, 500) - volta * 35);
   const ondaS = criarOndas(3, 0.002, 0.004), ondaE = criarOndas(3, 0.004, 0.008), ondaD = criarOndas(3, 0.004, 0.008);
@@ -515,26 +538,225 @@ function perfilCaverna(dif, larg) {
   }
   parede(y, yD0, xD); ponto(xD0, yD0);
   horizontal(xD0, L, ySup); ponto(L, ySup(L));
-  return { nome: 'CAVERNA', pts, plats, caverna: true, ceu: Math.min(yE0, yD0) };
+  return { nome: 'CAVERNA', dica: 'DESÇA ATÉ O FUNDO - TANQUE CHEIO', pts, plats, caverna: true, ceu: Math.min(yE0, yD0) };
 }
 
-const PERFIS = [perfilPlanicie, perfilCrateras, perfilCanions, perfilMontanhas, perfilCaverna];
+// --- Perfil 6: mesas de paredes verticais sob vento que muda de força e de lado.
+// x5 no topo estreito da mesa mais alta, x3 noutra mesa, x2 no chão entre elas.
+function perfilMesas(dif, larg, volta) {
+  const A = CFG.MUNDO_A, base = A * 0.86, onda = criarOndas(4, 0.002, 0.004), t = 10;
+  const meias = [larg(5) / 2 + aleat(8, 16), larg(3) / 2 + aleat(16, 30), aleat(45, 75), aleat(30, 55)];
+  const ms = sortearIntervalos(meias.map(h => h + t), 90).map(o => {
+    const alt = o.i === 0 ? aleat(330, 400) : aleat(160, 290);
+    return { c: o.c, meia: o.h - t, topo: base + onda(o.c) * 40 - alt, i: o.i };
+  });
+  const altura = x => {
+    let y = base + onda(x) * 40;
+    for (const m of ms) y += (m.topo - y) * clamp((m.meia + t - Math.abs(x - m.c)) / t, 0, 1);
+    return y;
+  };
+  const bordas = [];
+  for (const m of ms) bordas.push(m.c - m.meia - t, m.c - m.meia, m.c + m.meia, m.c + m.meia + t);
+  const plats = [];
+  [[0, 5], [1, 3]].forEach(([i, m]) => {
+    const k = ms.find(q => q.i === i);
+    if (k) plats.push(plataformaEm(k.c, larg(m), m)); else sortearPlataforma(plats, larg(m), m);
+  });
+  sortearPlataforma(plats, larg(2), 2, ms.map(m => [m.c - m.meia - t - 40, m.c + m.meia + t + 40]));
+  const vento = { V: Math.min(12, 7 + 2 * volta), p1: aleat(0, 6.3), p2: aleat(0, 6.3) };
+  return { nome: 'MESAS', dica: 'CUIDADO COM O VENTO', altura, plats, bordas, aspereza: 3, passo: [6, 16], vento };
+}
+
+// --- Perfil 7: gelo pontiagudo, sem lugar para pousar no chão. As plataformas flutuam
+// em três alturas e vão e vêm; a x5, mais rápida, também sobe e desce. Para pousar é
+// preciso acompanhar a plataforma: valem as velocidades em relação a ela.
+function perfilMoveis(dif, larg, volta) {
+  const A = CFG.MUNDO_A, L = CFG.MUNDO_L, base = A * 0.97, relevo = 120;
+  const ondas = [];
+  for (let i = 0; i < 4; i++) ondas.push({ f: aleat(0.007, 0.012) * (i + 1), p: aleat(0, 6.3), amp: 1 / (i + 1) });
+  const soma = ondas.reduce((s, o) => s + o.amp, 0);
+  const altura = x => {
+    let s = 0;
+    for (const o of ondas) s += (1 - Math.abs(Math.sin(x * o.f + o.p))) * o.amp;
+    return base - (s / soma) * relevo;
+  };
+  const faixas = [A * 0.4, A * 0.57, A * 0.74].sort(() => Math.random() - 0.5);
+  const rapidez = 1 + 0.15 * volta;
+  const moveis = [[2, 18, 24], [3, 26, 34], [5, 32, 40]].map(([m, v0, v1], i) => {
+    const w = larg(m) * 1.15, amp = m === 5 ? aleat(120, 200) : aleat(170, 300);
+    const cx = aleat(80 + amp + w / 2, L - 80 - amp - w / 2);
+    const mov = { cx, w, amp, om: aleat(v0, v1) * rapidez / amp, f: aleat(0, 6.3), y0: faixas[i], ampY: m === 5 ? 35 : 0, f2: aleat(0, 6.3) };
+    return { ...plataformaEm(cx, w, m), y: faixas[i], vx: 0, vy: 0, mov };
+  });
+  return { nome: 'PLATAFORMAS MÓVEIS', dica: 'ACOMPANHE A PLATAFORMA PARA POUSAR', altura, plats: [], moveis, aspereza: 7, passo: [5, 13] };
+}
+
+// --- Perfil 8: vulcões de cratera aberta que lançam rochas de tempos em tempos.
+// Pouco antes de cada erupção a cratera solta faíscas. Plataformas entre os vulcões.
+function perfilVulcoes(dif, larg, volta) {
+  const A = CFG.MUNDO_A, base = A * 0.84, onda = criarOndas(4, 0.002, 0.005), relevo = 50;
+  const cones = sortearIntervalos([aleat(105, 130), aleat(100, 125), aleat(95, 120)], 110)
+    .map(o => ({ c: o.c, R: o.h, H: aleat(170, 240), cw: 22 }));
+  // Cone de flancos côncavos, truncado na borda da cratera (cw) e com o fundo afundado
+  const altura = x => {
+    let y = base + onda(x) * relevo;
+    for (const k of cones) {
+      const d = Math.abs(x - k.c), dd = Math.max(d, k.cw);
+      if (dd < k.R) y -= k.H * ((1 - dd / k.R) / (1 - k.cw / k.R)) ** 1.3;
+      if (d < k.cw) y += 22 * (1 - (d / k.cw) ** 2);
+    }
+    return y;
+  };
+  const bordas = [];
+  for (const k of cones) bordas.push(k.c - k.cw, k.c, k.c + k.cw);
+  const evitar = cones.map(k => [k.c - k.R - 15, k.c + k.R + 15]);
+  const plats = [];
+  for (const m of [5, 3, 2]) sortearPlataforma(plats, larg(m), m, evitar);
+  const vulcoes = cones.map(k => {
+    const periodo = aleat(3.5, 5) / (1 + 0.2 * volta);
+    return { x: k.c, y: altura(k.c + k.cw) - 4, periodo, t: aleat(0, periodo), n: 3 + volta };
+  });
+  return { nome: 'VULCÕES', dica: 'DESVIE DAS ROCHAS DOS VULCÕES', altura, plats, bordas, aspereza: 4, passo: [6, 16], vulcoes };
+}
+
+// --- Perfil 9: gravidade baixa e três pousos em ordem (1, 2 e 3), em vales separados
+// por dois pináculos altos. A 1 fica do lado oposto ao da chegada, a 2 do lado da
+// chegada e a 3, a última, no meio: é preciso decolar de novo e cruzar os pináculos.
+function perfilEntrega(dif, larg, volta) {
+  const A = CFG.MUNDO_A, L = CFG.MUNDO_L, base = A * 0.8, onda = criarOndas(4, 0.002, 0.005), relevo = 110;
+  const pin = [L / 3, 2 * L / 3].map(c => ({ c: c + aleat(-60, 60), R: aleat(45, 65), H: aleat(330, 420) + volta * 40 }));
+  const altura = x => {
+    let y = base + onda(x) * relevo;
+    for (const p of pin) { const d = Math.abs(x - p.c); if (d < p.R) y -= p.H * (1 - d / p.R) ** 0.7; }
+    return y;
+  };
+  const vales = [[60, pin[0].c - pin[0].R - 40], [pin[0].c + pin[0].R + 40, pin[1].c - pin[1].R - 40], [pin[1].c + pin[1].R + 40, L - 60]];
+  const inicio = Math.random() < 0.5 ? 'esq' : 'dir';
+  const ordem = inicio === 'esq' ? [2, 0, 1] : [0, 2, 1];
+  const plats = [2, 3, 5].map((m, k) => {
+    const [a, b] = vales[ordem[k]], w = larg(m);
+    return { ...plataformaEm(aleat(a + w / 2, b - w / 2), w, m), seq: k };
+  });
+  return { nome: 'POUSO EM SEQUÊNCIA', dica: 'POUSE NA 1, NA 2 E NA 3 - TANQUE CHEIO', altura, plats, aspereza: 6, passo: [7, 18], entrega: { atual: 0 }, inicio };
+}
+
+// --- Perfil 10: túnel. Um maciço atravessado por um túnel sinuoso e sem saída, com
+// estalactites, estalagmites e trechos apertados. x2 logo na entrada, x3 no meio e x5
+// no fim. Montado com a entrada à esquerda e espelhado na metade das vezes.
+function perfilTunel(dif, larg, volta) {
+  const L = CFG.MUNDO_L, A = CFG.MUNDO_A, rug = 3;
+  const ondaP = criarOndas(3, 0.003, 0.006), ondaS = criarOndas(3, 0.003, 0.006), ondaT = criarOndas(2, 0.004, 0.006);
+  const yPl = x => A * 0.86 + ondaP(x) * 18;   // planície dos dois lados
+  const ySu = x => A * 0.2 + ondaS(x) * 30;    // cume do maciço
+  const xm0 = aleat(230, 290), xa = xm0 + 70, xb = L - aleat(230, 270), xs1 = xb + 60, xm1 = xs1 + 110;
+  const H0 = Math.max(58, 64 - 3 * volta), Hap = Math.max(38, 43 - 3 * volta), amp = Math.min(100, 85 + 15 * volta);
+
+  // Plataformas: posições primeiro, para o túnel ficar reto em volta delas
+  const w2 = larg(2), w3 = larg(3), w5 = larg(5);
+  const plats = [
+    plataformaEm(xa + 50 + w2 / 2, w2, 2),
+    plataformaEm(xa + (xb - xa) * aleat(0.45, 0.55), w3, 3),
+    plataformaEm(xb - 16 - w5 / 2, w5, 5),
+  ];
+  const livre = (x, folga) => plats.every(p => x < p.x0 - folga || x > p.x1 + folga);
+  // Linha central: ondulada, reta em volta das plataformas (transição suave e longa) e
+  // com inclinação limitada, para nenhuma curva fechar a passagem. Tabelada a cada 2
+  const ycB = x => A * 0.6 + ondaT(x) * amp;
+  const tab = [], X0 = xa - 20, DX = 2, INC = 0.9 * DX;
+  for (let x = X0; x <= xb + 20; x += DX) {
+    let y = ycB(x);
+    for (const p of plats) {
+      const c = (p.x0 + p.x1) / 2, h = (p.x1 - p.x0) / 2, k = clamp((h + 160 - Math.abs(x - c)) / 140, 0, 1);
+      y += (ycB(c) - y) * k * k * (3 - 2 * k);
+    }
+    tab.push(y);
+  }
+  for (let i = 1; i < tab.length; i++) tab[i] = clamp(tab[i], tab[i - 1] - INC, tab[i - 1] + INC);
+  for (let i = tab.length - 2; i >= 0; i--) tab[i] = clamp(tab[i], tab[i + 1] - INC, tab[i + 1] + INC);
+  const yc = x => {
+    const f = clamp((x - X0) / DX, 0, tab.length - 1.001), i = Math.floor(f);
+    return tab[i] + (tab[i + 1] - tab[i]) * (f - i);
+  };
+  // Trechos apertados e pontas (estalactites no teto, estalagmites no chão)
+  const apertos = [];
+  for (let t = 0; t < 300 && apertos.length < Math.min(4, 2 + volta); t++) {
+    const c = aleat(xa + 150, xb - 120);
+    if (livre(c, 80) && apertos.every(a => Math.abs(a - c) > 160)) apertos.push(c);
+  }
+  const h = x => {
+    let k = 0;
+    for (const a of apertos) k = Math.max(k, clamp(1 - (Math.abs(x - a) - 25) / 45, 0, 1));
+    return H0 - (H0 - Hap) * k * k * (3 - 2 * k);
+  };
+  const pontas = [];
+  for (let t = 0; t < 400 && pontas.length < 4 + 2 * volta; t++) {
+    const c = aleat(xa + 100, xb - 60);
+    if (livre(c, 40) && apertos.every(a => Math.abs(a - c) > 90) && pontas.every(p => Math.abs(p.c - c) > 70)) {
+      pontas.push({ c, hw: aleat(10, 15), alt: aleat(24, 32), teto: pontas.length % 2 === 0 });
+    }
+  }
+  const yF = x => yc(x) + h(x), yC = x => yc(x) - h(x);
+  for (const p of plats) p.y = yF((p.x0 + p.x1) / 2);
+
+  const pts = [], ponto = (x, y) => pts.push({ x, y });
+  // Pontos internos de um trecho, com x crescente, plataformas planas e pontas
+  const trecho = (x0, x1, yFn, ps, ns, sinal) => {
+    const r = [];
+    let x = x0 + aleat(8, 14);
+    while (x < x1 - 6) {
+      const p = ps.find(q => x > q.x0 - 4 && x < q.x1 + 4);
+      const s = ns.find(q => x > q.c - q.hw - 4 && x < q.c + q.hw + 4);
+      if (p) { r.push({ x: p.x0, y: p.y }, { x: p.x1, y: p.y }); x = p.x1 + aleat(8, 14); }
+      else if (s) {
+        r.push({ x: s.c - s.hw, y: yFn(s.c - s.hw) }, { x: s.c + aleat(-3, 3), y: yFn(s.c) + sinal * s.alt }, { x: s.c + s.hw, y: yFn(s.c + s.hw) });
+        x = s.c + s.hw + aleat(8, 14);
+      } else { r.push({ x, y: yFn(x) + aleat(-rug, rug) }); x += aleat(10, 20); }
+    }
+    return r;
+  };
+  const inclinado = (xa_, ya, xb_, yb) => {
+    const k = Math.max(1, Math.round(Math.hypot(xb_ - xa_, yb - ya) / 16));
+    for (let i = 1; i < k; i++) ponto(xa_ + (xb_ - xa_) * i / k + aleat(-3, 3), ya + (yb - ya) * i / k + aleat(-rug, rug));
+  };
+  // Planície, encosta até a boca, chão do túnel, parede do fundo, teto (de volta),
+  // aba sobre a boca, cume e encosta do outro lado
+  ponto(0, yPl(0)); pts.push(...trecho(0, xm0, yPl, [], [], 0)); ponto(xm0, yPl(xm0));
+  inclinado(xm0, yPl(xm0), xa, yF(xa)); ponto(xa, yF(xa));
+  pts.push(...trecho(xa, xb, yF, plats, pontas.filter(p => !p.teto), -1)); ponto(xb, yF(xb));
+  for (let y = yF(xb) - aleat(10, 16); y > yC(xb) + 6; y -= aleat(12, 20)) ponto(xb + aleat(-3, 2), y);
+  ponto(xb, yC(xb));
+  pts.push(...trecho(xa, xb, yC, [], pontas.filter(p => p.teto), 1).reverse()); ponto(xa, yC(xa));
+  inclinado(xa, yC(xa), xa + 50, ySu(xa + 50)); ponto(xa + 50, ySu(xa + 50));
+  pts.push(...trecho(xa + 50, xs1, ySu, [], [], 0)); ponto(xs1, ySu(xs1));
+  inclinado(xs1, ySu(xs1), xm1, yPl(xm1)); ponto(xm1, yPl(xm1));
+  pts.push(...trecho(xm1, L, yPl, [], [], 0)); ponto(L, yPl(L));
+
+  let inicio = 'esq';
+  if (Math.random() < 0.5) { // espelha: entrada à direita
+    inicio = 'dir';
+    for (const p of pts) p.x = L - p.x;
+    pts.reverse();
+    for (const p of plats) [p.x0, p.x1] = [L - p.x1, L - p.x0];
+  }
+  return { nome: 'TÚNEL', dica: 'ATRAVESSE O TÚNEL ATÉ O FIM - TANQUE CHEIO', pts, plats, caverna: true, ceu: A * 0.2 - 30, inicio };
+}
 
 // Monta o terreno da fase: um perfil por fase, em ciclo, cada volta mais difícil
 function gerarTerreno(fase) {
-  const L = CFG.MUNDO_L, A = CFG.MUNDO_A, dif = fase - 1;
-  const escala = Math.max(0.5, 1 - 0.07 * dif); // plataformas encolhem
+  const L = CFG.MUNDO_L, A = CFG.MUNDO_A, dif = fase - 1, f = dadosFase(fase);
+  // Plataformas encolhem; nas fases de mecânica nova, só a cada volta
+  const escala = f.novo ? Math.max(0.6, 0.9 - 0.1 * f.volta) : Math.max(0.5, 1 - 0.07 * dif);
   const larg = m => Math.max(36, { 2: 95, 3: 66, 5: 44 }[m] * escala);
   const limY = y => clamp(y, A * 0.22, A * 0.96);
-  const perfil = PERFIS[dif % PERFIS.length](dif, larg);
-  if (perfil.pts) return indexar({ pts: perfil.pts, plataformas: perfil.plats.sort((a, b) => a.x0 - b.x0), nome: perfil.nome, caverna: true, ceu: perfil.ceu });
+  const { altura, plats, aspereza, passo, bordas, moveis = [], ...extras } = f.perfil(dif, larg, f.volta);
+  if (extras.pts) return indexar({ ...extras, plataformas: plats.sort((a, b) => a.x0 - b.x0) });
 
-  const plataformas = perfil.plats.sort((a, b) => a.x0 - b.x0);
-  for (const p of plataformas) p.y = limY(perfil.altura((p.x0 + p.x1) / 2));
+  const plataformas = plats.sort((a, b) => a.x0 - b.x0);
+  for (const p of plataformas) p.y = limY(altura((p.x0 + p.x1) / 2));
 
   // Posições x dos vértices: passos irregulares + cantos obrigatórios do perfil
-  const xs = [...(perfil.bordas || []), L];
-  for (let x = 0; x < L; x += aleat(perfil.passo[0], perfil.passo[1])) xs.push(x);
+  const xs = [...(bordas || []), L];
+  for (let x = 0; x < L; x += aleat(passo[0], passo[1])) xs.push(x);
   xs.sort((a, b) => a - b);
 
   // Linha contínua, com trechos planos nas plataformas
@@ -547,9 +769,10 @@ function gerarTerreno(fase) {
     }
     if (plataformas.some(p => x >= p.x0 - 2 && x <= p.x1 + 2)) continue;
     if (pts.length && x - pts[pts.length - 1].x < 0.5) continue;
-    pts.push({ x, y: limY(perfil.altura(x) + aleat(-1, 1) * perfil.aspereza) });
+    pts.push({ x, y: limY(altura(x) + aleat(-1, 1) * aspereza) });
   }
-  return indexar({ pts, plataformas, nome: perfil.nome });
+  // As plataformas móveis não fazem parte da linha do terreno
+  return indexar({ ...extras, pts, plataformas: plataformas.concat(moveis) });
 }
 
 // A linha do terreno vai de x = 0 a x = MUNDO_L e a rocha fica abaixo dela. Nas
@@ -598,6 +821,118 @@ function distTerreno(x, y, r) {
   }
   return m;
 }
+// Distância de (x, y) ao segmento (ax, ay)-(bx, by)
+function distSeg(x, y, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const t = clamp(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+  return Math.hypot(ax + dx * t - x, ay + dy * t - y);
+}
+// Como chaoAbaixo e distTerreno, mas contando também as plataformas móveis
+function chaoComPlataformas(x, y) {
+  let c = chaoAbaixo(x, y);
+  for (const p of terreno.plataformas) if (p.mov && x >= p.x0 && x <= p.x1 && p.y >= y) c = Math.min(c, p.y);
+  return c;
+}
+function distObstaculos(x, y, r) {
+  let m = distTerreno(x, y, r);
+  for (const p of terreno.plataformas) if (p.mov) m = Math.min(m, distSeg(x, y, p.x0, p.y, p.x1, p.y));
+  return m;
+}
+
+// =====================================================================
+// 6b. MECÂNICAS DAS FASES (vento, plataformas móveis, vulcões)
+// =====================================================================
+// Vento: aceleração horizontal que muda de força e de lado devagar, com rajadas.
+// Mais fraco perto do chão (metade da força rente ao solo).
+function ventoEm(x, y) {
+  const v = terreno.vento;
+  if (!v) return 0;
+  const t = jogo.mundoT, alt = clamp(chaoAbaixo(x, y) - y, 0, 600);
+  return v.V * (0.5 + alt / 1200) *
+    (0.75 * Math.sin(0.15 * t + v.p1) + 0.25 * Math.sin(0.83 * t + v.p2) + 0.12 * Math.sin(2.9 * t + 2 * v.p1));
+}
+
+function moverPlataformas() {
+  const t = jogo.mundoT;
+  for (const p of terreno.plataformas) {
+    const m = p.mov;
+    if (!m) continue;
+    const a = m.om * t + m.f, b = m.om * 1.6 * t + m.f2, x = m.cx + m.amp * Math.sin(a);
+    p.x0 = x - m.w / 2; p.x1 = x + m.w / 2;
+    p.y = m.y0 + m.ampY * Math.sin(b);
+    p.vx = m.amp * m.om * Math.cos(a); p.vy = m.ampY * m.om * 1.6 * Math.cos(b);
+  }
+}
+
+// As rochas caem com gravidade própria, bem mais forte que a da fase: arcos rápidos,
+// que sobem de 120 a 380 acima da cratera e duram poucos segundos
+const G_ROCHA = 40;
+function erupcao(v) {
+  for (let i = 0; i < v.n; i++) {
+    const ang = -Math.PI / 2 + aleat(-0.8, 0.8), vel = aleat(98, 174);
+    rochas.push({
+      x: v.x + aleat(-4, 4), y: v.y, vx: Math.cos(ang) * vel, vy: Math.sin(ang) * vel,
+      r: aleat(3.5, 6), ang: 0, va: aleat(-5, 5), forma: Array.from({ length: 6 }, () => aleat(0.7, 1.15)),
+    });
+  }
+  bipe(60, 0.5, 'sawtooth', 0.07);
+}
+
+// Tudo o que se move na fase sem depender da nave; roda também depois do pouso
+// e da explosão
+function atualizarMundo(dt) {
+  jogo.mundoT += dt;
+  const L = CFG.MUNDO_L, A = CFG.MUNDO_A;
+  moverPlataformas();
+  // A nave pousada numa plataforma móvel vai junto com ela
+  const ap = nave && nave.apoio;
+  if (ap && ap.p.mov) { nave.x = ap.p.x0 + ap.dx; nave.y = ap.p.y + ap.dy; }
+
+  for (const v of terreno.vulcoes || []) {
+    v.t += dt;
+    if (v.t > v.periodo - 0.8 && Math.random() < 0.25) { // aviso: faíscas na cratera
+      faiscas.push({ x: v.x + aleat(-8, 8), y: v.y + 2, vx: aleat(-12, 12), vy: aleat(-55, -25), vida: aleat(0.3, 0.6) });
+    }
+    if (v.t >= v.periodo) { v.t -= v.periodo; erupcao(v); }
+  }
+  for (const r of rochas) {
+    r.vy += G_ROCHA * dt; r.x += r.vx * dt; r.y += r.vy * dt; r.ang += r.va * dt;
+    if (dentroRocha(r.x, r.y + r.r * 0.6)) {
+      r.morta = true;
+      for (let i = 0; i < 6; i++) faiscas.push({ x: r.x, y: r.y, vx: aleat(-40, 40), vy: aleat(-50, -10), vida: aleat(0.2, 0.5) });
+    }
+    if (r.x < -50 || r.x > L + 50 || r.y > A + 50) r.morta = true;
+  }
+  if (rochas.length) rochas = rochas.filter(r => !r.morta);
+
+  // Poeira levada pelo vento, só na parte visível do mundo
+  if (terreno.vento) {
+    const vw = cw / cam.zoom / 2 + 20, vh = ch / cam.zoom / 2 + 20;
+    const x0 = cam.x - vw, x1 = cam.x + vw, y0 = cam.y - vh, y1 = cam.y + vh;
+    while (poeira.length < 60) poeira.push({ x: aleat(x0, x1), y: aleat(y0, y1), k: aleat(0.6, 1.4), v: 0 });
+    for (const p of poeira) {
+      p.v = ventoEm(p.x, p.y);
+      p.x += p.v * 14 * p.k * dt;
+      if (p.y < y0 || p.y > y1) { p.x = aleat(x0, x1); p.y = aleat(y0, y1); }
+      else if (p.x < x0 || p.x > x1) { p.x = p.v > 0 ? x0 : x1; p.y = aleat(y0, y1); }
+    }
+  }
+}
+
+// Rochas dos vulcões que encostam em alguma linha da nave
+function verificarRochas() {
+  const n = nave, c = Math.cos(n.a), s = Math.sin(n.a);
+  for (const r of rochas) {
+    const dx = r.x - n.x, dy = r.y - n.y;
+    if (dx * dx + dy * dy > 900) continue;
+    const lx = dx * c + dy * s, ly = -dx * s + dy * c;
+    if (NAVE_LINHAS.some(l => distSeg(lx, ly, l[0], l[1], l[2], l[3]) < r.r)) {
+      r.morta = true;
+      explodir('ATINGIDA POR UMA ROCHA');
+      return;
+    }
+  }
+}
 
 // Estrelas ficam no mundo, só acima do terreno
 function gerarEstrelas() {
@@ -634,14 +969,16 @@ const CASCO = [[-9, -12], [9, -12], [-5, -16], [5, -16], [0, -19], [-11, -3], [1
                [-11, 3], [11, 3], [-5, 7], [5, 7], [-9, -6], [9, -6]];
 
 function novaNave() {
-  const daEsq = Math.random() < 0.5;
+  // No túnel e no pouso em sequência a fase decide de que lado a nave chega
+  const daEsq = terreno.inicio ? terreno.inicio === 'esq' : Math.random() < 0.5;
   nave = {
     x: daEsq ? 140 : CFG.MUNDO_L - 140, y: 70,
     vx: daEsq ? 30 : -30, vy: 0, a: 0,
     propulsor: false, latE: false, latD: false,
+    apoio: null,       // plataforma em que a nave está parada: { p, dx, dy }
   };
-  destrocos = []; faiscas = [];
-  jogo.estado = 'jogando'; jogo.tEstado = 0; jogo.resultado = null;
+  destrocos = []; faiscas = []; rochas = [];
+  jogo.estado = 'jogando'; jogo.tEstado = 0; jogo.resultado = null; jogo.aviso = null;
 }
 
 // Converte ponto local da nave para coordenadas do mundo
@@ -649,28 +986,34 @@ function naveMundo(lx, ly) {
   const c = Math.cos(nave.a), s = Math.sin(nave.a);
   return { x: nave.x + lx * c - ly * s, y: nave.y + lx * s + ly * c };
 }
-const altitude = () => chaoAbaixo(nave.x, nave.y) - (nave.y + 10);
+const altitude = () => chaoComPlataformas(nave.x, nave.y) - (nave.y + 10);
 
 // =====================================================================
 // 8. FLUXO DO JOGO (início, fases, reinício)
 // =====================================================================
+function novaFase(n) {
+  jogo.fase = n; jogo.mundoT = 0;
+  terreno = gerarTerreno(n); gerarEstrelas();
+  rochas = []; poeira = [];
+  moverPlataformas();
+}
 function reiniciar() {
-  jogo.fase = 1; jogo.pontos = 0; jogo.tempo = 0; jogo.comb = CFG.COMB_MAX;
+  jogo.pontos = 0; jogo.tempo = 0; jogo.comb = CFG.COMB_MAX;
   jogo.pausado = false;
-  terreno = gerarTerreno(1); gerarEstrelas();
+  novaFase(jogo.faseIni);
   novaNave();
 }
 function proximaFase() {
-  jogo.fase++;
-  terreno = gerarTerreno(jogo.fase); gerarEstrelas();
-  // A caverna pede um percurso longo: tanque cheio
-  jogo.comb = terreno.caverna ? CFG.COMB_MAX : Math.min(CFG.COMB_MAX, jogo.comb + CFG.COMB_MAX * CFG.RECARGA);
+  novaFase(jogo.fase + 1);
+  registrarFase(jogo.fase);
+  // Percursos longos (caverna, pouso em sequência, túnel): tanque cheio
+  jogo.comb = dadosFase(jogo.fase).cheio ? CFG.COMB_MAX : Math.min(CFG.COMB_MAX, jogo.comb + CFG.COMB_MAX * CFG.RECARGA);
   novaNave();
 }
 function irMenu() {
   salvarRecorde();
   jogo.estado = 'menu'; jogo.pausado = false; jogo.menuSel = 0;
-  destrocos = []; faiscas = [];
+  destrocos = []; faiscas = []; rochas = []; poeira = [];
 }
 // Volta à lista de jogos (página inicial do app)
 let saindo = false;
@@ -695,11 +1038,25 @@ function avancar() {
     if (jogo.resultado.fim) reiniciar(); else novaNave();
   }
 }
-function ativarItemMenu(i) {
-  if (i === 0) reiniciar();
-  else if (i === 1) { jogo.modo = jogo.modo === 'classico' ? 'arcade' : 'classico'; salvarPrefs(); }
-  else if (i === 2) alternarCor();
-  else if (i === 3) alternarMudo();
+// Itens do menu; a escolha da fase inicial só aparece depois de passar da fase 1
+function itensMenu() {
+  const it = [{ id: 'iniciar', txt: 'INICIAR JOGO' }];
+  if (jogo.faseMax > 1) it.push({ id: 'fase', txt: 'FASE INICIAL: ' + jogo.faseIni + ' ' + dadosFase(jogo.faseIni).nome });
+  it.push(
+    { id: 'modo', txt: 'MODO: ' + (jogo.modo === 'classico' ? 'CLÁSSICO' : 'ARCADE') },
+    { id: 'cor', txt: 'COR: ' + (jogo.cor === 'branco' ? 'BRANCO' : 'VERDE FÓSFORO') },
+    { id: 'som', txt: 'SOM: ' + (jogo.mudo ? 'MUDO' : 'LIGADO') },
+  );
+  return it;
+}
+// dir: -1 com a seta para a esquerda (só muda algo na fase inicial)
+function ativarItemMenu(i, dir = 1) {
+  const id = (itensMenu()[i] || {}).id;
+  if (id === 'iniciar') reiniciar();
+  else if (id === 'fase') { jogo.faseIni = (jogo.faseIni - 1 + dir + jogo.faseMax) % jogo.faseMax + 1; salvarPrefs(); }
+  else if (id === 'modo') { jogo.modo = jogo.modo === 'classico' ? 'arcade' : 'classico'; salvarPrefs(); }
+  else if (id === 'cor') alternarCor();
+  else if (id === 'som') alternarMudo();
 }
 
 // =====================================================================
@@ -717,8 +1074,10 @@ function entrada() {
 function atualizar(dt) {
   if (jogo.estado === 'menu') return;
   jogo.tEstado += dt;
+  atualizarMundo(dt);
   atualizarDestrocos(dt);
   if (jogo.estado !== 'jogando') return;
+  if (jogo.aviso && (jogo.aviso.t -= dt) <= 0) jogo.aviso = null;
 
   const n = nave, g = dadosFase(jogo.fase).g, T = empuxo(g), ent = entrada();
   const tinhaComb = jogo.comb > 0;
@@ -753,6 +1112,20 @@ function atualizar(dt) {
     if (jogo.bipeT <= 0) { bipe(990, 0.09); jogo.bipeT = 0.7; }
   }
 
+  // Parada numa plataforma (pouso em sequência): fica até o propulsor vencer a gravidade.
+  // Ao girar, a nave continua apoiada nos pés
+  if (n.apoio) {
+    if (ay >= 0) {
+      n.vx = n.vy = 0;
+      const pes = PES.map(p => naveMundo(p[0], p[1]));
+      n.y -= Math.max(pes[0].y, pes[1].y) - n.apoio.p.y + 0.01;
+      verificarRochas();
+      return;
+    }
+    n.apoio = null; // decolou
+  }
+  ax += ventoEm(n.x, n.y);
+
   // Integração (inércia: nada freia a nave além do propulsor)
   n.vx += ax * dt; n.vy += ay * dt;
   n.x += n.vx * dt; n.y += n.vy * dt;
@@ -763,6 +1136,7 @@ function atualizar(dt) {
   if (n.y < -400) { n.y = -400; if (n.vy < 0) n.vy = 0; }
 
   verificarContato();
+  if (jogo.estado === 'jogando') verificarRochas();
 }
 
 // Detecta contato com o terreno e decide entre pouso e destruição
@@ -770,29 +1144,47 @@ function verificarContato() {
   const n = nave, c = Math.cos(n.a), s = Math.sin(n.a);
   let pesTocaram = false, cascoTocou = false;
   const pes = PES.map(p => naveMundo(p[0], p[1]));
+  const casco = CASCO.map(p => naveMundo(p[0], p[1]));
+  // Ponto do mundo dentro do contorno do casco
+  const noCasco = (x, y) => {
+    const dx = x - n.x, dy = y - n.y, lx = dx * c + dy * s, ly = -dx * s + dy * c;
+    return lx > -11 && lx < 11 && ly > -17 && ly < 7.5;
+  };
   for (const p of pes) if (dentroRocha(p.x, p.y)) pesTocaram = true;
-  for (const p of CASCO) { const w = naveMundo(p[0], p[1]); if (dentroRocha(w.x, w.y)) cascoTocou = true; }
+  for (const w of casco) if (dentroRocha(w.x, w.y)) cascoTocou = true;
   // Picos e quinas do terreno que entram no casco entre dois pontos de teste
   for (const t of terreno.pts) {
     if (Math.abs(t.x - n.x) > 20 || Math.abs(t.y - n.y) > 25) continue;
-    const dx = t.x - n.x, dy = t.y - n.y;
-    const lx = dx * c + dy * s, ly = -dx * s + dy * c;
-    if (lx > -11 && lx < 11 && ly > -17 && ly < 7.5) cascoTocou = true;
+    if (noCasco(t.x, t.y)) cascoTocou = true;
+  }
+  // Plataformas móveis: corpos sólidos de 7 de espessura
+  let movel = null, bateuMovel = false;
+  for (const p of terreno.plataformas) {
+    if (!p.mov) continue;
+    const dentro = (x, y) => x >= p.x0 && x <= p.x1 && y >= p.y && y <= p.y + 7;
+    if (pes.some(f => dentro(f.x, f.y))) { pesTocaram = true; movel = p; }
+    if (casco.some(w => dentro(w.x, w.y)) || [[p.x0, p.y], [p.x1, p.y], [p.x0, p.y + 7], [p.x1, p.y + 7]].some(q => noCasco(q[0], q[1]))) {
+      cascoTocou = bateuMovel = true;
+    }
   }
   if (!pesTocaram && !cascoTocou) return;
 
   const xmin = Math.min(pes[0].x, pes[1].x), xmax = Math.max(pes[0].x, pes[1].x);
   const yPes = Math.max(pes[0].y, pes[1].y);
-  const plat = terreno.plataformas.find(p => xmin >= p.x0 && xmax <= p.x1 && Math.abs(yPes - p.y) < 6);
-  const okVy = n.vy <= CFG.LIM_VY, okVx = Math.abs(n.vx) <= CFG.LIM_VX, okAng = Math.abs(n.a) <= CFG.LIM_ANG;
+  const plat = movel ? (xmin >= movel.x0 && xmax <= movel.x1 ? movel : null)
+                     : terreno.plataformas.find(p => !p.mov && xmin >= p.x0 && xmax <= p.x1 && Math.abs(yPes - p.y) < 6);
+  // Velocidades em relação à plataforma (as móveis também se mexem)
+  const vx = n.vx - ((plat && plat.vx) || 0), vy = n.vy - ((plat && plat.vy) || 0);
+  const okVy = vy <= CFG.LIM_VY, okVx = Math.abs(vx) <= CFG.LIM_VX, okAng = Math.abs(n.a) <= CFG.LIM_ANG;
 
   if (plat && !cascoTocou && okVy && okVx && okAng) {
-    pousar(plat);
+    pousar(plat, vx, vy);
   } else {
     // Pé que entrou de lado: a rocha continua logo acima dele (parede)
     const deLado = pes.some(p => dentroRocha(p.x, p.y) && dentroRocha(p.x, p.y - 4));
     let motivo = 'NAVE INCLINADA DEMAIS';
-    if (deLado) motivo = 'BATEU NA PAREDE';
+    if (bateuMovel) motivo = 'BATEU NA PLATAFORMA';
+    else if (deLado) motivo = 'BATEU NA PAREDE';
     else if (!plat) motivo = pesTocaram ? 'FORA DA PLATAFORMA' : 'COLISÃO COM O CASCO';
     else if (cascoTocou && okAng) motivo = 'COLISÃO COM O CASCO';
     else if (!okVy) motivo = 'IMPACTO VERTICAL FORTE';
@@ -801,19 +1193,39 @@ function verificarContato() {
   }
 }
 
-function pousar(plat) {
+// vx, vy: velocidades em relação à plataforma
+function pousar(plat, vx, vy) {
   const n = nave;
   // Quão longe dos limites foi o pouso (0 = parado e reto, 1 = no limite)
-  const r = Math.max(0, n.vy / CFG.LIM_VY, Math.abs(n.vx) / CFG.LIM_VX, Math.abs(n.a) / CFG.LIM_ANG);
+  const r = Math.max(0, vy / CFG.LIM_VY, Math.abs(vx) / CFG.LIM_VX, Math.abs(n.a) / CFG.LIM_ANG);
   const perfeito = r < 0.4;
   const bonus = perfeito ? 300 : Math.round(150 * (1 - r));
+  // Assenta a nave na plataforma; nas móveis ela vai junto
+  const pes = PES.map(p => naveMundo(p[0], p[1]));
+  n.y -= Math.max(pes[0].y, pes[1].y) - plat.y + 0.01;
+  n.vx = n.vy = 0; n.propulsor = n.latE = n.latD = false;
+  n.apoio = { p: plat, dx: n.x - plat.x0, dy: n.y - plat.y };
+
+  // Pouso em sequência: antes da última, a nave para, pontua e decola de novo
+  const ent = terreno.entrega;
+  if (ent && !(plat.seq === 2 && ent.atual === 2)) {
+    if (plat.seq === ent.atual) {
+      const pts = 100 * (ent.atual + 1) + bonus;
+      jogo.pontos += pts;
+      ent.atual++;
+      jogo.aviso = { l1: 'POUSO ' + ent.atual + ' DE 3  +' + pts, l2: 'DECOLE PARA A ' + (ent.atual + 1), t: 3 };
+      somPouso(perfeito);
+    } else {
+      jogo.aviso = { l1: plat.seq < ent.atual ? 'ESTA JÁ FOI' : 'FORA DE ORDEM', l2: 'VÁ PARA A ' + (ent.atual + 1), t: 3 };
+      bipe(330, 0.2, 'triangle', 0.15);
+    }
+    return;
+  }
+  if (ent) ent.atual = 3;
+
   const base = plat.mult * Math.round(jogo.comb / 4);
   jogo.pontos += base + bonus;
   salvarRecorde();
-  // Assenta a nave na plataforma
-  const pes = PES.map(p => naveMundo(p[0], p[1]));
-  n.y -= Math.max(pes[0].y, pes[1].y) - plat.y;
-  n.vx = n.vy = 0; n.propulsor = n.latE = n.latD = false;
   jogo.estado = 'pousou'; jogo.tEstado = 0;
   jogo.resultado = { perfeito, mult: plat.mult, comb: Math.round(jogo.comb), base, bonus };
   somPouso(perfeito);
@@ -885,7 +1297,7 @@ function atualizarCamera(dtReal) {
     // paredes e torres, e muda o zoom com velocidade limitada: aproxima devagar
     // e afasta um pouco mais rápido, sem o vaivém de antes.
     const r = (ch / zb) * CFG.ZOOM_ALCANCE;
-    const alvo = clamp(r / Math.max(1, distTerreno(nave.x, nave.y, r + 12) - 12), 1, CFG.ZOOM_FATOR);
+    const alvo = clamp(r / Math.max(1, distObstaculos(nave.x, nave.y, r + 12) - 12), 1, CFG.ZOOM_FATOR);
     const dl = Math.log(alvo / cam.fator);
     cam.fator *= Math.exp(clamp(dl * (1 - Math.exp(-dtReal * 2)), -0.9 * dtReal, 0.45 * dtReal));
   }
@@ -895,7 +1307,7 @@ function atualizarCamera(dtReal) {
   let ax = emVoo ? nave.x : L / 2;
   // Chão de referência logo abaixo da nave, suavizado (salta na beira dos cânions e das saliências)
   if (emVoo) {
-    const chao = Math.min(chaoAbaixo(nave.x, nave.y), A);
+    const chao = Math.min(chaoComPlataformas(nave.x, nave.y), A);
     cam.chao = isFinite(cam.chao) ? cam.chao + (chao - cam.chao) * (1 - Math.exp(-dtReal * 2.5)) : chao;
   }
   // Chão a ~70% da altura da tela, sem deixar a nave sair por cima. Dentro da
@@ -934,6 +1346,19 @@ function desenharMundo(cor, t) {
   }
   ctx.globalAlpha = 1;
 
+  // Poeira levada pelo vento: riscos na direção do vento
+  if (terreno.vento && jogo.estado !== 'menu') {
+    ctx.globalAlpha = 0.45;
+    ctx.strokeStyle = cor; ctx.lineWidth = 1 / z;
+    ctx.beginPath();
+    for (const p of poeira) {
+      if (Math.abs(p.v) < 0.5 || dentroRocha(p.x, p.y)) continue;
+      ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.v * 2.2 * p.k, p.y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   // Brilho de monitor vetorial
   ctx.shadowBlur = 7 * dpr;
   ctx.shadowColor = cor;
@@ -953,6 +1378,33 @@ function desenharMundo(cor, t) {
   ctx.beginPath();
   for (const pl of terreno.plataformas) { ctx.moveTo(pl.x0, pl.y); ctx.lineTo(pl.x1, pl.y); }
   ctx.stroke();
+
+  // Plataformas móveis: casco por baixo e dois propulsores acesos
+  ctx.lineWidth = 1.4 / z;
+  ctx.beginPath();
+  for (const pl of terreno.plataformas) {
+    if (!pl.mov) continue;
+    const { x0, x1, y } = pl;
+    ctx.moveTo(x0, y); ctx.lineTo(x0 + 6, y + 7); ctx.lineTo(x1 - 6, y + 7); ctx.lineTo(x1, y);
+    for (const bx of [x0 + 12, x1 - 12]) {
+      const len = aleat(4, 9);
+      ctx.moveTo(bx - 2.5, y + 7); ctx.lineTo(bx + aleat(-1, 1), y + 7 + len); ctx.lineTo(bx + 2.5, y + 7);
+    }
+  }
+  ctx.stroke();
+
+  // Rochas dos vulcões, com um rastro curto
+  if (rochas.length) {
+    ctx.beginPath();
+    for (const r of rochas) {
+      for (let i = 0; i <= 6; i++) {
+        const a = r.ang + i * Math.PI / 3, k = r.r * r.forma[i % 6];
+        if (i) ctx.lineTo(r.x + Math.cos(a) * k, r.y + Math.sin(a) * k); else ctx.moveTo(r.x + Math.cos(a) * k, r.y + Math.sin(a) * k);
+      }
+      ctx.moveTo(r.x - r.vx * 0.06, r.y - r.vy * 0.06); ctx.lineTo(r.x - r.vx * 0.16, r.y - r.vy * 0.16);
+    }
+    ctx.stroke();
+  }
 
   if (jogo.estado === 'jogando' || jogo.estado === 'pousou') desenharNave(cor, z);
 
@@ -1005,10 +1457,17 @@ function desenharNave(cor, z) {
   ctx.restore();
 }
 
-// Multiplicadores sob as plataformas (em coordenadas de tela)
+// Rótulo da plataforma: multiplicador ou, no pouso em sequência, a ordem (OK se já foi)
+function rotulo(p) {
+  if (p.seq === undefined) return 'x' + p.mult;
+  return p.seq < terreno.entrega.atual ? 'OK' : String(p.seq + 1);
+}
+// Rótulos sob as plataformas (em coordenadas de tela); o próximo pouso da sequência pisca
 function desenharRotulosPlataformas(cor, u) {
+  const ent = terreno.entrega;
   for (const p of terreno.plataformas) {
-    texto('x' + p.mult, telaX((p.x0 + p.x1) / 2), telaY(p.y) + 6 + u, u, 'centro', cor);
+    if (ent && p.seq === ent.atual && jogo.estado === 'jogando' && !piscar(2)) continue;
+    texto(rotulo(p), telaX((p.x0 + p.x1) / 2), telaY(p.y) + (p.mov ? 13 : 6) + u, u, 'centro', cor);
   }
 }
 
@@ -1024,6 +1483,7 @@ function desenharSetasPlataformas(cor, u) {
   for (const p of terreno.plataformas) {
     const px = telaX((p.x0 + p.x1) / 2), py = telaY(p.y);
     if (px > 0 && px < cw && py > 0 && py < ch) continue;
+    if (p.seq !== undefined && p.seq < terreno.entrega.atual) continue;
     const dx = px - cx, dy = py - cy;
     const t = Math.min(dx > 0 ? (x1 - cx) / dx : dx < 0 ? (x0 - cx) / dx : Infinity,
                        dy > 0 ? (y1 - cy) / dy : dy < 0 ? (y0 - cy) / dy : Infinity);
@@ -1034,7 +1494,7 @@ function desenharSetasPlataformas(cor, u) {
     ctx.lineTo(sx - c * k * 1.6 + s * k, sy - s * k * 1.6 - c * k);
     ctx.closePath();
     ctx.stroke();
-    texto('x' + p.mult, sx - c * k * 3.6, sy - s * k * 3.6 - 3 * uT, uT, 'centro', cor);
+    texto(rotulo(p), sx - c * k * 3.6, sy - s * k * 3.6 - 3 * uT, uT, 'centro', cor);
   }
 }
 
@@ -1077,6 +1537,11 @@ function desenharHUD(cor, u) {
     ['VEL VERT', Math.abs(vy) + ' ' + (vy > 0 ? '↓' : vy < 0 ? '↑' : ' '), n.vy > CFG.LIM_VY, true],
     ['ÂNGULO', graus + '°', Math.abs(n.a) > CFG.LIM_ANG],
   ];
+  if (terreno.vento) {
+    const v = ventoEm(n.x, n.y), va = Math.round(Math.abs(v));
+    col2.push(['VENTO', va + ' ' + (va === 0 ? ' ' : v > 0 ? '→' : '←')]);
+  }
+  if (terreno.entrega) col2.push(['POUSOS', Math.min(3, terreno.entrega.atual) + ' DE 3']);
   const linha = (row, x, y) => {
     const [rot, val, alerta, pisca] = row;
     texto(rot, x, y, u, 'esq', cor);
@@ -1097,20 +1562,25 @@ function desenharHUD(cor, u) {
   const x2 = estreito ? m : m + colL + 4 * 6 * u;
   const y2 = estreito ? by + 3 * u + lh * 0.8 : m;
   col2.forEach((r, i) => linha(r, x2, y2 + i * lh));
+  jogo.hudFim = Math.max(by + 3 * u, y2 + col2.length * lh); // as mensagens começam abaixo
 }
 
 function desenharMensagens(cor, u) {
   const cx = cw / 2, maxL = cw - 32;
-  let y = ch * 0.3;
+  const y0 = Math.max(ch * 0.3, (jogo.hudFim || 0) + u * 8); // abaixo do painel, que no celular é mais alto
+  let y = y0;
   const uG = u * 2, r = jogo.resultado;
   const linhaTxt = (s, uu, c = cor) => { const k = textoCabe(s, cx, y, uu, 'centro', c, maxL); y += k * 6 + uu * 5; };
   const prompt = jogo.toque ? 'TOQUE' : 'ENTER';
 
-  // Abertura da fase: número, astro e tipo de relevo
-  if (jogo.estado === 'jogando' && jogo.tEstado < 3 && !jogo.pausado) {
-    const k = textoCabe('FASE ' + jogo.fase, cx, ch * 0.3, uG, 'centro', cor, maxL);
-    textoCabe(dadosFase(jogo.fase).nome + ' - ' + terreno.nome, cx, ch * 0.3 + k * 6 + u * 5, u, 'centro', cor, maxL);
-    if (terreno.caverna) textoCabe('DESÇA ATÉ O FUNDO - TANQUE CHEIO', cx, ch * 0.3 + k * 6 + u * 16, u, 'centro', cor, maxL);
+  // Abertura da fase: número, astro, tipo de relevo e dica
+  if (jogo.estado === 'jogando' && !jogo.pausado && jogo.aviso) {
+    const k = textoCabe(jogo.aviso.l1, cx, y0, u * 1.5, 'centro', cor, maxL);
+    textoCabe(jogo.aviso.l2, cx, y0 + k * 6 + u * 5, u, 'centro', cor, maxL);
+  } else if (jogo.estado === 'jogando' && jogo.tEstado < 3 && !jogo.pausado) {
+    const k = textoCabe('FASE ' + jogo.fase, cx, y0, uG, 'centro', cor, maxL);
+    textoCabe(dadosFase(jogo.fase).nome + ' - ' + terreno.nome, cx, y0 + k * 6 + u * 5, u, 'centro', cor, maxL);
+    if (terreno.dica) textoCabe(terreno.dica, cx, y0 + k * 6 + u * 16, u, 'centro', cor, maxL);
   }
   if (jogo.estado === 'jogando' && jogo.comb <= 0 && piscar(2.5)) {
     textoCabe('SEM COMBUSTÍVEL', cx, ch * 0.22, uG, 'centro', COR_ALERTA, maxL);
@@ -1146,18 +1616,13 @@ function desenharMensagens(cor, u) {
 
 function desenharMenu(cor, u) {
   const cx = cw / 2, maxL = cw - 32;
-  let y = Math.max(20, ch / 2 - 78 * u);
+  const itens = itensMenu().map(it => it.txt);
+  let y = Math.max(20, ch / 2 - (78 + (itens.length - 4) * 8) * u);
   let k = textoCabe('LUNAR LANDER', cx, y, u * 3.2, 'centro', cor, maxL);
   y += k * 6 + u * 5;
   textoCabe('MÓDULO DE POUSO VETORIAL', cx, y, u, 'centro', cor, maxL);
   y += u * 16;
 
-  const itens = [
-    'INICIAR JOGO',
-    'MODO: ' + (jogo.modo === 'classico' ? 'CLÁSSICO' : 'ARCADE'),
-    'COR: ' + (jogo.cor === 'branco' ? 'BRANCO' : 'VERDE FÓSFORO'),
-    'SOM: ' + (jogo.mudo ? 'MUDO' : 'LIGADO'),
-  ];
   jogo.itensMenu = [];
   const uI = u * 1.35;
   itens.forEach((s, i) => {
@@ -1332,9 +1797,9 @@ window.addEventListener('keydown', e => {
     case 'KeyR': if (!menu) reiniciar(); break;
     case 'Escape': if (!menu) irMenu(); break;
     case 'Enter': case 'NumpadEnter': case 'Space': avancar(); break;
-    case 'ArrowUp': if (menu) jogo.menuSel = (jogo.menuSel + 3) % 4; break;
-    case 'ArrowDown': if (menu) jogo.menuSel = (jogo.menuSel + 1) % 4; break;
-    case 'ArrowLeft': case 'ArrowRight': if (menu && jogo.menuSel > 0) ativarItemMenu(jogo.menuSel); break;
+    case 'ArrowUp': if (menu) { const n = itensMenu().length; jogo.menuSel = (jogo.menuSel + n - 1) % n; } break;
+    case 'ArrowDown': if (menu) jogo.menuSel = (jogo.menuSel + 1) % itensMenu().length; break;
+    case 'ArrowLeft': case 'ArrowRight': if (menu && jogo.menuSel > 0) ativarItemMenu(jogo.menuSel, e.code === 'ArrowLeft' ? -1 : 1); break;
   }
 });
 window.addEventListener('keyup', e => { teclas[e.code] = false; });
@@ -1434,8 +1899,7 @@ function quadro(agora) {
 }
 
 // Início: terreno de fundo para o menu
-terreno = gerarTerreno(1);
-gerarEstrelas();
+novaFase(1);
 novaNave();
 jogo.estado = 'menu';
 requestAnimationFrame(quadro);
