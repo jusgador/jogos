@@ -15,7 +15,9 @@ Abra pelo servidor de teste da raiz (ver o README de lá), em `http://localhost:
   - **Bola 9**, com push out no Profissional.
   - **Carambola**: livre ou três tabelas, na mesa sem caçapas.
 - **Mesas:** de bar (2,00 × 1,00 m, bolas de 54 mm, caçapas largas, feltro mais lento e meia-lua), de clube (pool de 9 pés), oficial de sinuca (3,57 × 1,78 m, caçapas justas) e de carambola. Cada modo oferece as mesas que fazem sentido para ele.
+- **Campeonato:** você e 7 adversários do computador (ver abaixo).
 - **Treino livre:** sem regras, em qualquer mesa, com as bolas que você escolher no menu (na carambola, as três bolas).
+- **Estatísticas:** por jogador humano (pelo nome): partidas, vitórias (no total e por modo), acerto, maior sequência, aberturas com bola encaçapada e os troféus dos campeonatos vencidos.
 - **Como jogar:** as regras de cada modo, com diagramas e a lista de variantes.
 
 ### Partidas
@@ -28,6 +30,19 @@ Abra pelo servidor de teste da raiz (ver o README de lá), em `http://localhost:
 - **Bolas secretas (Mata-mata):** antes da partida, cada jogador recebe o aparelho, toca em "Ver minhas bolas" e passa adiante. Na partida, a tela da vez e o botão 👁 Minhas bolas mostram só as bolas de quem está na vez. O placar diz quem está vivo e quantas bolas tem, nunca quais; no fim, a tela revela de quem era cada bola.
 - **Botões do modo:** aparecem embaixo do placar quando o modo pede uma escolha: o grupo (Três jogadores), o push out e depois "Jogar daqui" ou "Devolver a vez" (Bola 9).
 - **Dica (💡, só no Aprendiz):** o computador procura uma boa jogada para quem está na vez, deixa a mira, o efeito e a força prontos (e a branca no lugar, com bola na mão), destaca a bola e a caçapa e explica a jogada num balão.
+
+### Campeonatos
+
+| Campeonato | Formato | Fases | Adversários |
+|---|---|---|---|
+| Copa do Bar | chave | Bola 8, mesa de bar | os 7 mais fracos |
+| Rei do Boteco | chave | quartas Par × Ímpar, semifinal Contagem, final Sinuca de bar (mesa de bar) | 7 sorteados |
+| Noite do Mata-mata | mesas | duas mesas de 4; os 2 primeiros de cada vão à mesa final, e o último vivo dela é o campeão | 7 sorteados |
+| Torneio Brasileiro | chave | Sinuca brasileira tradicional, mesa oficial | 7 sorteados |
+| Circuito Misto | chave | quartas Bola 8, semifinal Bola 9, final Sinuca brasileira | 7 sorteados |
+| Grand Slam Profissional | chave | nível Profissional obrigatório; Bola 9, Sinuca brasileira na mesa oficial e final em Carambola três tabelas (a 5 pontos; o Snooker entra como opção na etapa 7) | os 7 mais fortes |
+
+Na chave, quartas, semifinal e final são séries de melhor de 3 ou de 5, à escolha; quem abre alterna a cada jogo. As séries entre adversários do computador são simuladas jogo a jogo, com a chance de cada um tirada dos atributos (mira pesa mais; na carambola, o efeito também) e do modo favorito; nas mesas do Mata-mata, sai um de cada vez, com chance maior para os mais fracos. A tela do campeonato mostra a chave (ou as mesas) com os resultados e o troféu, desenhado em canvas: apagado enquanto está em jogo, dourado para quem vence. O progresso fica salvo entre os jogos: dá para sair e continuar depois (um jogo interrompido recomeça). Se você cai, o resto é simulado até o campeão.
 
 ### Adversários do computador
 
@@ -68,7 +83,7 @@ Ao fim de cada tacada, a física entrega ao motor de regras o registro da jogada
 
 ## Dados salvos
 
-No `localStorage`, com o prefixo `sinuca-`: `sinuca-config` (bolas, nível e mesa do treino, feltro, rastro, vibração, som e volumes, tempo do Profissional, tela entre as vezes), `sinuca-preparo` (o último preparo de cada modo: jogadores humanos ou adversários, nomes, nível, mesa, feltro, variantes) e `sinuca-regras-casa` (as regras da casa salvas).
+No `localStorage`, com o prefixo `sinuca-`: `sinuca-config` (bolas, nível e mesa do treino, feltro, rastro, vibração, som e volumes, tempo do Profissional, tela entre as vezes), `sinuca-preparo` (o último preparo de cada modo: jogadores humanos ou adversários, nomes, nível, mesa, feltro, variantes), `sinuca-regras-casa` (as regras da casa salvas), `sinuca-campeonato` (o campeonato atual, com a chave e os resultados) e `sinuca-estatisticas` (as estatísticas de cada jogador humano).
 
 ## Inteligência artificial
 
@@ -104,7 +119,7 @@ Cada modo é um objeto em `REGRAS`, com a mesma interface: `montar(sim, estado)`
 3. **Regras e modos de bar** (pronta): motor de regras para 2 a 6 jogadores, duplas, variantes e regra da casa; Bola 8, Par × Ímpar e Contagem de pontos no passa-e-joga; níveis com balões, desfazer e relógio; telas de modo, preparo, como jogar, configurações e fim; placar completo.
 4. **Modos brasileiros, multijogador e mesas** (pronta): Mata-mata com sorteio secreto e tela de privacidade, Três jogadores, Sinuca brasileira tradicional e de bar, Bola 9 com push out, Carambola livre e três tabelas; mesas de bar, oficial e de carambola, com escolha de mesa e de feltro por partida.
 5. **Inteligência artificial** (pronta): IA em todos os modos, multijogador e bolas secretas incluídos; os 8 adversários com avatar, modo favorito e frases; "pensando…"; botão Dica do Aprendiz; partidas mistas de humanos e computador.
-6. Campeonatos, estatísticas e progresso salvo.
+6. **Campeonato e progresso** (pronta): os 6 campeonatos, com chave em séries ou mesas do Mata-mata; simulação entre os adversários do computador; troféu em canvas; estatísticas por jogador; progresso salvo para continuar depois.
 7. Snooker, desafios de tacada e revisão para celular.
 
 ### Pendências conhecidas

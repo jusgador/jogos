@@ -27,6 +27,7 @@
   #tela { display: block; position: fixed; inset: 0; touch-action: none; user-select: none;
     -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
   button { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
 
   /* Placa de madeira com moldura de latão (HUD e telas) */
   .placa {
@@ -165,6 +166,32 @@
   .fala img.av { width: 44px; height: 44px; }
   .fala small { font-style: normal; color: var(--fraco); }
 
+  #chave-trofeu { display: block; margin: 0 auto 4px; }
+  .chave { display: flex; gap: 10px; text-align: left; margin: 6px 0 10px; overflow-x: auto; }
+  .chave .col { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }
+  .chave .jogos { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 8px; }
+  .chave h3 { margin: 0; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--latao); font-weight: normal; }
+  .chave .conf { border: 1px solid rgba(201,162,74,.45); border-radius: 8px; padding: 4px 6px; background: rgba(0,0,0,.18); }
+  .chave .conf small { color: var(--fraco); font-size: 11px; }
+  .chave .conf.vazio { color: var(--fraco); font-size: 13px; text-align: center; }
+  .chave .ln { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; color: var(--fraco); }
+  .chave .ln .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chave .ln.ven { color: var(--texto); font-weight: bold; }
+  .chave .ln.eu .nm { color: #7cf2a6; }
+  .chave .ln .av { width: 20px; height: 20px; font-size: 8px; box-shadow: none; }
+  .estat-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0; text-align: left; }
+  .estat-grade div { border: 1px solid rgba(201,162,74,.4); border-radius: 8px; padding: 6px 10px; background: rgba(0,0,0,.15); }
+  .estat-grade small { display: block; color: var(--fraco); font-size: 12px; }
+  .estat-grade b { font-size: 18px; color: var(--latao-claro); }
+  .tabela { width: 100%; border-collapse: collapse; font-size: 14px; margin: 4px 0 8px; }
+  .tabela th, .tabela td { padding: 4px 6px; border-bottom: 1px solid rgba(201,162,74,.25); text-align: center; }
+  .tabela th { color: var(--latao); font-weight: normal; font-size: 12px; }
+  .tabela td:first-child, .tabela th:first-child { text-align: left; }
+  .trofeus { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .trofeus figure { margin: 0; width: 96px; text-align: center; }
+  .trofeus canvas { display: block; margin: 0 auto; }
+  .trofeus figcaption { font-size: 11px; color: var(--fraco); }
+
   /* Balão de dica */
   #balao { position: fixed; left: 50%; bottom: calc(14px + var(--seguro-baixo)); transform: translate(-50%, 12px);
     max-width: min(520px, 80vw); padding: 10px 36px 10px 16px; font-size: 15px; opacity: 0; pointer-events: none;
@@ -204,12 +231,18 @@
       <h1>SINUCA<br><span>DE BICO</span></h1>
       <p class="sub">Sinuca e bilhar de bar, vistos de cima.</p>
       <button class="bt" data-acao="modos">Jogar</button>
-      <button class="bt fraco" data-acao="treino">Treino livre</button>
+      <div class="linha">
+        <button class="bt" data-acao="camps">Campeonato</button>
+        <button class="bt fraco" data-acao="treino">Treino livre</button>
+      </div>
       <div class="linha">
         <button class="bt fraco" data-acao="regras-menu">Como jogar</button>
-        <button class="bt fraco" data-acao="config">Configurações</button>
+        <button class="bt fraco" data-acao="estat">Estatísticas</button>
       </div>
-      <button class="bt fraco" data-acao="jogos">Jogos</button>
+      <div class="linha">
+        <button class="bt fraco" data-acao="config">Configurações</button>
+        <button class="bt fraco" data-acao="jogos">Jogos</button>
+      </div>
       <p class="nota">Em construção: o campeonato, o snooker e os desafios chegam nas próximas versões.</p>
     </div>
   </section>
@@ -288,6 +321,46 @@
     </div>
   </section>
 
+  <section class="tela" id="t-camps">
+    <div class="placa larga">
+      <h2>Campeonato</h2>
+      <div id="camps-lista"></div>
+      <button class="bt fraco" data-acao="voltar">Voltar</button>
+    </div>
+  </section>
+
+  <section class="tela" id="t-camp-prep">
+    <div class="placa">
+      <h2 id="camp-prep-titulo"></h2>
+      <p class="sub" id="camp-prep-resumo"></p>
+      <div id="camp-prep"></div>
+      <button class="bt" data-acao="camp-comecar">Começar</button>
+      <button class="bt fraco" data-acao="voltar">Voltar</button>
+    </div>
+  </section>
+
+  <section class="tela" id="t-chave">
+    <div class="placa larga">
+      <h2 id="chave-titulo"></h2>
+      <canvas id="chave-trofeu" role="img" aria-label="Troféu"></canvas>
+      <p class="sub" id="chave-status"></p>
+      <div id="chave"></div>
+      <button class="bt" data-acao="camp-jogar" id="chave-jogar">Jogar</button>
+      <div class="linha">
+        <button class="bt fraco" data-acao="camp-abandonar" id="chave-abandonar">Abandonar</button>
+        <button class="bt fraco" data-acao="menu-inicio">Menu</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="tela" id="t-estat">
+    <div class="placa larga">
+      <h2>Estatísticas</h2>
+      <div id="estat"></div>
+      <button class="bt fraco" data-acao="voltar">Voltar</button>
+    </div>
+  </section>
+
   <section class="tela" id="t-fim">
     <div class="placa larga">
       <h2 id="fim-titulo"></h2>
@@ -295,9 +368,11 @@
       <table id="fim-tabela"></table>
       <div id="fim-revela"></div>
       <div id="fim-falas"></div>
+      <p class="sub" id="fim-camp" hidden></p>
       <div class="linha">
         <button class="bt fraco" data-acao="menu">Menu principal</button>
-        <button class="bt" data-acao="de-novo">Jogar de novo</button>
+        <button class="bt" data-acao="de-novo" id="fim-de-novo">Jogar de novo</button>
+        <button class="bt" data-acao="camp-ver" id="fim-camp-ver" hidden>Ver o campeonato</button>
       </div>
     </div>
   </section>
@@ -559,7 +634,7 @@ const MODOS = {
     min: 2, max: 2, duplas: false, secretas: false, mesas: ['carambola'], mesaPadrao: 'carambola', bolas: 'carambola', etapa: 4,
     variantes: {
       meta: {
-        nome: 'Pontos para vencer', padrao: '50', opcoes: [{ id: '10', nome: '10 pontos' }, { id: '25', nome: '25 pontos' }, { id: '50', nome: '50 pontos (padrão de bar)' }, { id: '100', nome: '100 pontos' }],
+        nome: 'Pontos para vencer', padrao: '50', opcoes: [{ id: '5', nome: '5 pontos' }, { id: '10', nome: '10 pontos' }, { id: '25', nome: '25 pontos' }, { id: '50', nome: '50 pontos (padrão de bar)' }, { id: '100', nome: '100 pontos' }],
         texto: 'Quem chegar primeiro a esse número de pontos vence.',
       },
       estilo: {
@@ -625,8 +700,30 @@ const ADVERSARIOS = [
     frases: { vitoria: ['Diagnóstico: puxeta com um toque de lateral.', 'Receita: treine mais o efeito.'],
               derrota: ['Interessante. Vou estudar essa tacada.', 'Até a doutora erra a dose às vezes.'] } },
 ];
-// Campeonatos (etapa 6): { id, nome, modos por fase, mesa, nivel dos adversários }
-const CAMPEONATOS = [];
+// Campeonatos: 8 participantes (você e 7 adversários do computador).
+// formato 'chave': quartas, semifinal e final, em séries de melhor de 3 ou 5.
+// formato 'mesas': duas mesas de 4 no Mata-mata; os 2 primeiros de cada uma vão à mesa final.
+// fases: modo, mesa e variantes de cada rodada. adversarios: 'faceis' (os 7 mais fracos),
+// 'fortes' (os 7 mais fortes) ou 'todos' (7 sorteados). nivel: nível obrigatório (ou null).
+const CAMPEONATOS = [
+  { id: 'copa', nome: 'Copa do Bar', resumo: 'Bola 8 na mesa de bar, contra adversários fáceis.', formato: 'chave', adversarios: 'faceis', nivel: null,
+    fases: [{ modo: 'bola8', mesa: 'bar' }, { modo: 'bola8', mesa: 'bar' }, { modo: 'bola8', mesa: 'bar' }] },
+  { id: 'boteco', nome: 'Rei do Boteco', resumo: 'Um modo de bar por fase: Par × Ímpar, Contagem de pontos e, na final, Sinuca de bar.', formato: 'chave', adversarios: 'todos', nivel: null,
+    fases: [{ modo: 'parImpar', mesa: 'bar' }, { modo: 'contagem', mesa: 'bar' }, { modo: 'brasileira', mesa: 'bar', variantes: { estilo: 'bar' } }] },
+  { id: 'matamata', nome: 'Noite do Mata-mata', resumo: 'Duas mesas de 4 no Mata-mata; os dois primeiros de cada uma vão à mesa final.', formato: 'mesas', adversarios: 'todos', nivel: null,
+    fases: [{ modo: 'mataMata', mesa: 'bar', variantes: { bolas: '2' } }, { modo: 'mataMata', mesa: 'bar', variantes: { bolas: '2' } }] },
+  { id: 'brasileiro', nome: 'Torneio Brasileiro', resumo: 'Sinuca brasileira tradicional, na mesa oficial.', formato: 'chave', adversarios: 'todos', nivel: null,
+    fases: [{ modo: 'brasileira', mesa: 'oficial' }, { modo: 'brasileira', mesa: 'oficial' }, { modo: 'brasileira', mesa: 'oficial' }] },
+  { id: 'misto', nome: 'Circuito Misto', resumo: 'Bola 8 nas quartas, Bola 9 na semifinal e Sinuca brasileira na final.', formato: 'chave', adversarios: 'todos', nivel: null,
+    fases: [{ modo: 'bola8', mesa: 'clube' }, { modo: 'bola9', mesa: 'clube' }, { modo: 'brasileira', mesa: 'oficial' }] },
+  { id: 'grandslam', nome: 'Grand Slam Profissional', resumo: 'Nível Profissional, adversários fortes, Bola 9, Sinuca brasileira na mesa oficial e a final em Carambola três tabelas.', formato: 'chave', adversarios: 'fortes', nivel: 'profissional',
+    fases: [{ modo: 'bola9', mesa: 'clube' }, { modo: 'brasileira', mesa: 'oficial' }, { modo: 'carambola', mesa: 'carambola', variantes: { estilo: 'tres', meta: '5' } }],
+    // a final pode ser em Snooker (etapa 7) ou em Carambola três tabelas
+    finais: { carambola: { modo: 'carambola', mesa: 'carambola', variantes: { estilo: 'tres', meta: '5' } } } },
+];
+// Escala da força na simulação entre adversários do computador: com 40 pontos de diferença,
+// o mais forte ganha cerca de 10 jogos para cada 1 do mais fraco [25–60]
+const ESCALA_FORCA = 40;
 // Desafios de tacada (etapa 7): { nome, bolas, objetivo, zona, estrelas }
 const DESAFIOS = [];
 
@@ -2242,7 +2339,7 @@ const Partida = {
       modo: P.modo, M: MODOS[P.modo], regras: REGRAS[P.modo], nivel: P.nivel, variantes: Object.assign({}, P.variantes),
       duplas: !!P.duplas, lados, vez: (P.inicio || 0) % lados.length, m: {}, abertura: true, cantada: null, pendente: null,
       fim: null, tacadas: 0, relogio: 0, antes: [], sim, preparo: P, bolaNaMaoInicial: null,
-      mesa: P.mesa, feltro: P.feltro, sorteio: false,
+      mesa: P.mesa, feltro: P.feltro, sorteio: false, ordemSaida: [],
     };
   },
   // Treino: um lado só, sem relógio nem regras
@@ -3407,11 +3504,67 @@ const Render = (() => {
     return (avatares[chave] = cv.toDataURL());
   }
 
+  // Troféu: base de madeira com plaqueta, haste, taça com alças e uma bola 8 em cima.
+  // cheio = dourado e brilhante (campeão); senão, uma silhueta apagada do que está em jogo.
+  function trofeu(cv, texto, cheio, larg = 160) {
+    const W = larg, H = larg * 1.25, k = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = W * k; cv.height = H * k; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    const c = cv.getContext('2d');
+    c.setTransform(k, 0, 0, k, 0, 0);
+    c.clearRect(0, 0, W, H);
+    const s = W / 160;
+    c.save(); c.scale(s, s);
+    c.globalAlpha = cheio ? 1 : 0.35;
+    const ouro = (x0, y0, x1, y1) => {
+      const g = c.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, '#7a5a12'); g.addColorStop(0.25, '#f7e08a'); g.addColorStop(0.45, '#c99a2e');
+      g.addColorStop(0.7, '#fff3c0'); g.addColorStop(1, '#8a6316');
+      return g;
+    };
+    // brilho atrás
+    if (cheio) {
+      const g = c.createRadialGradient(80, 80, 5, 80, 80, 85);
+      g.addColorStop(0, 'rgba(255,230,140,0.45)'); g.addColorStop(1, 'rgba(255,230,140,0)');
+      c.fillStyle = g; c.fillRect(0, 0, 160, 200);
+    }
+    // base
+    let g = c.createLinearGradient(0, 160, 0, 196);
+    g.addColorStop(0, '#6a3418'); g.addColorStop(1, '#2e1408');
+    c.fillStyle = g; c.beginPath(); c.moveTo(34, 162); c.lineTo(126, 162); c.lineTo(134, 196); c.lineTo(26, 196); c.closePath(); c.fill();
+    c.fillStyle = ouro(50, 170, 110, 190); c.fillRect(46, 171, 68, 16);
+    c.fillStyle = '#3a2408'; c.font = 'bold 8px Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    let t = texto || '';
+    while (c.measureText(t).width > 64 && t.length > 4) t = t.slice(0, -2) + '…';
+    c.fillText(t, 80, 179.5);
+    // pé e haste
+    c.fillStyle = ouro(56, 140, 104, 160); c.beginPath(); c.moveTo(60, 162); c.lineTo(100, 162); c.lineTo(92, 148); c.lineTo(68, 148); c.closePath(); c.fill();
+    c.fillStyle = ouro(72, 110, 88, 150); c.fillRect(74, 112, 12, 38);
+    c.beginPath(); c.ellipse(80, 132, 11, 4, 0, 0, Math.PI * 2); c.fill();
+    // alças
+    c.strokeStyle = ouro(20, 40, 140, 100); c.lineWidth = 6;
+    c.beginPath(); c.arc(38, 64, 18, Math.PI * 0.5, Math.PI * 1.55); c.stroke();
+    c.beginPath(); c.arc(122, 64, 18, Math.PI * 1.45, Math.PI * 0.5); c.stroke();
+    // taça
+    c.fillStyle = ouro(36, 40, 124, 110);
+    c.beginPath(); c.moveTo(34, 40); c.lineTo(126, 40);
+    c.bezierCurveTo(126, 86, 106, 110, 80, 114); c.bezierCurveTo(54, 110, 34, 86, 34, 40); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.35)';
+    c.beginPath(); c.moveTo(46, 46); c.bezierCurveTo(46, 76, 56, 94, 66, 102); c.lineTo(60, 102); c.bezierCurveTo(48, 92, 40, 74, 40, 46); c.closePath(); c.fill();
+    c.fillStyle = ouro(30, 34, 130, 44); c.beginPath(); c.ellipse(80, 40, 46, 7, 0, 0, Math.PI * 2); c.fill();
+    // bola 8 em cima
+    g = c.createRadialGradient(76, 22, 2, 80, 26, 14);
+    g.addColorStop(0, '#666'); g.addColorStop(0.5, '#1a1a1a'); g.addColorStop(1, '#000');
+    c.fillStyle = g; c.beginPath(); c.arc(80, 26, 13, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#f4efe1'; c.beginPath(); c.arc(80, 26, 6, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#111'; c.font = 'bold 8px Arial, sans-serif'; c.fillText('8', 80, 26.5);
+    c.restore();
+  }
+
   function definirFeltro(hex) { feltroRGB = U.rgb(hex); }
   function invalidarBolas(sim) { for (const b of sim.bolas) b.qd = null; r.tamSprite = 0; }
 
   return { r, vista, telaParaMesa, mesaParaTela, dirTela, construirCena, desenharBolas, desenharTaco, desenharMira,
-           desenharBarra, desenharAnel, desenharEfeito, diagrama, avatar, desenharCacapasCantar, desenharAneis, gravarRastros, desenharRastros, definirFeltro, invalidarBolas };
+           desenharBarra, desenharAnel, desenharEfeito, diagrama, avatar, trofeu, desenharCacapasCantar, desenharAneis, gravarRastros, desenharRastros, definirFeltro, invalidarBolas };
 })();
 
 // =====================================================================
@@ -4047,6 +4200,10 @@ const Telas = {
     else if (id === 't-pausa') Telas.montarPausa();
     else if (id === 't-fim') Telas.montarFim();
     else if (id === 't-vez') Telas.montarVez();
+    else if (id === 't-camps') Telas.montarCamps();
+    else if (id === 't-camp-prep') Telas.montarCampPrep();
+    else if (id === 't-chave') Telas.montarChave();
+    else if (id === 't-estat') Telas.montarEstat();
   },
 
   // Tela "Passe o aparelho": no sorteio, cada jogador vê as suas bolas; na partida, protege as bolas secretas
@@ -4218,7 +4375,7 @@ const Telas = {
     el('pausa-titulo').textContent = p.M.nome;
     el('pausa-info').textContent = treino ? '' : `Nível ${NIVEIS[p.nivel].nome} · ${p.lados.map(l => l.nome).join(' × ')}`;
     el('p-arrumar').hidden = !treino;
-    el('p-menu').textContent = treino ? 'Menu principal' : 'Desistir da partida';
+    el('p-menu').textContent = treino ? 'Menu principal' : p.preparo.campeonato ? 'Sair (o jogo recomeça depois)' : 'Desistir da partida';
     box.innerHTML = '';
     if (treino) {
       const vb = MODOS.treino.variantes.bolas;
@@ -4228,6 +4385,148 @@ const Telas = {
       Campo.sel(box, 'Mesa', MODOS.treino.mesas.map(id => ({ id, nome: MESAS[id].nome })), jogo.config.mesaTreino,
         v => { jogo.config.mesaTreino = v; Salvar.config(); Jogo.iniciarTreino(); });
     }
+  },
+
+  // ---- Campeonatos ----
+  montarCamps() {
+    const box = el('camps-lista'), c = Camp.atual();
+    box.innerHTML = '';
+    if (c) {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = 'bt modo-bt';
+      b.innerHTML = '<b></b><small></small>';
+      b.querySelector('b').textContent = (c.terminou ? 'Ver o resultado: ' : 'Continuar: ') + c.nome;
+      b.querySelector('small').textContent = c.terminou
+        ? (c.campeao === 0 ? `${c.jogador} venceu o campeonato!` : `Campeão: ${c.part[c.campeao].nome}.`)
+        : (c.eliminado ? 'Você já caiu.' : Camp.nomeRodada(c, c.rodada) + '.');
+      b.addEventListener('click', () => Telas.abrir('t-chave'));
+      box.appendChild(b);
+      Campo.secao(box, 'Começar outro');
+    }
+    for (const d of CAMPEONATOS) {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = 'bt modo-bt fraco';
+      b.innerHTML = '<b></b><small></small>';
+      b.querySelector('b').textContent = d.nome;
+      b.querySelector('small').textContent = d.resumo;
+      b.addEventListener('click', () => { jogo.campNovo = { id: d.id, melhorDe: 3, nivel: 'clube', finalEscolhida: d.finais ? Object.keys(d.finais)[0] : null }; Telas.abrir('t-camp-prep'); });
+      box.appendChild(b);
+    }
+  },
+  montarCampPrep() {
+    const N = jogo.campNovo, d = CAMPEONATOS.find(x => x.id === N.id), box = el('camp-prep'), c = Camp.atual();
+    el('camp-prep-titulo').textContent = d.nome;
+    el('camp-prep-resumo').textContent = d.resumo;
+    box.innerHTML = '';
+    const linha = document.createElement('div'); linha.className = 'op';
+    linha.innerHTML = '<label for="camp-nome">Seu nome</label><input type="text" id="camp-nome" maxlength="14" autocomplete="off">';
+    const inp = linha.querySelector('input');
+    if (N.nome == null) N.nome = (c && c.jogador) || (Salvar.ler('preparo', {}).bola8 || {}).nomes?.[0] || 'Você';
+    inp.value = N.nome;
+    inp.addEventListener('input', () => { N.nome = inp.value; });
+    box.appendChild(linha);
+    if (d.formato === 'chave')
+      Campo.sel(box, 'Séries', [{ id: '3', nome: 'Melhor de 3' }, { id: '5', nome: 'Melhor de 5' }], String(N.melhorDe), v => { N.melhorDe = +v; });
+    if (d.nivel) Campo.texto(box, `Nível ${NIVEIS[d.nivel].nome}, obrigatório neste campeonato.`);
+    else Campo.sel(box, 'Nível', Object.entries(NIVEIS).map(([id, x]) => ({ id, nome: x.nome })), N.nivel, v => { N.nivel = v; });
+    if (d.finais)
+      Campo.sel(box, 'Final', [{ id: 'carambola', nome: 'Carambola três tabelas' }, { id: 'snooker', nome: 'Snooker (em breve)', desligado: true }], N.finalEscolhida, v => { N.finalEscolhida = v; });
+    const fases = d.fases.map((f, r) => `${(d.formato === 'chave' ? Camp.NOMES_CHAVE : Camp.NOMES_MESAS)[r]}: ${MODOS[f.modo].nome} (${MESAS[f.mesa].nome.toLowerCase()})`);
+    Campo.texto(box, fases.join(' · ') + '. Você e 7 adversários do computador; as partidas entre eles são simuladas.');
+    if (c && !c.terminou) Campo.texto(box, `Começar este campeonato abandona o que está em andamento (${c.nome}).`);
+  },
+  // Chave (ou mesas), troféu e o próximo jogo
+  montarChave() {
+    const c = Camp.atual(), box = el('chave');
+    if (!c) { Telas.voltar(); return; }
+    el('chave-titulo').textContent = c.nome;
+    Render.trofeu(el('chave-trofeu'), c.nome, c.campeao === 0, 120);
+    const nomeP = i => {
+      const pt = c.part[i], adv = pt.adv && ADVERSARIOS.find(a => a.id === pt.adv);
+      const av = adv ? `<img class="av" alt="" src="${Render.avatar(adv, 48)}">` : `<span class="av" style="background:${CORES_JOGADORES[0]}">${escapar(Partida.iniciais(pt.nome))}</span>`;
+      return `${av}<span class="nm">${escapar(pt.nome)}</span>`;
+    };
+    let html = '<div class="chave">';
+    if (c.rodadas) {
+      c.rodadas.forEach((rod, r) => {
+        html += `<div class="col"><h3>${Camp.NOMES_CHAVE[r]}</h3><div class="jogos">`;
+        if (!rod.length) html += '<div class="conf vazio">a definir</div>';
+        for (const x of rod) {
+          html += '<div class="conf">';
+          for (const [i, v] of [[x.a, x.va], [x.b, x.vb]])
+            html += `<div class="ln${x.vencedor === i ? ' ven' : ''}${i === 0 ? ' eu' : ''}">${nomeP(i)}<b>${x.va + x.vb ? v : ''}</b></div>`;
+          html += '</div>';
+        }
+        html += '</div></div>';
+      });
+    } else {
+      c.mesas.forEach((mesas, r) => {
+        html += `<div class="col"><h3>${Camp.NOMES_MESAS[r]}</h3><div class="jogos">`;
+        if (!mesas.length) html += '<div class="conf vazio">a definir</div>';
+        mesas.forEach((m, k) => {
+          html += `<div class="conf"><small>${r === 0 ? 'Mesa ' + (k + 1) : 'Mesa final'}</small>`;
+          const ordem = m.classif || m.jog;
+          ordem.forEach((i, pos) => {
+            const passa = m.classif && (r === 0 ? pos < 2 : pos === 0);
+            html += `<div class="ln${passa ? ' ven' : ''}${i === 0 ? ' eu' : ''}">${nomeP(i)}<b>${m.classif ? pos + 1 + 'º' : ''}</b></div>`;
+          });
+          html += '</div>';
+        });
+        html += '</div></div>';
+      });
+    }
+    box.innerHTML = html + '</div>';
+    let st;
+    if (c.terminou) st = c.campeao === 0 ? `${c.jogador} venceu o campeonato! O troféu é seu.` : `Campeão: ${c.part[c.campeao].nome}.` + (c.eliminado && c.caiuEm ? ` ${c.jogador} caiu ${c.caiuEm}.` : '');
+    else st = Camp.descreverProximo(c);
+    el('chave-status').textContent = st;
+    const jogar = el('chave-jogar');
+    jogar.hidden = !Camp.proximo(c);
+    jogar.textContent = 'Jogar: ' + (Camp.proximo(c) ? Camp.nomeRodada(c, c.rodada) : '');
+    el('chave-abandonar').textContent = c.terminou ? 'Novo campeonato' : 'Abandonar';
+    jogo.confirmarAbandono = false;
+  },
+  // Estatísticas por jogador
+  montarEstat() {
+    const d = Estat.ler(), box = el('estat'), nomes = Object.keys(d.jogadores);
+    box.innerHTML = '';
+    if (!nomes.length) { Campo.texto(box, 'Ainda não há partidas registradas. As estatísticas contam as partidas dos jogadores humanos, pelo nome.', ''); return; }
+    if (!jogo.estatDe || !d.jogadores[jogo.estatDe]) jogo.estatDe = nomes.sort((a, b) => d.jogadores[b].partidas - d.jogadores[a].partidas)[0];
+    if (nomes.length > 1) Campo.sel(box, 'Jogador', nomes.map(k => ({ id: k, nome: d.jogadores[k].nome })), jogo.estatDe, v => { jogo.estatDe = v; Telas.montarEstat(); });
+    const e = d.jogadores[jogo.estatDe], pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
+    const itens = [
+      ['Partidas', e.partidas], ['Vitórias', `${e.vitorias} (${pct(e.vitorias, e.partidas)})`],
+      ['Acerto', `${pct(e.acertos, e.tacadas)} de ${e.tacadas} tacadas`], ['Maior sequência', e.maiorSequencia],
+      ['Aberturas com bola', `${e.aberturasComBola} de ${e.aberturas}`], ['Campeonatos vencidos', e.campeonatos.length],
+    ];
+    const g = document.createElement('div'); g.className = 'estat-grade';
+    g.innerHTML = itens.map(([k, v]) => `<div><small>${k}</small><b>${escapar(String(v))}</b></div>`).join('');
+    box.appendChild(g);
+    const modos = Object.entries(e.modos);
+    if (modos.length) {
+      Campo.secao(box, 'Vitórias por modo');
+      const t = document.createElement('table'); t.className = 'tabela';
+      t.innerHTML = '<tr><th>Modo</th><th>Partidas</th><th>Vitórias</th></tr>' +
+        modos.map(([m, x]) => `<tr><td>${escapar(MODOS[m] ? MODOS[m].nome : m)}</td><td>${x.p}</td><td>${x.v} (${pct(x.v, x.p)})</td></tr>`).join('');
+      box.appendChild(t);
+    }
+    if (e.campeonatos.length) {
+      Campo.secao(box, 'Troféus');
+      const tr = document.createElement('div'); tr.className = 'trofeus';
+      for (const cp of e.campeonatos) {
+        const f = document.createElement('figure'), cv = document.createElement('canvas');
+        Render.trofeu(cv, cp.nome, true, 70);
+        f.appendChild(cv);
+        const cap = document.createElement('figcaption'); cap.textContent = `${cp.nome}, ${new Date(cp.data).toLocaleDateString('pt-BR')}`;
+        f.appendChild(cap); tr.appendChild(f);
+      }
+      box.appendChild(tr);
+    }
+    Campo.botao(box, 'Zerar as estatísticas de ' + e.nome, ev => {
+      const b = ev.currentTarget;
+      if (b.dataset.conf) { delete d.jogadores[jogo.estatDe]; Estat.gravar(d); jogo.estatDe = null; Telas.montarEstat(); }
+      else { b.dataset.conf = '1'; b.textContent = 'Toque de novo para confirmar'; }
+    });
   },
 
   montarFim() {
@@ -4242,6 +4541,14 @@ const Telas = {
       falas.push(`<p class="fala"><img class="av" alt="" src="${Render.avatar(adv, 60)}"><span>“${escapar(lista[(Math.random() * lista.length) | 0])}”<br><small>${escapar(adv.apelido)}</small></span></p>`);
     }));
     el('fim-falas').innerHTML = falas.join('');
+    // No campeonato: situação da série e o caminho de volta para a chave
+    const cp = p.preparo.campeonato;
+    el('fim-de-novo').hidden = !!cp; el('fim-camp-ver').hidden = !cp; el('fim-camp').hidden = !cp;
+    if (cp) {
+      const c = Camp.atual();
+      el('fim-camp').textContent = !c ? '' : c.terminou ? (c.campeao === 0 ? `${c.jogador} venceu o campeonato!` : `Campeão: ${c.part[c.campeao].nome}.`)
+        : c.eliminado ? `${c.jogador} caiu ${c.caiuEm}.` : Camp.descreverProximo(c);
+    }
     const pts = p.modo === 'contagem';
     let html = `<tr><th>Jogador</th>${pts ? '<th>Pontos</th>' : ''}<th>Bolas</th><th>Faltas</th><th>Tacadas</th></tr>`;
     const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -4261,6 +4568,20 @@ function acao(a) {
   if (a === 'modos') { jogo.modosPara = 'jogar'; Telas.abrir('t-modos'); }
   else if (a === 'regras-menu') { jogo.modosPara = 'regras'; Telas.abrir('t-modos'); }
   else if (a === 'treino') Jogo.iniciarTreino();
+  else if (a === 'camps') Telas.abrir('t-camps');
+  else if (a === 'estat') Telas.abrir('t-estat');
+  else if (a === 'camp-comecar') {
+    const N = jogo.campNovo;
+    Camp.criar(N.id, (N.nome || '').trim() || 'Você', N.melhorDe, N.nivel, N.finalEscolhida);
+    jogo.pilha = ['t-menu', 't-camps']; jogo.subtela = null; Telas.abrir('t-chave');
+  } else if (a === 'camp-jogar') { const c = Camp.atual(); if (Camp.proximo(c)) Jogo.iniciarPartida(Camp.preparo(c)); }
+  else if (a === 'camp-ver') { Jogo.irParaMenu(); jogo.pilha = ['t-menu', 't-camps']; jogo.subtela = null; Telas.abrir('t-chave'); }
+  else if (a === 'camp-abandonar') {
+    const c = Camp.atual(), b = el('chave-abandonar');
+    if (c && c.terminou) { jogo.pilha = ['t-menu']; jogo.subtela = null; Telas.abrir('t-camps'); }
+    else if (!jogo.confirmarAbandono) { jogo.confirmarAbandono = true; b.textContent = 'Toque de novo para abandonar'; }
+    else { Salvar.gravar('campeonato', null); jogo.pilha = ['t-menu']; jogo.subtela = null; Telas.abrir('t-camps'); }
+  } else if (a === 'menu-inicio') { jogo.pilha = []; jogo.subtela = 't-menu'; Telas.atualizar(); }
   else if (a === 'config') Telas.abrir('t-config');
   else if (a === 'voltar') Telas.voltar();
   else if (a === 'jogos') voltarAosJogos();
@@ -4466,9 +4787,11 @@ const Jogo = {
     Jogo.comecar();
   },
   iniciarPartida(P) {
-    const salvo = Salvar.ler('preparo', {});
-    salvo[P.modo] = { nomes: P.nomes, quantos: P.quantos, duplas: P.duplas, nivel: P.nivel, variantes: P.variantes, regraCasa: P.regraCasa, mesa: P.mesa, feltro: P.feltro, tipos: P.tipos };
-    Salvar.gravar('preparo', salvo);
+    if (!P.campeonato) {
+      const salvo = Salvar.ler('preparo', {});
+      salvo[P.modo] = { nomes: P.nomes, quantos: P.quantos, duplas: P.duplas, nivel: P.nivel, variantes: P.variantes, regraCasa: P.regraCasa, mesa: P.mesa, feltro: P.feltro, tipos: P.tipos };
+      Salvar.gravar('preparo', salvo);
+    }
     const M = MODOS[P.modo];
     Jogo.novaMesa(P.mesa, P.nivel);
     jogo.partida = Partida.criar(P, jogo.sim);
@@ -4582,26 +4905,22 @@ const Jogo = {
   // Aplica o resultado das regras: faltas, bolas recolocadas, mensagens, fim, vez e branca
   aplicarPartida(reg) {
     const p = jogo.partida, sim = jogo.sim, eu = p.vez, lado = p.lados[eu];
+    const atirador = Partida.jogador(p), eraAbertura = p.abertura;
     const res = p.regras.validarJogada(reg, p);
+    Estat.tacada(p, atirador, reg, res, eraAbertura, lado.sequencia + (res.continuaJogando ? 1 : 0));
     if (!reg.tempoEsgotado) lado.tacadas++;
     lado.encacapadas += reg.encacapadas.filter(x => x.num !== 0).length;
     if (res.falta) lado.faltas++;
     for (const n of res.recolocar) { if (p.regras.recolocarBola) p.regras.recolocarBola(p, n); else Rack.recolocar(sim, n); }
-    for (const i of res.eliminados) p.lados[i].eliminado = true;
-    for (const i of res.revividos || []) p.lados[i].eliminado = false;
+    for (const i of res.eliminados) { p.lados[i].eliminado = true; if (!p.ordemSaida.includes(i)) p.ordemSaida.push(i); }
+    for (const i of res.revividos || []) { p.lados[i].eliminado = false; p.ordemSaida = p.ordemSaida.filter(x => x !== i); }
     if (res.eliminados.length) Som.jingle('eliminacao');
     // Segurança: um só lado vivo encerra a partida
     const vivos = p.lados.map((l, i) => i).filter(i => !p.lados[i].eliminado);
     if (!res.fimDePartida && vivos.length === 1 && p.lados.length > 1) { res.fimDePartida = true; res.vencedor = vivos[0]; res.mensagemCurta = `${p.lados[vivos[0]].nome} venceu!`; }
     p.abertura = false; p.cantada = null; p.tacadas++;
     Jogo.mensagem(res);
-    if (res.fimDePartida) {
-      p.fim = { vencedor: res.vencedor, motivo: res.mensagemCurta };
-      jogo.desfazer = []; jogo.podeDesfazerLado = null;
-      Som.jingle(Partida.temHumano(p.lados[res.vencedor]) || !p.lados.some(Partida.temHumano) ? 'vitoria' : 'derrota');
-      setTimeout(() => { if (jogo.partida === p && jogo.tela === 'partida') { jogo.pilha = []; jogo.subtela = null; Telas.abrir('t-fim'); } }, 1600);
-      return;
-    }
+    if (res.fimDePartida) { Jogo.encerrar(res.vencedor, res.mensagemCurta); return; }
     if (res.falta) Som.jingle('falta');
     let trocou = false;
     if (res.continuaJogando) lado.sequencia++;
@@ -4615,6 +4934,17 @@ const Jogo = {
     jogo.podeDesfazerLado = !reg.tempoEsgotado && lado.membros.some(m => m.humano) && !jogo.tacadaIA ? eu : null;
     jogo.tacadaIA = false;
     if (trocou) Jogo.anunciarVez(false);
+  },
+  // Fim da partida: registra estatísticas e campeonato, toca a vinheta e abre a tela de fim
+  encerrar(vencedor, motivo) {
+    const p = jogo.partida;
+    if (p.fim) return;
+    p.fim = { vencedor, motivo };
+    jogo.desfazer = []; jogo.podeDesfazerLado = null; jogo.ia = null;
+    Estat.fimDePartida(p);
+    if (p.preparo.campeonato) Camp.fimDeJogo(p);
+    Som.jingle(Partida.temHumano(p.lados[vencedor]) || !p.lados.some(Partida.temHumano) ? 'vitoria' : 'derrota');
+    setTimeout(() => { if (jogo.partida === p && jogo.tela === 'partida') { jogo.pilha = []; jogo.subtela = null; Telas.abrir('t-fim'); } }, 1600);
   },
   // Mensagens conforme o nível: Aprendiz explica tudo; Clube explica as faltas; Profissional só diz a consequência
   mensagem(res) {
@@ -4736,11 +5066,7 @@ const Jogo = {
     jogo.podeDesfazerLado = null;
     aviso(`A ${b.num} saiu da mesa.`, 1.6);
     const f = p.regras.depoisDeRetirar(p, lado);
-    if (f) {
-      p.fim = { vencedor: f.vencedor, motivo: f.texto };
-      aviso(f.texto, 3); Som.jingle('vitoria');
-      setTimeout(() => { if (jogo.partida === p) { jogo.pilha = []; jogo.subtela = null; Telas.abrir('t-fim'); } }, 1600);
-    }
+    if (f) { aviso(f.texto, 3); Jogo.encerrar(f.vencedor, f.texto); }
     atualizarHUD();
   },
   // Desfazer: no treino, sempre; na partida, conforme o nível, só a própria última tacada
@@ -4795,9 +5121,151 @@ const Jogo = {
   },
 };
 
+// ---- Campeonato: chave (quartas, semifinal e final em séries) ou mesas do Mata-mata ----
+// Estado salvo em "sinuca-campeonato": participantes (0 = você), rodadas ou mesas, rodada atual, campeão.
+const Camp = {
+  NOMES_CHAVE: ['Quartas de final', 'Semifinal', 'Final'],
+  NOMES_MESAS: ['Primeira fase', 'Mesa final'],
+  def(c) { return CAMPEONATOS.find(x => x.id === c.id); },
+  atual() { const c = Salvar.ler('campeonato', null); return c && CAMPEONATOS.some(x => x.id === c.id) ? c : null; },
+  salvar(c) { Salvar.gravar('campeonato', c); },
+  nomeRodada(c, r) { return (c.rodadas ? Camp.NOMES_CHAVE : Camp.NOMES_MESAS)[r]; },
+  // Força de um adversário num modo (para a simulação): mira pesa mais; efeito pesa mais na carambola
+  forca(part, modo) {
+    const a = ADVERSARIOS.find(x => x.id === part.adv);
+    if (!a) return 70;
+    const w = modo === 'carambola' ? [0.4, 0.2, 0.4] : modo === 'brasileira' ? [0.5, 0.3, 0.2] : [0.5, 0.25, 0.25];
+    return a.precisao * w[0] + a.forca * w[1] + a.efeito * w[2] + (a.favorito === modo ? 6 : 0);
+  },
+  fase(c, r) {
+    const d = Camp.def(c);
+    if (d.finais && r === d.fases.length - 1 && c.finalEscolhida && d.finais[c.finalEscolhida]) return d.finais[c.finalEscolhida];
+    return d.fases[r];
+  },
+  // Novo campeonato: sorteia os 7 adversários e a chave (ou as mesas)
+  criar(id, nome, melhorDe, nivel, finalEscolhida) {
+    const d = CAMPEONATOS.find(x => x.id === id);
+    const media = a => (a.precisao + a.forca + a.efeito) / 3;
+    let advs = ADVERSARIOS.slice().sort((x, y) => media(x) - media(y));
+    advs = d.adversarios === 'faceis' ? advs.slice(0, 7) : d.adversarios === 'fortes' ? advs.slice(-7) : U.embaralhar(advs, Math.random).slice(0, 7);
+    const part = [{ nome, humano: true }].concat(advs.map(a => ({ nome: a.apelido, adv: a.id })));
+    const ordem = U.embaralhar([0, 1, 2, 3, 4, 5, 6, 7], Math.random);
+    const c = {
+      id, nome: d.nome, jogador: nome, melhorDe: d.formato === 'mesas' ? 1 : melhorDe, nivel: d.nivel || nivel,
+      finalEscolhida, part, rodada: 0, campeao: null, eliminado: false, terminou: false, criado: Date.now(),
+    };
+    if (d.formato === 'chave') c.rodadas = [[0, 1, 2, 3].map(k => ({ a: ordem[2 * k], b: ordem[2 * k + 1], va: 0, vb: 0, vencedor: null })), [], []];
+    else c.mesas = [[{ jog: ordem.slice(0, 4), classif: null }, { jog: ordem.slice(4), classif: null }], []];
+    Camp.salvar(c);
+    return c;
+  },
+  // Confronto (ou mesa) do jogador na rodada atual, ainda sem resultado
+  proximo(c) {
+    if (!c || c.terminou || c.eliminado) return null;
+    if (c.rodadas) return c.rodadas[c.rodada].find(x => x.vencedor == null && (x.a === 0 || x.b === 0)) || null;
+    return c.mesas[c.rodada].find(m => !m.classif && m.jog.includes(0)) || null;
+  },
+  // Série entre dois adversários do computador, jogo a jogo, pela chance de cada um
+  simularSerie(c, x, modo) {
+    const alvo = Math.ceil(c.melhorDe / 2), fa = Camp.forca(c.part[x.a], modo), fb = Camp.forca(c.part[x.b], modo);
+    const pA = 1 / (1 + Math.pow(10, (fb - fa) / ESCALA_FORCA));
+    while (x.va < alvo && x.vb < alvo) { if (Math.random() < pA) x.va++; else x.vb++; }
+    x.vencedor = x.va > x.vb ? x.a : x.b;
+  },
+  // Mesa de Mata-mata simulada: a cada passo sai alguém, com chance maior para os mais fracos
+  simularMesa(c, m, modo) {
+    const vivos = m.jog.slice(), saida = [];
+    while (vivos.length > 1) {
+      const pesos = vivos.map(i => Math.pow(10, -Camp.forca(c.part[i], modo) / ESCALA_FORCA));
+      let s = pesos.reduce((a, b) => a + b, 0) * Math.random(), k = 0;
+      while (k < pesos.length - 1 && (s -= pesos[k]) > 0) k++;
+      saida.push(vivos.splice(k, 1)[0]);
+    }
+    m.classif = [vivos[0]].concat(saida.reverse());
+  },
+  // Fecha o que der: simula as séries e mesas sem o jogador (todas, se ele já caiu) e monta as rodadas seguintes
+  avancar(c) {
+    for (;;) {
+      const r = c.rodada, modo = Camp.fase(c, r).modo;
+      if (c.rodadas) {
+        const rod = c.rodadas[r];
+        for (const x of rod) if (x.vencedor == null && (c.eliminado || (x.a !== 0 && x.b !== 0))) Camp.simularSerie(c, x, modo);
+        if (rod.some(x => x.vencedor == null)) break;
+        if (r === c.rodadas.length - 1) { c.campeao = rod[0].vencedor; break; }
+        c.rodadas[r + 1] = [];
+        for (let k = 0; k < rod.length; k += 2) c.rodadas[r + 1].push({ a: rod[k].vencedor, b: rod[k + 1].vencedor, va: 0, vb: 0, vencedor: null });
+        c.rodada++;
+      } else {
+        const mesas = c.mesas[r];
+        for (const m of mesas) if (!m.classif && (c.eliminado || !m.jog.includes(0))) Camp.simularMesa(c, m, modo);
+        if (mesas.some(m => !m.classif)) break;
+        if (r === c.mesas.length - 1) { c.campeao = mesas[0].classif[0]; break; }
+        c.mesas[r + 1] = [{ jog: mesas.flatMap(m => m.classif.slice(0, 2)), classif: null }];
+        c.rodada++;
+      }
+    }
+    if (c.campeao != null && !c.terminou) {
+      c.terminou = true;
+      if (c.campeao === 0) Estat.campeonato(c.jogador, c);
+    }
+    Camp.salvar(c);
+  },
+  // Resultado de um jogo do jogador: vencedor e, no Mata-mata, a classificação (índices de participantes)
+  resultado(c, vencedor, classif) {
+    const x = Camp.proximo(c);
+    if (!x) return;
+    if (c.rodadas) {
+      if (vencedor === x.a) x.va++; else x.vb++;
+      const alvo = Math.ceil(c.melhorDe / 2);
+      if (x.va >= alvo || x.vb >= alvo) {
+        x.vencedor = x.va > x.vb ? x.a : x.b;
+        if (x.vencedor !== 0) { c.eliminado = true; c.caiuEm = ['nas quartas de final', 'na semifinal', 'na final'][c.rodada]; }
+      }
+    } else {
+      x.classif = classif;
+      if (classif.indexOf(0) > (c.rodada === 0 ? 1 : 0)) { c.eliminado = true; c.caiuEm = ['na primeira fase', 'na mesa final'][c.rodada]; }
+    }
+    Camp.avancar(c);
+  },
+  // Preparo da partida do jogador (ele é sempre o primeiro lugar; quem abre alterna na série)
+  preparo(c) {
+    const x = Camp.proximo(c), f = Camp.fase(c, c.rodada);
+    const ordem = [0].concat((c.rodadas ? [x.a, x.b] : x.jog).filter(i => i !== 0));
+    const jogoN = c.rodadas ? x.va + x.vb : 0;
+    return {
+      modo: f.modo, quantos: ordem.length, duplas: false,
+      nomes: ordem.map(i => c.part[i].nome), tipos: ordem.map(i => c.part[i].adv || 'humano'),
+      nivel: c.nivel, variantes: Object.assign(Jogo.variantesPadrao(f.modo), f.variantes || {}),
+      mesa: f.mesa, feltro: MESAS[f.mesa].feltro, regraCasa: '', inicio: jogoN % ordem.length,
+      campeonato: { ordem },
+    };
+  },
+  descreverProximo(c) {
+    const x = Camp.proximo(c);
+    if (!x) return '';
+    const f = Camp.fase(c, c.rodada), onde = `${MODOS[f.modo].nome}, ${MESAS[f.mesa].nome.toLowerCase()}`;
+    if (c.rodadas) {
+      const outro = c.part[x.a === 0 ? x.b : x.a].nome, eu = x.a === 0 ? x.va : x.vb, ele = x.a === 0 ? x.vb : x.va;
+      return `${Camp.nomeRodada(c, c.rodada)}, jogo ${x.va + x.vb + 1} da melhor de ${c.melhorDe}, contra ${outro} (${onde}). Série: ${eu} a ${ele}.`;
+    }
+    return `${Camp.nomeRodada(c, c.rodada)}: mesa com ${x.jog.filter(i => i !== 0).map(i => c.part[i].nome).join(', ')} (${onde}). ` +
+           (c.rodada === 0 ? 'Os dois primeiros vão à mesa final.' : 'O último vivo é o campeão.');
+  },
+  // Fim de um jogo do jogador: registra o resultado no campeonato salvo
+  fimDeJogo(p) {
+    const c = Camp.atual();
+    if (!c || !Camp.proximo(c)) return;
+    const ordem = p.preparo.campeonato.ordem, venc = p.fim.vencedor;
+    const lados = [venc].concat(p.ordemSaida.slice().reverse().filter(i => i !== venc));
+    p.lados.forEach((l, i) => { if (!lados.includes(i)) lados.splice(1, 0, i); });
+    Camp.resultado(c, ordem[venc], lados.map(i => ordem[i]));
+    p.fim.camp = c;
+  },
+};
+
 // =====================================================================
 // 10. SALVAMENTO (localStorage, sempre com try/catch). Chaves com o prefixo "sinuca-":
-//     config, preparo (último preparo de cada modo), regras-casa. Etapas seguintes: progresso, estatisticas.
+//     config, preparo (último preparo de cada modo), regras-casa, campeonato (o atual), estatisticas.
 // =====================================================================
 const Salvar = {
   ler(chave, padrao) {
@@ -4821,6 +5289,44 @@ const Salvar = {
   },
   apagarRegraCasa(modo, nome) { Salvar.gravar('regras-casa', Salvar.regrasCasa().filter(x => !(x.modo === modo && x.nome === nome))); },
 };
+
+// Estatísticas por jogador humano (pelo nome), em "sinuca-estatisticas": partidas, vitórias por modo,
+// acerto (tacadas que dão a vez de novo, sem falta), maior sequência, aberturas com bola encaçapada e campeonatos
+const Estat = {
+  ler() { const d = Salvar.ler('estatisticas', null); return d && d.jogadores ? d : { jogadores: {} }; },
+  gravar(d) { Salvar.gravar('estatisticas', d); },
+  de(d, nome) {
+    const n = (nome || '').trim() || 'Jogador', k = n.toLowerCase();
+    return d.jogadores[k] || (d.jogadores[k] = { nome: n, partidas: 0, vitorias: 0, tacadas: 0, acertos: 0, maiorSequencia: 0,
+                                                   aberturas: 0, aberturasComBola: 0, modos: {}, campeonatos: [] });
+  },
+  tacada(p, membro, reg, res, abertura, sequencia) {
+    if (!membro.humano || p.modo === 'treino' || reg.tempoEsgotado) return;
+    const d = Estat.ler(), e = Estat.de(d, membro.nome);
+    e.tacadas++;
+    if (!res.falta && (res.continuaJogando || (res.fimDePartida && res.vencedor === p.vez))) e.acertos++;
+    if (abertura) { e.aberturas++; if (reg.encacapadas.some(x => x.num !== 0)) e.aberturasComBola++; }
+    e.maiorSequencia = Math.max(e.maiorSequencia, sequencia);
+    Estat.gravar(d);
+  },
+  fimDePartida(p) {
+    if (p.modo === 'treino') return;
+    const d = Estat.ler();
+    p.lados.forEach((l, i) => l.membros.forEach(m => {
+      if (!m.humano) return;
+      const e = Estat.de(d, m.nome), md = e.modos[p.modo] || (e.modos[p.modo] = { p: 0, v: 0 });
+      e.partidas++; md.p++;
+      if (i === p.fim.vencedor) { e.vitorias++; md.v++; }
+    }));
+    Estat.gravar(d);
+  },
+  campeonato(nome, c) {
+    const d = Estat.ler();
+    Estat.de(d, nome).campeonatos.push({ id: c.id, nome: c.nome, data: Date.now() });
+    Estat.gravar(d);
+  },
+};
+
 
 // =====================================================================
 // 11. LOOP PRINCIPAL: layout, atualização e desenho
@@ -5114,7 +5620,7 @@ Telas.atualizar();
 requestAnimationFrame(quadro);
 
 // Acesso para testes no console, só com #teste no endereço
-if (location.hash === '#teste') window.__sinuca = { jogo, Fisica, Render, Jogo, Rack, Som, IA, Partida, Entrada, ADVERSARIOS, REGRAS, FISICA, MESAS, NIVEIS };
+if (location.hash === '#teste') window.__sinuca = { jogo, Fisica, Render, Jogo, Rack, Som, IA, Partida, Entrada, Camp, Estat, ADVERSARIOS, REGRAS, CAMPEONATOS, FISICA, MESAS, NIVEIS };
 })();
 </script>
 </body>
