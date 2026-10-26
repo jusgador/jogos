@@ -68,7 +68,13 @@
     text-align: center; font-size: 16px; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; }
   #aviso.ver { opacity: 1; transform: translate(-50%, 0); }
 
-  /* Telas (menu, pausa, aviso de girar) */
+  /* Dica de girar o aparelho (celular em pé): some sozinha */
+  #dica-girar { position: fixed; left: calc(124px + var(--seguro-esq)); bottom: calc(34px + var(--seguro-baixo));
+    max-width: calc(100vw - 136px - var(--seguro-esq) - var(--seguro-dir)); box-sizing: border-box; transform: translateY(8px);
+    padding: 7px 14px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .4s, transform .4s; }
+  #dica-girar.ver { opacity: 1; transform: translateY(0); }
+
+  /* Telas (menu, pausa) */
   #telas { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
     background: radial-gradient(ellipse at center, rgba(0,0,0,.25), rgba(0,0,0,.72)); padding: 12px; box-sizing: border-box; }
   #telas.ativo { display: flex; }
@@ -99,8 +105,6 @@
   #controles { text-align: left; font-size: 14px; line-height: 1.45; color: var(--texto); margin: 6px 0 4px; }
   #controles b { color: var(--latao-claro); }
   #controles p { margin: 6px 0; }
-  .icone-girar { font-size: 54px; color: var(--latao-claro); animation: girar 2.4s ease-in-out infinite; }
-  @keyframes girar { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(90deg); } }
 
   /* Telas de preparo, regras e fim */
   .tela .placa.larga { width: min(600px, calc(100vw - 24px)); }
@@ -222,6 +226,7 @@
 </div>
 
 <div id="aviso" class="placa"></div>
+<div id="dica-girar" class="placa" aria-hidden="true">↻ Deitado, a mesa fica maior</div>
 <div id="balao" class="placa" role="status">
   <button id="balao-fechar" aria-label="Fechar">✕</button>
   <b id="balao-t"></b><p id="balao-x"></p>
@@ -301,7 +306,7 @@
       <div id="controles" hidden>
         <p><b>Computador.</b> Mova o mouse para mirar. Segure o botão e puxe para trás: o taco recua; solte para tacar. Puxar de volta até o começo cancela. A barra de força à direita também taca: arraste para baixo e solte.</p>
         <p>Setas ← → ou a roda do mouse: ajuste fino de 0,1° (com Shift, 0,01°). Setas ↑ ↓: força da barra. Espaço ou Enter: taca com a força da barra. Z desfaz, Esc abre este menu. No treino, M liga o modo de mover bolas e R arruma as bolas.</p>
-        <p><b>Celular.</b> Toque ou arraste na mesa para mirar. Ajuste fino: gire o anel do canto ou arraste com dois dedos. Força: arraste a barra da direita para baixo e solte; arrastar para fora dela cancela.</p>
+        <p><b>Celular.</b> Toque ou arraste na mesa para mirar. Ajuste fino: gire o anel do canto ou arraste com dois dedos. Força: arraste a barra da direita para baixo e solte; arrastar para fora dela cancela. Dá para jogar em pé ou deitado; deitado, a mesa fica maior.</p>
         <p><b>Efeito.</b> Arraste o ponto vermelho na bola do seletor (no celular, toque no ícone da branca acima da barra): em cima dá siga, embaixo puxeta, dos lados efeito lateral, que muda a saída da tabela e encurva de leve as tacadas fortes. Fora do círculo tracejado, o taco pode escorregar (miscue). Teclas W, S, A e D movem o ponto; C ou duplo clique centralizam.</p>
         <p><b>Bola na mão.</b> Arraste a branca para onde quiser, dentro da área permitida (na abertura, atrás da linha de saída). No treino a branca sempre pode ser arrastada; com ✥ ligado, qualquer bola.</p>
         <p><b>Cantar caçapa.</b> Quando a regra pede, toque na caçapa onde a bola vai cair antes de tacar.</p>
@@ -389,14 +394,6 @@
     </div>
   </section>
 
-  <section class="tela" id="t-girar">
-    <div class="placa">
-      <div class="icone-girar">▯</div>
-      <h2>Gire o aparelho</h2>
-      <p class="sub">A mesa fica bem maior na horizontal.</p>
-      <button class="bt" data-acao="retrato">Jogar assim mesmo</button>
-    </div>
-  </section>
 </div>
 
 <script>
@@ -4281,7 +4278,7 @@ const jogo = {
   mover: false,            // modo de mover qualquer bola
   toque: matchMedia('(pointer: coarse)').matches,
   girar: false,            // mesa girada 90° (retrato)
-  retratoAceito: false,
+  dicaGirarDada: false,    // a dica de girar aparece uma vez por visita
   lay: { s: 1, barra: { x: 0, y: 0, w: 56, h: 300 }, anel: { x: 0, y: 0, r: 40 },
          efeito: { x: 0, y: 0, r: 36 }, painel: { x: 0, y: 0, r: 70 } },
   miraCache: null,
@@ -4309,7 +4306,7 @@ const Entrada = (() => {
     const id = p && p.regras.bolaDoJogador ? p.regras.bolaDoJogador(p) : null;
     return id != null ? s.bolas.find(b => b.id === id) : s.bolas.find(b => b.tipo === 'branca');
   };
-  const podeInteragir = () => jogo.tela === 'partida' && !jogo.pausado && jogo.fase === 'mirando' && !precisaGirar() && !jogo.partida.fim && !Jogo.vezDaIA();
+  const podeInteragir = () => jogo.tela === 'partida' && !jogo.pausado && jogo.fase === 'mirando' &&!jogo.partida.fim && !Jogo.vezDaIA();
 
   function dentro(r, x, y, folga = 0) { return x >= r.x - folga && x <= r.x + r.w + folga && y >= r.y - folga && y <= r.y + r.h + folga; }
   // Bola sob o ponteiro que pode ser arrastada agora
@@ -4534,7 +4531,7 @@ const Entrada = (() => {
     }
     const k = ev.key;
     if (k === 'Escape') { ev.preventDefault(); Telas.alternarPausa(); return; }
-    if (jogo.pausado || precisaGirar()) return;
+    if (jogo.pausado) return;
     const fino = ev.shiftKey ? 0.01 : 0.1;
     if (k === 'ArrowLeft') { ev.preventDefault(); ajusteFino(-fino); }
     else if (k === 'ArrowRight') { ev.preventDefault(); ajusteFino(fino); }
@@ -4585,7 +4582,14 @@ const Entrada = (() => {
 // =====================================================================
 const el = id => document.getElementById(id);
 
-function precisaGirar() { return jogo.tela === 'partida' && jogo.toque && Render.r.ch > Render.r.cw && !jogo.retratoAceito; }
+// Celular em pé numa partida: a mesa gira e a dica de deitar o aparelho aparece uma vez e some
+function dicaGirar() {
+  if (jogo.dicaGirarDada || jogo.tela !== 'partida' || jogo.subtela || !jogo.toque || Render.r.ch <= Render.r.cw) return;
+  jogo.dicaGirarDada = true;
+  const d = el('dica-girar');
+  setTimeout(() => d.classList.add('ver'), 600);
+  setTimeout(() => d.classList.remove('ver'), 4600);
+}
 function emPartida() { return jogo.tela === 'partida' && jogo.partida && jogo.partida.modo !== 'treino'; }
 // Nível que vale agora: o da partida, ou o escolhido no treino
 function nivelAtual() { return emPartida() ? jogo.partida.nivel : jogo.config.nivel; }
@@ -4660,8 +4664,9 @@ const Telas = {
   atualizar() {
     let id;
     if (jogo.tela === 'menu') id = jogo.subtela || 't-menu';
-    else id = precisaGirar() ? 't-girar' : jogo.subtela;
+    else id = jogo.subtela;
     jogo.pausado = jogo.tela === 'partida' && !!id;
+    dicaGirar();
     document.querySelectorAll('.tela').forEach(t => t.classList.toggle('ativa', t.id === id));
     el('telas').classList.toggle('ativo', !!id);
     el('hud').hidden = jogo.tela !== 'partida';
@@ -5134,7 +5139,6 @@ function acao(a) {
       (p.m.vidas && +p.variantes.vidas > 1 ? `<span class="vidas">${'♥'.repeat(p.m.vidas[i])}</span>` : '');
     el('vez-bolas').hidden = false;
   }
-  else if (a === 'retrato') { jogo.retratoAceito = true; Telas.atualizar(); }
   else if (a === 'controles') {
     const c = el('controles'), b = document.querySelector('[data-acao="controles"]');
     c.hidden = !c.hidden; b.setAttribute('aria-expanded', String(!c.hidden));
@@ -5149,7 +5153,7 @@ function pedirTelaCheia() {
   const d = document.documentElement;
   try {
     const p = d.requestFullscreen ? d.requestFullscreen({ navigationUI: 'hide' }) : d.webkitRequestFullscreen && d.webkitRequestFullscreen();
-    if (p && p.then) p.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (err) {} }).catch(() => {});
+    if (p && p.catch) p.catch(() => {});
   } catch (err) {}
 }
 
