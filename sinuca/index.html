@@ -563,8 +563,8 @@ const MODOS = {
     variantes: {
       arrumacao: {
         nome: 'Arrumação', padrao: 'intercalada',
-        opcoes: [{ id: 'intercalada', nome: 'Duas em cada tabela, intercaladas' }, { id: 'cabeceiras', nome: 'Cada cor numa cabeceira' }, { id: 'laterais', nome: 'Cada cor numa lateral' }],
-        texto: 'Onde ficam as bolas no começo. Intercaladas: duas em cada tabela, uma de cada cor. Nas outras, as quatro de uma cor ficam junto a uma tabela, e as quatro da outra, junto à tabela oposta.',
+        opcoes: [{ id: 'intercalada', nome: 'Duas em cada tabela, intercaladas' }, { id: 'metades', nome: 'Cada cor numa metade' }, { id: 'cabeceiras', nome: 'Cada cor numa cabeceira' }, { id: 'laterais', nome: 'Cada cor numa lateral' }],
+        texto: 'Onde ficam as bolas no começo. Intercaladas: duas em cada tabela, uma de cada cor. Cada cor numa metade: de cada lado da mesa, duas bolas junto ao fundo e uma em cada lateral. Numa cabeceira ou numa lateral: as quatro de uma cor ficam junto a uma tabela, e as quatro da outra, junto à tabela oposta.',
       },
       falta: {
         nome: 'Penalidade da falta', padrao: 'duas',
@@ -1603,10 +1603,15 @@ const Rack = (() => {
     for (let x = mc[v][0]; x < geo.hx - geo.R; x += geo.R * 0.5) if (livre(x, 0)) { b.x = x; b.y = 0; return; }
   }
   // Carioquinha: as oito bolas junto às tabelas, com uns 4 cm de folga. 'intercalada': duas em cada tabela,
-  // alternando as cores na volta da mesa; 'cabeceiras' / 'laterais': as amarelas junto a uma tabela e as azuis junto à oposta
+  // alternando as cores na volta da mesa; 'cabeceiras' / 'laterais': as amarelas junto a uma tabela e as azuis junto à oposta;
+  // 'metades': cada cor numa metade da mesa, duas junto ao fundo e uma em cada lateral
   function marcasCarioquinha(geo, arrumacao) {
     const xx = geo.hx - 2.5 * geo.R, yy = geo.hy - 2.5 * geo.R, m = {};
-    if (arrumacao === 'cabeceiras') [-0.6, -0.2, 0.2, 0.6].forEach((f, i) => { m[1 + i] = [-xx, f * geo.hy]; m[5 + i] = [xx, f * geo.hy]; });
+    if (arrumacao === 'metades') {
+      const metade = [[-xx, -geo.hy / 2], [-xx, geo.hy / 2], [-geo.hx / 2, -yy], [-geo.hx / 2, yy]];
+      metade.forEach(([x, y], i) => { m[1 + i] = [x, y]; m[5 + i] = [-x, y]; });
+    }
+    else if (arrumacao === 'cabeceiras')[-0.6, -0.2, 0.2, 0.6].forEach((f, i) => { m[1 + i] = [-xx, f * geo.hy]; m[5 + i] = [xx, f * geo.hy]; });
     else if (arrumacao === 'laterais') [-0.7, -0.3, 0.3, 0.7].forEach((f, i) => { m[1 + i] = [f * geo.hx, -yy]; m[5 + i] = [f * geo.hx, yy]; });
     else {
       // A partir da tabela de cima, à esquerda, no sentido horário: amarela, azul, amarela, azul…
