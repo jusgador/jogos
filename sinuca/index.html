@@ -306,7 +306,7 @@
       <div id="controles" hidden>
         <p><b>Computador.</b> Mova o mouse para mirar. Segure o botão e puxe para trás: o taco recua; solte para tacar. Puxar de volta até o começo cancela. A barra de força à direita também taca: arraste para baixo e solte.</p>
         <p>Setas ← → ou a roda do mouse: ajuste fino de 0,1° (com Shift, 0,01°). Setas ↑ ↓: força da barra. Espaço ou Enter: taca com a força da barra. Z desfaz, Esc abre este menu. No treino, M liga o modo de mover bolas e R arruma as bolas.</p>
-        <p><b>Celular.</b> Toque ou arraste na mesa para mirar. Ajuste fino: gire o anel do canto ou arraste com dois dedos. Força: arraste a barra da direita para baixo e solte; arrastar para fora dela cancela. Dá para jogar em pé ou deitado; deitado, a mesa fica maior.</p>
+        <p><b>Celular.</b> O dedo é o taco: toque atrás da branca e arraste em volta dela para mirar; pegando em cima do taco, ele gira sem pular. Ajuste fino: gire o anel do canto ou arraste com dois dedos; devagar é bem fino, mais rápido gira mais. Força: arraste a barra da direita para baixo e solte; arrastar para fora dela cancela. Dá para jogar em pé ou deitado; deitado, a mesa fica maior.</p>
         <p><b>Efeito.</b> Arraste o ponto vermelho na bola do seletor (no celular, toque no ícone da branca acima da barra): em cima dá siga, embaixo puxeta, dos lados efeito lateral, que muda a saída da tabela e encurva de leve as tacadas fortes. Fora do círculo tracejado, o taco pode escorregar (miscue). Teclas W, S, A e D movem o ponto; C ou duplo clique centralizam.</p>
         <p><b>Bola na mão.</b> Arraste a branca para onde quiser, dentro da área permitida (na abertura, atrás da linha de saída). No treino a branca sempre pode ser arrastada; com ✥ ligado, qualquer bola.</p>
         <p><b>Cantar caçapa.</b> Quando a regra pede, toque na caçapa onde a bola vai cair antes de tacar.</p>
@@ -4300,7 +4300,10 @@ const Entrada = (() => {
     forca: 0, fora: false,
     bola: null, invalido: null,
     anelGiro: 0, anelUlt: 0,
+    vel: 0, t: 0, acum: 0, // velocidade do dedo no anel ou nos dois dedos (para acelerar o ajuste fino)
     toques: new Map(),     // toques na mesa: id → {x, y}
+    pega: null,            // taco seguro pelo dedo: ângulo do dedo em volta da branca e mira no começo
+    angAntes: 0,           // mira antes do primeiro dedo (volta se o segundo dedo chega logo)
     centro: null,
     suspensa: null,        // mira presa depois de ajuste fino: ponto do mouse onde foi presa
     mouse: null,
@@ -4335,6 +4338,41 @@ const Entrada = (() => {
     if (Math.hypot(dx, dy) < jogo.sim.geo.R * 0.6) return;
     jogo.mira.ang = Math.atan2(dy, dx);
   }
+  // Toque na mesa: o dedo é o próprio taco, atrás da branca, e a mira vai do dedo para a branca.
+  // Pegando em cima do taco (ou perto dele), a mira não pula: gira só o que o dedo girar em volta da branca.
+  // Longe do taco, o taco vem para o dedo.
+  function angDedo(p) {
+    const br = branca();
+    if (!br || br.estado !== 'mesa' || Math.hypot(br.x - p.x, br.y - p.y) < jogo.sim.geo.R * 1.5) return null;
+    return Math.atan2(br.y - p.y, br.x - p.x);
+  }
+  function pegarTaco(p) {
+    const br = branca(), a = angDedo(p);
+    e.pega = null;
+    if (a === null) return;
+    const cs = Math.cos(jogo.mira.ang), sn = Math.sin(jogo.mira.ang), dx = p.x - br.x, dy = p.y - br.y;
+    const atras = -(dx * cs + dy * sn), lado = Math.abs(-dx * sn + dy * cs) * jogo.lay.s;
+    if (!(atras > 0 && atras < 1600 && lado < 32)) jogo.mira.ang = a;
+    e.pega = { a0: a, ang0: jogo.mira.ang };
+  }
+  function moverTaco(p) {
+    const a = angDedo(p);
+    if (a === null) return;
+    if (!e.pega) { e.pega = { a0: a, ang0: jogo.mira.ang }; return; }
+    jogo.mira.ang = U.angDif(e.pega.ang0 + U.angDif(a - e.pega.a0));
+  }
+  // Ajuste fino acelerado: devagar é bem fino; rápido, gira até 10 vezes mais
+  function ganho(v, v0, k) {
+    return U.clamp(1 + (v - v0) * k, 1, 10);
+  }
+  // Velocidade do dedo (por segundo), medida a cada 8 ms ou mais: os dois dedos chegam no mesmo instante
+  function medirVel(dist, ts) {
+    e.acum += dist;
+    const dt = ts - e.t;
+    if (dt < 8) return;
+    e.vel += (e.acum / (dt / 1000) - e.vel) * 0.5;
+    e.acum = 0; e.t = ts;
+  }
   function ajusteFino(graus) {
     jogo.mira.ang = U.angDif(jogo.mira.ang + graus * Math.PI / 180);
     if (e.mouse) e.suspensa = { x: e.mouse.x, y: e.mouse.y };
@@ -4358,7 +4396,7 @@ const Entrada = (() => {
   function capturar(id) { try { tela.setPointerCapture(id); } catch (err) {} }
   function soltarTudo() {
     if (e.modo === 'arrastar' && e.bola) e.invalido = null;
-    e.modo = null; e.id = null; e.forca = 0; e.fora = false; e.bola = null; e.toques.clear();
+    e.modo = null; e.id = null; e.forca = 0; e.fora = false; e.bola = null; e.toques.clear(); e.pega = null;
   }
 
   function down(ev) {
@@ -4394,6 +4432,7 @@ const Entrada = (() => {
     // Anel de ajuste fino
     if (jogo.toque && Math.hypot(x - L.anel.x, y - L.anel.y) < L.anel.r + 14) {
       e.modo = 'anel'; e.id = ev.pointerId; e.anelUlt = Math.atan2(y - L.anel.y, x - L.anel.x);
+      e.vel = 0; e.acum = 0; e.t = ev.timeStamp;
       capturar(ev.pointerId);
       return;
     }
@@ -4401,7 +4440,11 @@ const Entrada = (() => {
     if (ev.pointerType === 'touch' && e.modo === 'mirarToque') {
       // Segundo dedo na mesa: ajuste fino com dois dedos
       e.toques.set(ev.pointerId, { x, y });
-      if (e.toques.size >= 2) { e.modo = 'doisDedos'; e.centro = centroToques(); }
+      if (e.toques.size >= 2) {
+        // Os dois dedos chegaram quase juntos: o primeiro não devia ter mexido no taco
+        if (ev.timeStamp - e.t < 300) jogo.mira.ang = e.angAntes;
+        e.modo = 'doisDedos'; e.centro = centroToques(); e.vel = 0; e.acum = 0; e.t = ev.timeStamp;
+      }
       return;
     }
     // Partida: tirar uma bola da mesa (penalidade) ou cantar a caçapa
@@ -4434,7 +4477,8 @@ const Entrada = (() => {
     } else {
       e.modo = 'mirarToque'; e.id = ev.pointerId;
       e.toques.clear(); e.toques.set(ev.pointerId, { x, y });
-      mirarEm(p);
+      e.angAntes = jogo.mira.ang; e.t = ev.timeStamp;
+      pegarTaco(p);
     }
   }
   // Bola na mesa sob o ponteiro (qualquer uma, menos a branca)
@@ -4487,15 +4531,18 @@ const Entrada = (() => {
     } else if (e.modo === 'anel') {
       const a = Math.atan2(y - L.anel.y, x - L.anel.x), d = U.angDif(a - e.anelUlt);
       e.anelUlt = a; e.anelGiro += d;
-      jogo.mira.ang = U.angDif(jogo.mira.ang + d / 30);     // uma volta inteira do anel = 12°
+      medirVel(Math.abs(d), ev.timeStamp);                   // rad/s
+      // Devagar, uma volta inteira do anel = 12°; girando rápido, até 120°
+      jogo.mira.ang = U.angDif(jogo.mira.ang + d / 30 * ganho(e.vel, 2, 2));
     } else if (e.modo === 'mirarToque') {
-      mirarEm(Render.telaParaMesa(x, y));
+      moverTaco(Render.telaParaMesa(x, y));
     } else if (e.modo === 'doisDedos') {
       const c = centroToques(), dx = c.x - e.centro.x, dy = c.y - e.centro.y;
       e.centro = c;
+      medirVel(Math.hypot(dx, dy), ev.timeStamp);           // px/s
       const d = Render.dirTela(Math.cos(jogo.mira.ang), Math.sin(jogo.mira.ang));
-      // Arrastar de lado em relação à mira gira a mira para aquele lado, devagar
-      jogo.mira.ang = U.angDif(jogo.mira.ang + (dx * -d.y + dy * d.x) * 0.0004);
+      // Arrastar de lado em relação à mira gira a mira para aquele lado: devagar bem fino, rápido mais
+      jogo.mira.ang = U.angDif(jogo.mira.ang + (dx * -d.y + dy * d.x) * 0.0004 * ganho(e.vel, 120, 0.02));
     } else if (e.modo === 'arrastar') {
       const sim = jogo.sim, geo = sim.geo, R = geo.R, p = Render.telaParaMesa(x, y);
       const nx = U.clamp(p.x + e.desloc.x, -geo.hx + R, geo.hx - R), ny = U.clamp(p.y + e.desloc.y, -geo.hy + R, geo.hy - R);
@@ -4509,7 +4556,8 @@ const Entrada = (() => {
   function up(ev) {
     if (e.toques.has(ev.pointerId)) {
       e.toques.delete(ev.pointerId);
-      if (e.modo === 'doisDedos' && e.toques.size < 2) { e.modo = e.toques.size ? 'mirarToque' : null; if (e.modo) e.id = [...e.toques.keys()][0]; e.centro = null; }
+      // Sobrou um dedo: ele volta a segurar o taco de onde a mira está, sem pular
+      if (e.modo === 'doisDedos' && e.toques.size < 2) { e.modo = e.toques.size ? 'mirarToque' : null; if (e.modo) e.id = [...e.toques.keys()][0]; e.centro = null; e.pega = null; }
       else if (e.modo === 'mirarToque' && !e.toques.size) e.modo = null;
       return;
     }
@@ -5203,7 +5251,7 @@ function hudTreino() {
   hudTexto('info-1', `Mira ${U.num(graus, 2)}° · força ${Math.round(forca * 100)}% (${U.num(vel, 1)} m/s) · efeito: ${textoEfeito()}`);
   const u = jogo.ultima;
   let l2;
-  if (!u) l2 = jogo.toque ? 'Toque na mesa para mirar. Arraste a barra de força para baixo e solte.'
+  if (!u) l2 = jogo.toque ? 'O dedo é o taco: arraste atrás da branca para mirar. Arraste a barra de força para baixo e solte.'
                           : 'Mova o mouse para mirar. Segure, puxe para trás e solte para tacar.';
   else {
     const g2 = ((-u.angulo * 180 / Math.PI) % 360 + 360) % 360;
