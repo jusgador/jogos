@@ -3235,7 +3235,10 @@ const IA = (() => {
     return null;
   }
 
-  return { perfil, PERFIL_DICA, iniciar, trabalhar, planejarJa, errar, escolherRetirada, escolherAcao, tiros, sigmas };
+  // Bolas que o jogador da vez pode tocar primeiro (null = qualquer uma), para o destaque na mesa
+  function alvos(p) { const M = MODO[p.modo]; return M && M.alvos ? M.alvos(p) : null; }
+
+  return { perfil, PERFIL_DICA, iniciar, trabalhar, planejarJa, errar, escolherRetirada, escolherAcao, tiros, sigmas, alvos };
 })();
 
 // =====================================================================
@@ -3973,6 +3976,22 @@ const Render = (() => {
     c.strokeStyle = cor; c.lineWidth = (2 + Math.sin(t * 6)) * px;
     for (const b of bolas) { c.beginPath(); c.arc(b.x, b.y, R * 1.45, 0, Math.PI * 2); c.stroke(); }
   }
+  // Bola da vez: anel claro com contorno escuro (aparece em qualquer feltro) e quatro marcas apontando
+  // para ela; no celular, com folga mínima em pixels para não sumir na bola pequena
+  function desenharVez(c, bolas, R, t, px) {
+    const ra = Math.max(R * 1.5, R + 7 * px), a = 0.65 + 0.35 * Math.sin(t * 4);
+    c.save(); c.lineCap = 'round';
+    for (const b of bolas) {
+      c.beginPath(); c.arc(b.x, b.y, ra, 0, Math.PI * 2);
+      for (let k = 0; k < 4; k++) {
+        const g = k * Math.PI / 2 + Math.PI / 4, cs = Math.cos(g), sn = Math.sin(g);
+        c.moveTo(b.x + cs * (ra + 3 * px), b.y + sn * (ra + 3 * px)); c.lineTo(b.x + cs * (ra + 9 * px), b.y + sn * (ra + 9 * px));
+      }
+      c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 4.5 * px; c.stroke();
+      c.strokeStyle = `rgba(255,248,220,${a})`; c.lineWidth = 2 * px; c.stroke();
+    }
+    c.restore();
+  }
 
   // Avatar de um adversário: círculo nas cores dele, aro de latão, iniciais e uma bolinha de sinuca
   const avatares = {};
@@ -4057,7 +4076,7 @@ const Render = (() => {
   function invalidarBolas(sim) { for (const b of sim.bolas) b.qd = null; r.tamSprite = 0; }
 
   return { r, vista, telaParaMesa, mesaParaTela, dirTela, construirCena, desenharBolas, desenharTaco, desenharMira,
-           desenharBarra, desenharAnel, desenharEfeito, diagrama, avatar, trofeu, desenharCacapasCantar, desenharAneis, gravarRastros, desenharRastros, definirFeltro, invalidarBolas };
+           desenharBarra, desenharAnel, desenharEfeito, diagrama, avatar, trofeu, desenharCacapasCantar, desenharAneis, desenharVez, gravarRastros, desenharRastros, definirFeltro, invalidarBolas };
 })();
 
 // =====================================================================
@@ -4361,16 +4380,18 @@ const Entrada = (() => {
     if (!e.pega) { e.pega = { a0: a, ang0: jogo.mira.ang }; return; }
     jogo.mira.ang = U.angDif(e.pega.ang0 + U.angDif(a - e.pega.a0));
   }
-  // Ajuste fino acelerado: devagar é bem fino; rápido, gira até 10 vezes mais
+  // Ajuste fino acelerado: no ritmo normal do dedo é fino; só bem rápido gira até 4 vezes mais
   function ganho(v, v0, k) {
-    return U.clamp(1 + (v - v0) * k, 1, 10);
+    return U.clamp(1 + (v - v0) * k, 1, 4);
   }
-  // Velocidade do dedo (por segundo), medida a cada 8 ms ou mais: os dois dedos chegam no mesmo instante
+  // Velocidade do dedo (por segundo), medida a cada 8 ms ou mais: os dois dedos chegam no mesmo instante.
+  // Depois de uma pausa, vale a velocidade nova, sem herdar a pressa de antes.
   function medirVel(dist, ts) {
     e.acum += dist;
     const dt = ts - e.t;
     if (dt < 8) return;
-    e.vel += (e.acum / (dt / 1000) - e.vel) * 0.5;
+    const v = e.acum / (dt / 1000);
+    e.vel = dt > 80 ? v : e.vel + (v - e.vel) * 0.5;
     e.acum = 0; e.t = ts;
   }
   function ajusteFino(graus) {
@@ -4532,8 +4553,8 @@ const Entrada = (() => {
       const a = Math.atan2(y - L.anel.y, x - L.anel.x), d = U.angDif(a - e.anelUlt);
       e.anelUlt = a; e.anelGiro += d;
       medirVel(Math.abs(d), ev.timeStamp);                   // rad/s
-      // Devagar, uma volta inteira do anel = 12°; girando rápido, até 120°
-      jogo.mira.ang = U.angDif(jogo.mira.ang + d / 30 * ganho(e.vel, 2, 2));
+      // Devagar, uma volta inteira do anel = 6°; só acima de uma volta por segundo acelera, até 24°
+      jogo.mira.ang = U.angDif(jogo.mira.ang + d / 60 * ganho(e.vel, 6.5, 0.25));
     } else if (e.modo === 'mirarToque') {
       moverTaco(Render.telaParaMesa(x, y));
     } else if (e.modo === 'doisDedos') {
@@ -4542,7 +4563,8 @@ const Entrada = (() => {
       medirVel(Math.hypot(dx, dy), ev.timeStamp);           // px/s
       const d = Render.dirTela(Math.cos(jogo.mira.ang), Math.sin(jogo.mira.ang));
       // Arrastar de lado em relação à mira gira a mira para aquele lado: devagar bem fino, rápido mais
-      jogo.mira.ang = U.angDif(jogo.mira.ang + (dx * -d.y + dy * d.x) * 0.0004 * ganho(e.vel, 120, 0.02));
+      // Devagar, 1 cm de tela (~40 px) gira uns 0,5°; arrastando rápido, até 4 vezes isso
+      jogo.mira.ang = U.angDif(jogo.mira.ang + (dx * -d.y + dy * d.x) * 0.0002 * ganho(e.vel, 400, 0.006));
     } else if (e.modo === 'arrastar') {
       const sim = jogo.sim, geo = sim.geo, R = geo.R, p = Render.telaParaMesa(x, y);
       const nx = U.clamp(p.x + e.desloc.x, -geo.hx + R, geo.hx - R), ny = U.clamp(p.y + e.desloc.y, -geo.hy + R, geo.hy - R);
@@ -6148,6 +6170,12 @@ function desenhar() {
   if (emPartida() && jogo.fase === 'mirando' && !pa.fim && Partida.precisaCantar(pa))
     Render.desenharCacapasCantar(c, sim.geo, pa.cantada, agora, px);
   Render.desenharBolas(c, sim);
+  // Bola da vez em destaque, quando a regra deixa tocar primeiro só uma, duas ou três bolas
+  if (emPartida() && jogo.fase === 'mirando' && !pa.fim && !pa.pendente) {
+    const nums = IA.alvos(pa);
+    if (nums && nums.length && nums.length <= 3)
+      Render.desenharVez(c, sim.bolas.filter(b => b.estado === 'mesa' && b !== br && nums.includes(b.num)), R, agora, px);
+  }
   // Dica: bola-alvo e caçapa em destaque por alguns segundos
   if (jogo.dica && agora * 1000 < jogo.dica.ate && jogo.fase === 'mirando') {
     const b = sim.bolas.find(x => x.num === jogo.dica.alvo && x.estado === 'mesa' && x !== br);
