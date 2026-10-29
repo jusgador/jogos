@@ -3976,21 +3976,15 @@ const Render = (() => {
     c.strokeStyle = cor; c.lineWidth = (2 + Math.sin(t * 6)) * px;
     for (const b of bolas) { c.beginPath(); c.arc(b.x, b.y, R * 1.45, 0, Math.PI * 2); c.stroke(); }
   }
-  // Bola da vez: anel claro com contorno escuro (aparece em qualquer feltro) e quatro marcas apontando
-  // para ela; no celular, com folga mínima em pixels para não sumir na bola pequena
+  // Bola da vez: halo suave de luz no feltro, por baixo da bola, pulsando devagar; no celular, com
+  // folga mínima em pixels para não sumir na bola pequena
   function desenharVez(c, bolas, R, t, px) {
-    const ra = Math.max(R * 1.5, R + 7 * px), a = 0.65 + 0.35 * Math.sin(t * 4);
-    c.save(); c.lineCap = 'round';
+    const ra = Math.max(R * 1.9, R + 10 * px), a = 0.3 + 0.1 * Math.sin(t * 2.5);
     for (const b of bolas) {
-      c.beginPath(); c.arc(b.x, b.y, ra, 0, Math.PI * 2);
-      for (let k = 0; k < 4; k++) {
-        const g = k * Math.PI / 2 + Math.PI / 4, cs = Math.cos(g), sn = Math.sin(g);
-        c.moveTo(b.x + cs * (ra + 3 * px), b.y + sn * (ra + 3 * px)); c.lineTo(b.x + cs * (ra + 9 * px), b.y + sn * (ra + 9 * px));
-      }
-      c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 4.5 * px; c.stroke();
-      c.strokeStyle = `rgba(255,248,220,${a})`; c.lineWidth = 2 * px; c.stroke();
+      const g = c.createRadialGradient(b.x, b.y, R * 0.9, b.x, b.y, ra);
+      g.addColorStop(0, `rgba(255,246,210,${a})`); g.addColorStop(1, 'rgba(255,246,210,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(b.x, b.y, ra, 0, Math.PI * 2); c.fill();
     }
-    c.restore();
   }
 
   // Avatar de um adversário: círculo nas cores dele, aro de latão, iniciais e uma bolinha de sinuca
@@ -6169,13 +6163,13 @@ function desenhar() {
   const pa = jogo.partida, agora = performance.now() / 1000;
   if (emPartida() && jogo.fase === 'mirando' && !pa.fim && Partida.precisaCantar(pa))
     Render.desenharCacapasCantar(c, sim.geo, pa.cantada, agora, px);
-  Render.desenharBolas(c, sim);
-  // Bola da vez em destaque, quando a regra deixa tocar primeiro só uma, duas ou três bolas
+  // Bola da vez em destaque, por baixo das bolas, quando a regra deixa tocar primeiro só uma, duas ou três bolas
   if (emPartida() && jogo.fase === 'mirando' && !pa.fim && !pa.pendente) {
     const nums = IA.alvos(pa);
     if (nums && nums.length && nums.length <= 3)
       Render.desenharVez(c, sim.bolas.filter(b => b.estado === 'mesa' && b !== br && nums.includes(b.num)), R, agora, px);
   }
+  Render.desenharBolas(c, sim);
   // Dica: bola-alvo e caçapa em destaque por alguns segundos
   if (jogo.dica && agora * 1000 < jogo.dica.ate && jogo.fase === 'mirando') {
     const b = sim.bolas.find(x => x.num === jogo.dica.alvo && x.estado === 'mesa' && x !== br);
