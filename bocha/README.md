@@ -2,6 +2,10 @@
 
 Bocha numa cancha de grama sintética, no gramado do clube, ao lado do campo de golfe. Um `index.html` só: three.js por CDN; cenário, texturas e sons feitos por código.
 
+## Jogadores
+
+A mesma turma do Campos Tennis: Leonardo, Ricardo, Beatriz e Lícia. No menu se escolhe quem você é e quem é o adversário (a CPU, ou o segundo jogador). Os bonecos, rostos e cabelos vêm de `tenis/index.html` (`drawFace`, `buildHair`, `bakeGroups`, `poseCelebrate`, `poseDefeat`); as poses do arremesso são próprias da bocha. Quem faz uma bochada ou encosta no bolim comemora, e no fim da partida o vencedor pula e o perdedor lamenta.
+
 ## Regras
 
 - Quem começa joga o bolim, que precisa parar entre a linha do meio e a última linha. Se errar, o outro lado tenta; se errar de novo, o bolim vai para o meio da cancha.
@@ -28,4 +32,4 @@ Nove situações de jogo, com até três estrelas cada. A melhor nota de cada um
 
 ## Dados salvos
 
-Prefixo `bocha-` no `localStorage`: `bocha-config` (nível, pontos da partida, som), `bocha-stats` (vitórias, sequência, melhor encostada, bochadas) e `bocha-desafios` (estrelas).
+Prefixo `bocha-` no `localStorage`: `bocha-config` (nível, pontos da partida, som, jogadores escolhidos), `bocha-stats` (vitórias, sequência, melhor encostada, bochadas) e `bocha-desafios` (estrelas).

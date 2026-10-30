@@ -52,6 +52,8 @@
     background: rgba(8, 22, 14, .42);
   }
   #menu { justify-content: flex-start; background: linear-gradient(90deg, rgba(8, 24, 14, .6), rgba(8, 24, 14, 0) 65%); }
+  #fim { align-items: flex-end; background: linear-gradient(rgba(8, 22, 14, 0) 40%, rgba(8, 22, 14, .5)); }
+  #fim .painel { margin: 0 auto; }
   .painel {
     background: var(--painel); border: 1px solid var(--linha); border-radius: 16px; padding: 22px;
     width: min(410px, 100%); margin: auto; box-shadow: 0 14px 44px rgba(0, 0, 0, .38);
@@ -227,6 +229,8 @@
   <div class="painel">
     <h1>BOCHA<span>DO CLUBE</span></h1>
     <p class="sub">Na grama, ao lado do campo de golfe.</p>
+    <div class="opcao"><span>Você</span><div class="seg" id="segEu"></div></div>
+    <div class="opcao"><span>Adversário</span><div class="seg" id="segRival"></div></div>
     <button class="bt principal" id="mJogar">Jogar contra o computador</button>
     <div class="opcao"><span>Nível</span><div class="seg" id="segNivel"><button data-v="facil">Fácil</button><button data-v="normal">Normal</button><button data-v="dificil">Difícil</button></div></div>
     <div class="opcao"><span>Partida até</span><div class="seg" id="segMeta"><button data-v="7">7 pontos</button><button data-v="12">12 pontos</button></div></div>
@@ -301,6 +305,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 // ============================================================
 // Utilidades
@@ -351,7 +356,7 @@ function ler(chave, padrao) {
   return structuredClone(padrao);
 }
 function gravar(chave, valor) { try { localStorage.setItem(PREFIXO + chave, JSON.stringify(valor)); } catch (e) {} }
-const config = ler('config', { nivel: 'normal', meta: 12, som: true, viuAjuda: false });
+const config = ler('config', { nivel: 'normal', meta: 12, som: true, viuAjuda: false, eu: 'ric', rival: 'bia' });
 const stats = ler('stats', {
   partidas: 0, vitorias: { facil: 0, normal: 0, dificil: 0 }, derrotas: { facil: 0, normal: 0, dificil: 0 },
   seq: 0, seqMelhor: 0, melhorEncostada: null, bochadas: 0, rodadasLimpas: 0,
@@ -1373,46 +1378,354 @@ function atualizarVisuais(dt) {
   }
 }
 
-// Os dois jogadores, de camisa vermelha e azul
-function criarFigura(corCamisa) {
-  const g = new THREE.Group();
-  const pele = new THREE.MeshStandardMaterial({ color: 0xd4a27c, roughness: 0.8 });
-  const camisa = new THREE.MeshStandardMaterial({ color: corCamisa, roughness: 0.85 });
-  const bermuda = new THREE.MeshStandardMaterial({ color: 0xe8e0cc, roughness: 0.9 });
-  const escuro = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8 });
-  const peca = (pai, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; pai.add(m); return m; };
-  for (const s of [-1, 1]) {
-    peca(g, new THREE.CylinderGeometry(0.072, 0.062, 0.5, 8), pele, s * 0.1, 0.25, 0);
-    peca(g, new THREE.CylinderGeometry(0.085, 0.08, 0.38, 8), bermuda, s * 0.1, 0.67, 0);
-    peca(g, new THREE.BoxGeometry(0.1, 0.07, 0.24), escuro, s * 0.1, 0.035, -0.04);
+// ============================================================
+// Os jogadores: a turma do Campos Tennis. Bonecos, rostos, cabelos e as poses de
+// comemorar e lamentar vêm de tenis/index.html; as poses do arremesso são da bocha.
+// ============================================================
+const css = h => '#' + h.toString(16).padStart(6, '0');
+const canvasTex = (w, h, desenhar, srgb = true) => texCanvas(w, h, desenhar, srgb);
+// Materiais "plástico" com leve brilho (clearcoat) — cache por cor
+const matCache = new Map();
+function plastic(color, rough = 0.42, extra) {
+  const key = color + '|' + rough + (extra ? JSON.stringify(extra) : '');
+  let m = matCache.get(key);
+  if (!m) {
+    m = new THREE.MeshPhysicalMaterial(Object.assign({ color, roughness: rough, metalness: 0, clearcoat: 0.45, clearcoatRoughness: 0.32 }, extra || {}));
+    matCache.set(key, m);
   }
-  const corpo = new THREE.Group();
-  corpo.position.y = 0.86;
-  g.add(corpo);
-  peca(corpo, new THREE.CylinderGeometry(0.19, 0.16, 0.6, 10), camisa, 0, 0.3, 0);
-  peca(corpo, new THREE.SphereGeometry(0.105, 14, 10), pele, 0, 0.76, 0);
-  peca(corpo, new THREE.CylinderGeometry(0.112, 0.112, 0.07, 14), matBranco, 0, 0.84, 0);
-  peca(corpo, new THREE.BoxGeometry(0.2, 0.02, 0.12), matBranco, 0, 0.81, -0.12);
-  const esq = peca(corpo, new THREE.CylinderGeometry(0.05, 0.045, 0.6, 8), camisa, -0.235, 0.28, 0);
-  esq.rotation.z = -0.08;
-  const ombro = new THREE.Group();
-  ombro.position.set(0.235, 0.56, 0);
-  corpo.add(ombro);
-  peca(ombro, new THREE.CylinderGeometry(0.05, 0.045, 0.6, 8).translate(0, -0.3, 0), camisa, 0, 0, 0);
-  peca(ombro, new THREE.SphereGeometry(0.045, 10, 8), pele, 0, -0.62, 0);
-  const naMao = peca(ombro, geoBola, matsBola[0], 0, -0.66, -0.05);
-  cena.add(g);
-  return { g, corpo, ombro, naMao };
+  return m;
 }
-const figuras = [criarFigura(0xc23b30), criarFigura(0x2f62c0)];
-figuras[1].naMao.material = matsBola[1];
+// Caixas com cantos arredondados (bevel) — cache por dimensão
+const geoCache = new Map();
+function rbox(w, h, d, r = 0.035) {
+  const k = `${w}|${h}|${d}|${r}`;
+  let g = geoCache.get(k);
+  if (!g) {
+    const rr = Math.max(0.002, Math.min(r, Math.min(w, h, d) / 2 - 0.002));
+    g = new RoundedBoxGeometry(w, h, d, 2, rr);
+    geoCache.set(k, g);
+  }
+  return g;
+}
+function box(parent, w, h, d, mat, x = 0, y = 0, z = 0, r) {
+  const m = new THREE.Mesh(rbox(w, h, d, r), mat);
+  m.position.set(x, y, z); m.castShadow = true;
+  parent.add(m); return m;
+}
+function grp(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; }
+function drawFace(def, mood) {
+  return canvasTex(128, 128, (g) => {
+    g.fillStyle = css(def.skin); g.fillRect(0, 0, 128, 128);
+    if (def.blush) { g.fillStyle = 'rgba(255,105,130,.33)'; for (const x of [26, 102]) { g.beginPath(); g.ellipse(x, 84, 12, 7, 0, 0, 7); g.fill(); } }
+    const ey = 60;
+    for (const ex of [37, 91]) {
+      g.fillStyle = '#fff'; g.beginPath(); g.ellipse(ex, ey, 11, mood === 'lose' ? 9 : 13, 0, 0, 7); g.fill();
+      g.fillStyle = '#1b1b24'; g.beginPath(); g.ellipse(ex + 1, ey + 2, 7, mood === 'lose' ? 6 : 9, 0, 0, 7); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(ex + 3.5, ey - 2, 2.6, 0, 7); g.fill();
+      if (def.lashes) { g.strokeStyle = '#1b1b24'; g.lineWidth = 3; g.beginPath();
+        const o = ex < 64 ? -1 : 1; g.moveTo(ex + o * 8, ey - 10); g.lineTo(ex + o * 15, ey - 16); g.moveTo(ex + o * 2, ey - 13); g.lineTo(ex + o * 6, ey - 20); g.stroke(); }
+    }
+    g.strokeStyle = def.brow; g.lineWidth = 6; g.lineCap = 'round';
+    for (const ex of [37, 91]) {
+      const o = ex < 64 ? -1 : 1; g.beginPath();
+      if (mood === 'lose') { g.moveTo(ex - o * 2, ey - 22); g.lineTo(ex + o * 12, ey - 15); }
+      else { g.moveTo(ex - 11, ey - 19); g.quadraticCurveTo(ex, ey - 26, ex + 11, ey - 19); }
+      g.stroke();
+    }
+    if (def.style === 'swoopGray') return;        // boca 3D na barba
+    g.strokeStyle = '#6b2a1f'; g.lineWidth = 5;
+    if (mood === 'lose') { g.beginPath(); g.arc(64, 108, 15, 1.2 * Math.PI, 1.8 * Math.PI); g.stroke(); }
+    else if (mood === 'win') {
+      g.fillStyle = '#7a1f2b'; g.beginPath(); g.arc(64, 84, 17, 0, Math.PI); g.closePath(); g.fill();
+      g.fillStyle = '#fff'; g.fillRect(52, 84, 24, 5);
+    } else { g.beginPath(); g.arc(64, 80, 17, 0.18 * Math.PI, 0.82 * Math.PI); g.stroke(); }
+  });
+}
+
+function buildHair(head, def, M) {
+  const H = M.hair;
+  const st = def.style;
+  if (st === 'swoop' || st === 'swoopGray') {
+    box(head, 0.44, 0.1, 0.42, H, 0, 0.47, -0.005, 0.04);
+    box(head, 0.44, 0.3, 0.08, H, 0, 0.33, -0.18, 0.03);
+    for (const sx of [-1, 1]) box(head, 0.06, 0.16, 0.34, H, sx * 0.21, 0.38, -0.02, 0.02);
+    box(head, 0.36, 0.11, 0.1, H, 0.03, 0.43, 0.18, 0.04).rotation.z = -0.18;   // franja jogada de lado
+    box(head, 0.17, 0.12, 0.08, H, 0.15, 0.37, 0.195, 0.04).rotation.z = -0.5;
+    if (st === 'swoop') {
+      const v = box(head, 0.34, 0.09, 0.27, H, -0.03, 0.535, 0.04, 0.04); v.rotation.z = 0.08; v.rotation.x = -0.12;
+    }
+  }
+  if (st === 'swoopGray') {
+    const G = plastic(0x1d1f26, 0.3);                       // óculos redondos de aro fino
+    const ringGeo = new THREE.TorusGeometry(0.056, 0.009, 6, 24);
+    const lensMat = new THREE.MeshStandardMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.28, roughness: 0.05 });
+    for (const sx of [-1, 1]) {
+      const fx = sx * 0.088;
+      const ring = new THREE.Mesh(ringGeo, G); ring.position.set(fx, 0.256, 0.207); head.add(ring);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.052, 24), lensMat);
+      lens.position.set(fx, 0.256, 0.205); head.add(lens);
+      box(head, 0.06, 0.016, 0.018, G, sx * 0.172, 0.262, 0.203, 0.005);  // dobradiça até a haste
+      box(head, 0.015, 0.016, 0.2, G, sx * 0.205, 0.262, 0.1, 0.006);
+    }
+    box(head, 0.05, 0.014, 0.018, G, 0, 0.27, 0.207, 0.005);              // ponte
+    const B = plastic(0xa8a8a8, 0.7);                       // barba grande grisalha
+    box(head, 0.4, 0.2, 0.13, B, 0, 0.065, 0.14, 0.05);
+    box(head, 0.32, 0.13, 0.11, B, 0, -0.05, 0.13, 0.05);
+    box(head, 0.22, 0.045, 0.05, plastic(0x8e8e8e, 0.7), 0, 0.215, 0.205, 0.02);  // bigode
+    box(head, 0.1, 0.022, 0.02, plastic(0x6b2a1f), 0, 0.177, 0.208, 0.008);       // boca/sorriso
+    box(head, 0.03, 0.02, 0.02, plastic(0x6b2a1f), -0.06, 0.188, 0.207, 0.008);
+    box(head, 0.03, 0.02, 0.02, plastic(0x6b2a1f), 0.06, 0.188, 0.207, 0.008);
+  }
+  if (st === 'princess') {
+    box(head, 0.44, 0.1, 0.42, H, 0, 0.47, 0, 0.04);
+    box(head, 0.46, 0.85, 0.1, H, 0, 0.08, -0.2, 0.04);
+    box(head, 0.5, 0.12, 0.14, H, 0, -0.33, -0.19, 0.05);
+    for (const sx of [-1, 1]) { box(head, 0.08, 0.62, 0.14, H, sx * 0.225, 0.13, 0.03, 0.03); box(head, 0.1, 0.1, 0.15, H, sx * 0.23, -0.17, 0.05, 0.04); }
+    box(head, 0.38, 0.08, 0.07, H, 0, 0.42, 0.18, 0.03);
+    const gold = plastic(0xffd34d, 0.25, { metalness: 0.6 });
+    box(head, 0.34, 0.04, 0.05, gold, 0, 0.505, 0.13, 0.015);
+    for (const [x, hh] of [[-0.1, 0.07], [0, 0.11], [0.1, 0.07]]) box(head, 0.035, hh, 0.03, gold, x, 0.52 + hh / 2, 0.14, 0.01);
+    box(head, 0.05, 0.05, 0.03, plastic(0xff3c9a, 0.2, { emissive: 0xff2a8a, emissiveIntensity: 0.6 }), 0, 0.56, 0.16, 0.012);
+  }
+  if (st === 'bob') {
+    // cabelo médio: laterais e nuca até a altura dos ombros, pontas levemente para fora
+    box(head, 0.44, 0.1, 0.42, H, 0, 0.47, 0, 0.04);
+    for (const sx of [-1, 1]) {
+      box(head, 0.07, 0.56, 0.38, H, sx * 0.215, 0.19, -0.01, 0.03);
+      box(head, 0.09, 0.09, 0.3, H, sx * 0.235, -0.07, -0.04, 0.03);
+    }
+    box(head, 0.46, 0.62, 0.09, H, 0, 0.16, -0.2, 0.03);
+    box(head, 0.5, 0.09, 0.12, H, 0, -0.13, -0.2, 0.04);
+    box(head, 0.3, 0.09, 0.07, H, -0.05, 0.41, 0.18, 0.03).rotation.z = 0.15;
+    box(head, 0.06, 0.1, 0.43, plastic(0xb8b8b8, 0.6), 0.09, 0.495, 0, 0.02);       // mecha grisalha
+    const V = plastic(def.visor, 0.35);
+    box(head, 0.45, 0.07, 0.03, V, 0, 0.44, 0.205, 0.015);
+    box(head, 0.38, 0.025, 0.17, V, 0, 0.415, 0.28, 0.012);
+  }
+  if (st === 'short' || st === 'band' || st === 'bandShort') {
+    box(head, 0.44, 0.09, 0.42, H, 0, 0.465, 0, 0.04);                                   // topo curto
+    box(head, 0.44, 0.24, 0.08, H, 0, 0.35, -0.18, 0.03);                                // nuca
+    for (const sx of [-1, 1]) box(head, 0.05, 0.13, 0.32, H, sx * 0.21, 0.39, -0.03, 0.02);
+    box(head, 0.4, 0.06, 0.06, H, 0, 0.43, 0.185, 0.02);                                 // linha da testa
+  }
+  if (def.tuft) { const t = box(head, 0.3, 0.09, 0.22, H, 0, 0.53, 0.07, 0.03); t.rotation.x = -0.18; }   // topete
+  if (st === 'band') {                                                                   // cabelo comprido até a nuca, volume por cima da faixa
+    box(head, 0.36, 0.1, 0.32, H, 0.02, 0.52, -0.01, 0.04);
+    box(head, 0.46, 0.34, 0.1, H, 0, 0.17, -0.2, 0.03);
+    for (const sx of [-1, 1]) box(head, 0.07, 0.24, 0.2, H, sx * 0.22, 0.26, -0.1, 0.03);
+  }
+  if (st === 'band' || st === 'bandShort') {                                             // faixa na testa
+    const B = plastic(def.band || 0xffffff, 0.5);
+    box(head, 0.43, 0.06, 0.41, B, 0, 0.405, 0, 0.02);
+    if (st === 'band') for (const sx of [-1, 1]) box(head, 0.05, 0.2, 0.03, B, sx * 0.05, 0.3, -0.22, 0.01).rotation.z = sx * 0.25;   // pontas do nó
+  }
+  if (st === 'curly') {                                                                  // cachos volumosos
+    box(head, 0.44, 0.1, 0.42, H, 0, 0.47, 0, 0.04);
+    box(head, 0.46, 0.4, 0.1, H, 0, 0.3, -0.19, 0.03);
+    const C = [[-0.15, 0.53, -0.12], [0, 0.56, -0.12], [0.15, 0.53, -0.12], [-0.15, 0.55, 0.03], [0, 0.58, 0.03], [0.15, 0.55, 0.03],
+      [-0.13, 0.52, 0.16], [0.02, 0.53, 0.17], [0.15, 0.5, 0.15], [-0.2, 0.42, -0.2], [0, 0.4, -0.23], [0.2, 0.42, -0.2],
+      [-0.22, 0.42, 0.02], [0.22, 0.42, 0.02], [-0.22, 0.42, -0.12], [0.22, 0.42, -0.12], [-0.1, 0.24, -0.23], [0.1, 0.24, -0.23]];
+    for (const [x, y, z] of C) box(head, 0.16, 0.14, 0.16, H, x, y, z, 0.06);
+  }
+  if (st === 'cap') {
+    const C = plastic(0x1d2a44, 0.5);
+    box(head, 0.44, 0.13, 0.42, C, 0, 0.48, 0, 0.05);
+    box(head, 0.36, 0.03, 0.16, C, 0, 0.43, 0.26, 0.012);
+    box(head, 0.12, 0.06, 0.02, plastic(0xffd23a), 0, 0.49, 0.212, 0.01);
+  }
+}
+
+// Desempenho: funde as peças sólidas de cada articulação numa só malha com cor por vértice
+// (de ~60 para ~16 draw calls por personagem; cada objeto móvel custa caro no WebGPU)
+const bakedMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.45, metalness: 0, clearcoat: 0.45, clearcoatRoughness: 0.32 });
+function bakeGroups(root) {
+  const groups = [];
+  root.traverse((o) => { if (o.isGroup || o === root) groups.push(o); });
+  for (const g of groups) {
+    const parts = g.children.filter((m) => m.isMesh && !m.material.map && !m.material.transparent && m.material.emissive && m.material.emissive.getHex() === 0 && !m.material.vertexColors);
+    if (parts.length < 2) continue;
+    const geos = parts.map((m) => {
+      m.updateMatrix();
+      const src = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', src.getAttribute('position').clone());
+      geo.setAttribute('normal', src.getAttribute('normal').clone());
+      geo.applyMatrix4(m.matrix);
+      const n = geo.getAttribute('position').count, col = new Float32Array(n * 3), c = m.material.color;
+      for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      return geo;
+    });
+    const merged = new THREE.Mesh(mergeGeometries(geos), bakedMat);
+    merged.castShadow = parts.some((m) => m.castShadow); merged.receiveShadow = true;
+    for (const m of parts) g.remove(m);
+    g.add(merged);
+  }
+}
+
+const PERSONAGENS = [
+  { id: 'leo', nome: 'Leonardo', curto: 'Leo', height: 1.66,
+    skin: 0xf2c48d, hair: 0xa0682f, brow: '#6b4421', style: 'swoop', shorts: 0xffffff, shirt: 0x2f7bff, trim: 0xffffff },
+  { id: 'ric', nome: 'Ricardo', curto: 'Ricardo', height: 1.80,
+    skin: 0xe5b07a, hair: 0x3d2a1c, brow: '#3d2a1c', style: 'swoopGray', shorts: 0x24324a, shirt: 0x22b573, trim: 0xffffff },
+  { id: 'bia', nome: 'Beatriz', curto: 'Bia', height: 1.66,
+    skin: 0xf5d2ad, hair: 0x6b3b1e, brow: '#4a2814', style: 'princess', shorts: 0xffffff, shirt: 0xff5fa8, trim: 0xffffff,
+    skirt: true, lashes: true, blush: true, fem: true },
+  { id: 'lic', nome: 'Lícia', curto: 'Lícia', height: 1.56,
+    skin: 0xeab98a, hair: 0xc9a46e, brow: '#8a6640', style: 'bob', shorts: 0xffffff, shirt: 0xffb31a, trim: 0xffffff,
+    skirt: true, lashes: true, blush: true, fem: true, visor: 0x14b8c4 },
+];
+const personagem = id => PERSONAGENS.find(p => p.id === id) || PERSONAGENS[1];
+const NP = 22;
+// Como o buildCharacter do tênis, sem a raquete: hips > torso > head / ombros > cotovelos > mãos ; hips > quadris > joelhos
+function montarPersonagem(def) {
+  const root = new THREE.Group(), s = def.height / 2.05;
+  const body = grp(root);
+  body.scale.setScalar(s);
+  const M = { skin: plastic(def.skin, 0.5), shirt: plastic(def.shirt, 0.45), shorts: plastic(def.shorts, 0.5), hair: plastic(def.hair, 0.6),
+    white: plastic(0xffffff, 0.45), sole: plastic(0x3a4152, 0.6), trim: plastic(def.trim, 0.45) };
+  const j = {};
+  const hips = j.hips = grp(body, 0, 0.9, 0);
+  box(hips, 0.46, 0.2, 0.28, M.shorts, 0, 0, 0, 0.05);
+  if (def.skirt) {
+    const sk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.34, 0.26, 8), M.shorts);
+    sk.position.y = -0.09; sk.castShadow = true; hips.add(sk);
+  }
+  const torso = j.torso = grp(hips, 0, 0.08, 0);
+  box(torso, 0.5, 0.56, 0.3, M.shirt, 0, 0.28, 0, 0.06);
+  box(torso, 0.24, 0.05, 0.31, M.trim, 0, 0.535, 0, 0.02);
+  for (const sx of [-1, 1]) box(torso, 0.035, 0.5, 0.31, M.trim, sx * 0.235, 0.27, 0, 0.012);
+  const head = j.head = grp(torso, 0, 0.58, 0);
+  box(head, 0.14, 0.08, 0.14, M.skin, 0, 0.02, 0, 0.03);
+  box(head, 0.4, 0.4, 0.38, M.skin, 0, 0.25, 0, 0.07);
+  for (const sx of [-1, 1]) box(head, 0.04, 0.09, 0.07, M.skin, sx * 0.205, 0.24, 0, 0.015);
+  const faces = { normal: drawFace(def, null), win: drawFace(def, 'win'), lose: drawFace(def, 'lose') };
+  const faceMat = new THREE.MeshStandardMaterial({ map: faces.normal, roughness: 0.5 });
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(0.33, 0.33), faceMat);
+  face.position.set(0, 0.24, 0.1905); head.add(face);
+  buildHair(head, def, M);
+  for (const lado of ['r', 'l']) {
+    const sx = lado === 'r' ? -1 : 1;
+    const sh = grp(torso, sx * 0.33, 0.5, 0);
+    box(sh, 0.17, 0.16, 0.18, M.shirt, 0, -0.05, 0, 0.04);
+    box(sh, 0.14, 0.3, 0.14, M.skin, 0, -0.16, 0, 0.04);
+    const el = grp(sh, 0, -0.3, 0);
+    box(el, 0.13, 0.27, 0.13, M.skin, 0, -0.13, 0, 0.04);
+    const hand = grp(el, 0, -0.3, 0);
+    box(hand, 0.14, 0.13, 0.14, M.skin, 0, 0, 0, 0.04);
+    j[lado + 'Sh'] = sh; j[lado + 'El'] = el; j[lado + 'Hand'] = hand;
+  }
+  for (const lado of ['r', 'l']) {
+    const sx = lado === 'r' ? -1 : 1;
+    const hp = grp(hips, sx * 0.12, -0.05, 0);
+    box(hp, 0.2, 0.42, 0.22, M.skin, 0, -0.21, 0, 0.05);
+    if (!def.skirt) box(hp, 0.22, 0.22, 0.24, M.shorts, 0, -0.08, 0, 0.05);
+    const kn = grp(hp, 0, -0.42, 0);
+    box(kn, 0.18, 0.34, 0.2, M.skin, 0, -0.17, 0, 0.05);
+    box(kn, 0.19, 0.1, 0.21, M.white, 0, -0.3, 0, 0.03);
+    box(kn, 0.21, 0.1, 0.32, M.white, 0, -0.375, 0.04, 0.04);
+    box(kn, 0.22, 0.03, 0.33, M.sole, 0, -0.425, 0.04, 0.012);
+    j[lado + 'Hip'] = hp; j[lado + 'Knee'] = kn;
+  }
+  bakeGroups(root);
+  const naMao = new THREE.Mesh(geoBola, matsBola[0]); // a bola, no tamanho de verdade, dentro da mão direita
+  naMao.scale.setScalar(1 / s);
+  naMao.position.set(0, -0.14, 0.03);
+  naMao.castShadow = true;
+  naMao.visible = false;
+  j.rHand.add(naMao);
+  root.visible = false;
+  cena.add(root);
+  return { def, g: root, j, faceMat, faces, naMao, dx: 0.33 * s, pose: new Float32Array(NP), T: new Float32Array(NP),
+    humor: null, humorAte: 0, fase: Math.random() * 10 };
+}
+
+// Poses (índices como no tênis): 0 alturaQuadril 2 giroTronco 3 inclinaTronco 4 cabeçaX 5 cabeçaY
+// 6-8 ombroD xyz 9 cotoveloD 10-12 ombroE xyz 13 cotoveloE 14 quadrilD x 15 quadrilD z 16 joelhoD
+// 17 quadrilE x 18 quadrilE z 19 joelhoE 20 rolagem 21 giroCorpo
+const PARADO = { 0: -0.02, 3: 0.04, 6: -0.08, 8: -0.1, 9: -0.15, 10: -0.08, 12: 0.1, 13: -0.15, 14: -0.05, 16: 0.08, 17: -0.05, 19: 0.08 };
+const SEGURANDO = { ...PARADO, 6: -0.45, 8: 0.12, 9: -1.25 };   // bola na mão, à frente da cintura
+// Arremesso por baixo: o braço vai atrás, a perna esquerda dá o passo, solta embaixo e acompanha
+function chavesArremesso(alto) {
+  return [
+    [0, SEGURANDO],
+    [0.42, { ...PARADO, 0: -0.1, 3: 0.35, 6: 1.15, 8: -0.12, 9: -0.1, 10: -0.55, 12: 0.3, 13: -0.3, 14: 0.35, 16: 0.35, 17: -0.55, 19: 0.6 }],
+    [0.62, { ...PARADO, 0: alto ? -0.1 : -0.2, 3: alto ? 0.3 : 0.62, 6: alto ? -1.0 : -0.45, 8: -0.05, 9: -0.1, 10: -0.6, 12: 0.4, 13: -0.3,
+      14: 0.45, 16: 0.4, 17: -0.75, 19: 0.9 }],
+    [0.85, { ...PARADO, 0: alto ? -0.08 : -0.16, 3: alto ? 0.2 : 0.45, 6: alto ? -2.0 : -1.4, 9: -0.25, 10: -0.5, 12: 0.4, 13: -0.3,
+      14: 0.4, 16: 0.4, 17: -0.7, 19: 0.85 }],
+    [1, PARADO],
+  ];
+}
+const CHAVES = { alto: chavesArremesso(true), rasteira: chavesArremesso(false) };
+const DUR_ARREMESSO = 1.1, SOLTA_EM = 0.62;
+function poseKeys(T, keys, p) {
+  let i = 0;
+  while (i < keys.length - 2 && p > keys[i + 1][0]) i++;
+  const a = keys[i][1], b = keys[i + 1][1];
+  const f = sstep(0, 1, (p - keys[i][0]) / (keys[i + 1][0] - keys[i][0]));
+  for (let k = 0; k < NP; k++) { const va = a[k] || 0, vb = b[k] || 0; T[k] = va + (vb - va) * f; }
+}
+function poseCelebrate(T, t) {
+  T[0] = Math.abs(Math.sin(t * 6)) * 0.22 - 0.02; T[3] = -0.1; T[4] = -0.25;
+  T[6] = -2.9; T[7] = 0; T[8] = -0.35; T[9] = -0.3; T[10] = -2.9; T[11] = 0; T[12] = 0.35; T[13] = -0.3;
+  T[14] = -0.2; T[17] = -0.2; T[16] = 0.35; T[19] = 0.35; T[2] = Math.sin(t * 3) * 0.3;
+}
+function poseDefeat(T, t) {
+  T[0] = -0.06; T[2] = 0; T[3] = 0.55; T[4] = 0.45; T[5] = Math.sin(t * 2.5) * 0.35;
+  T[6] = 0.1; T[7] = 0; T[8] = -0.08; T[9] = -0.2; T[10] = 0.1; T[11] = 0; T[12] = 0.08; T[13] = -0.2;
+  T[14] = -0.2; T[17] = -0.2; T[16] = 0.4; T[19] = 0.4;
+}
+function applyPose(c) {
+  const P = c.pose, j = c.j;
+  j.hips.position.y = 0.9 + P[0];
+  j.hips.rotation.set(P[1], P[21], P[20]);
+  j.torso.rotation.set(P[3], P[2], 0);
+  j.head.rotation.set(P[4], P[5], 0);
+  j.rSh.rotation.set(P[6], P[7], P[8]); j.rEl.rotation.x = P[9];
+  j.lSh.rotation.set(P[10], P[11], P[12]); j.lEl.rotation.x = P[13];
+  j.rHip.rotation.set(P[14], 0, P[15]); j.rKnee.rotation.x = P[16];
+  j.lHip.rotation.set(P[17], 0, P[18]); j.lKnee.rotation.x = P[19];
+}
+
+function animarFiguras(dt) {
+  for (let t = 0; t < figuras.length; t++) {
+    const f = figuras[t], T = f.T;
+    if (!f.g.visible) continue;
+    if (f.humor && f.humorAte && tempo > f.humorAte) f.humor = null;
+    T.fill(0);
+    let k = 8;
+    if (swing && swing.time === t) { poseKeys(T, swing.alto ? CHAVES.alto : CHAVES.rasteira, clamp(swing.t / DUR_ARREMESSO, 0, 1)); k = 30; }
+    else if (f.humor === 'win') { poseCelebrate(T, relogio); k = 10; }
+    else if (f.humor === 'lose') { poseDefeat(T, relogio); k = 6; }
+    else {
+      const base = f.naMao.visible ? SEGURANDO : PARADO;
+      for (const i in base) T[i] = base[i];
+      const br = Math.sin(relogio * 2.2 + f.fase);   // respiração
+      T[0] += br * 0.006; T[3] += br * 0.015;
+    }
+    for (let i = 0; i < NP; i++) f.pose[i] += (T[i] - f.pose[i]) * (1 - Math.exp(-k * dt));
+    applyPose(f);
+    if (f.faceMat.map !== f.faces[f.humor || 'normal']) f.faceMat.map = f.faces[f.humor || 'normal'];
+    if (swing || f.humor) sombraSuja = true;
+  }
+}
+const figurasPorId = Object.fromEntries(PERSONAGENS.map(d => [d.id, montarPersonagem(d)]));
+let figuras = [figurasPorId.ric, figurasPorId.bia];
+function escolherFiguras(ids) {
+  for (const f of Object.values(figurasPorId)) f.g.visible = false;
+  figuras = ids.map(id => figurasPorId[id] || figurasPorId.ric);
+  for (const f of figuras) { f.g.visible = true; f.humor = null; f.naMao.visible = false; }
+  sombraSuja = true;
+}
+function humor(t, h, seg = 0) { const f = figuras[t]; f.humor = h; f.humorAte = seg ? tempo + seg : 0; }
 let swing = null;
+function noLancamento(f, x0) { f.g.position.set(x0 - f.dx, 0, 0.45); f.g.rotation.y = Math.PI; }
 function posicionarFiguras(vez) {
   for (const t of [0, 1]) {
     const f = figuras[t];
-    f.ombro.rotation.x = 0; f.corpo.rotation.x = 0;
-    if (t === vez) { f.g.position.set(mira.x0 - 0.235, 0, 0.45); f.g.rotation.y = 0; }
-    else { f.g.position.set(t === 0 ? -2.7 : 2.8, 0, -1.2); f.g.rotation.y = t === 0 ? -1.3 : 1.3; }
+    if (t === vez) { noLancamento(f, mira.x0); f.humor = null; }
+    else { f.g.position.set(t === 0 ? -2.7 : 2.8, 0, -1.2); f.g.rotation.y = Math.PI + (t === 0 ? -1.3 : 1.3); }
     f.naMao.visible = false;
   }
   sombraSuja = true;
@@ -1462,7 +1775,6 @@ const matrizTmp = new THREE.Matrix4(), vTmp = new THREE.Vector3(), sTmp = new TH
 // ============================================================
 // Estado do jogo
 // ============================================================
-const NOMES = { cpu: ['Você', 'CPU'], '2j': ['Vermelhas', 'Azuis'], desafio: ['Você', 'Azuis'], demo: ['', ''] };
 const RUIDO = { // desvio padrão do ângulo (graus) e da distância (fração)
   jogador: [0.12, 0.008], facil: [0.8, 0.04], normal: [0.32, 0.016], dificil: [0.12, 0.0065],
 };
@@ -1487,7 +1799,14 @@ function processarAgenda() {
   for (const a of prontas) a.fn();
 }
 function adiantar() { for (const a of agenda) a.t = Math.min(a.t, tempo); }
-const nome = t => NOMES[partida.modo][t];
+// Nomes: no desafio, o outro lado são só as bolas azuis
+const azuis = t => partida.modo === 'desafio' && t === 1;
+const nome = t => azuis(t) ? 'Azuis' : partida.personagens[t].nome;
+const nomeCurto = t => azuis(t) ? 'Azuis' : partida.personagens[t].curto;
+const artigo = t => azuis(t) ? 'as' : partida.personagens[t].fem ? 'a' : 'o';
+const doLado = t => (azuis(t) ? 'das' : partida.personagens[t].fem ? 'da' : 'do') + ' ' + nome(t);   // "da Beatriz"
+const oLado = t => { const a = artigo(t); return a[0].toUpperCase() + a.slice(1) + ' ' + nome(t); };  // "A Beatriz"
+const ehVoce = t => partida.modo !== '2j' && t === 0;
 const humano = t => partida.modo === '2j' || partida.modo === 'desafio' || t === 0;
 
 function situacao(bolas) {
@@ -1525,7 +1844,7 @@ function textoVez(t) { $('vezTxt').textContent = t; }
 function atualizarPlacar() {
   const P = partida;
   for (const t of [0, 1]) {
-    $('nome' + t).textContent = nome(t);
+    $('nome' + t).textContent = nomeCurto(t);
     $('pts' + t).textContent = P.modo === 'desafio' ? '' : P.placar[t];
     const total = P.modo === 'desafio' ? (t === 0 ? P.desafio.bolas : 0) : BOLAS_POR_LADO;
     $('bolas' + t).innerHTML = Array.from({ length: total }, (_, i) => `<i class="${i < total - P.restantes[t] ? 'usada' : ''}"></i>`).join('');
@@ -1644,8 +1963,9 @@ function novaPartida(modo, desafio = null) {
   partida = {
     modo, nivel, meta: config.meta, placar: [0, 0], rodada: 0, saida: 0, bolas: [], bolim: null, restantes: [0, 0],
     vez: 0, fase: 'bolim', tentBolim: 0, cai: desafio ? desafio.cai : gerarCaimento(nivel), desafio, lancada: null,
-    ultimoTime: null, melhor: Infinity, bochadas: 0,
+    ultimoTime: null, melhor: Infinity, bochadas: 0, personagens: [personagem(config.eu), personagem(config.rival)],
   };
+  escolherFiguras([config.eu, config.rival]);
   miraLado[0] = { x0: 0, tipo: 'rasteira' }; miraLado[1] = { x0: 0, tipo: 'rasteira' };
   mostrarTela(null);
   mostrarJogoUI(true);
@@ -1661,7 +1981,7 @@ function novaRodada() {
   modoCam = 'mira';
   posicionarFiguras(P.vez);
   atualizarPlacar();
-  aviso(`Rodada ${P.rodada}`, P.modo === 'cpu' && P.vez === 1 ? 'A CPU joga o bolim' : P.modo === 'cpu' ? 'Você joga o bolim' : `As ${nome(P.vez)} jogam o bolim`, 1.6);
+  aviso(`Rodada ${P.rodada}`, (ehVoce(P.vez) ? 'Você' : oLado(P.vez)) + ' joga o bolim', 1.6);
   agendar(1.3, iniciarVez);
 }
 function iniciarVez() {
@@ -1678,25 +1998,25 @@ function iniciarVez() {
   atualizarMira();
   const { ds, quem } = situacao(P.bolas);
   let ponto = '';
-  if (P.fase !== 'bolim' && quem >= 0) ponto = ` · ponto ${P.modo === 'cpu' ? (quem === 0 ? 'seu' : 'da CPU') : 'das ' + nome(quem)} (${cm(ds[quem][0])})`;
+  if (P.fase !== 'bolim' && quem >= 0) ponto = ` · ponto ${ehVoce(quem) ? 'seu' : doLado(quem)} (${cm(ds[quem][0])})`;
   if (humano(t)) {
     estado = 'mira';
     mostrarControles(true);
-    textoVez((P.modo === 'cpu' || P.modo === 'desafio' ? 'Sua vez' : 'Vez das ' + nome(t)) + ponto);
+    textoVez((ehVoce(t) ? 'Sua vez' : 'Vez ' + doLado(t)) + ponto);
     $('dica').textContent = P.fase === 'bolim'
       ? 'Jogue o bolim: ele tem que parar entre a linha do meio e a última linha.'
       : TOQUE ? 'Arraste para mexer na mira, ou toque no lugar. Depois, LANÇAR.' : 'Arraste, toque ou use as setas para mirar. Espaço lança.';
   } else {
     estado = 'cpu';
     mostrarControles(false);
-    textoVez('Vez da CPU' + ponto);
+    textoVez('Vez ' + doLado(t) + ponto);
     agendar(0.7, cpuJogar);
   }
 }
 function moverPosicao(d) {
   if (estado !== 'mira' || partida.fase === 'bolim') return;
   mira.x0 = clamp(Math.round((mira.x0 + d * 0.1) * 10) / 10, -1.5, 1.5);
-  figuras[partida.vez].g.position.x = mira.x0 - 0.235;
+  noLancamento(figuras[partida.vez], mira.x0);
   sombraSuja = true;
   atualizarMira();
 }
@@ -1779,7 +2099,7 @@ function aoParar() {
       aviso('Bolim inválido', 'O bolim vai para o meio da cancha', 2.2);
     } else {
       P.vez = 1 - P.vez;
-      aviso('Bolim inválido', P.modo === 'cpu' ? (P.vez === 0 ? 'Agora você joga o bolim' : 'Agora a CPU joga o bolim') : `Agora as ${nome(P.vez)} jogam o bolim`, 2.2);
+      aviso('Bolim inválido', `Agora ${ehVoce(P.vez) ? 'você' : artigo(P.vez) + ' ' + nome(P.vez)} joga o bolim`, 2.2);
     }
     agendar(2.2, iniciarVez);
     return;
@@ -1800,12 +2120,13 @@ function analisarJogada() {
     if (humano(L.time) && P.modo === 'cpu') P.bochadas++;
     aviso('Bochada!', 'Tirou a bola do adversário');
     sons.palmas(20);
+    humor(L.time, 'win', 2.2); humor(1 - L.time, 'lose', 2.2);
     return true;
   }
-  if (d < 0.03) { aviso('Encostou!', cm(d) + ' do bolim'); sons.palmas(12); return true; }
+  if (d < 0.03) { aviso('Encostou!', cm(d) + ' do bolim'); sons.palmas(12); humor(L.time, 'win', 2); return true; }
   if (mexeu) { aviso('Mexeu no bolim!', '', 1.5); return true; }
   if (sit.quem === L.time && analise.antes !== L.time) {
-    aviso('Ponto ' + (P.modo === 'cpu' ? (L.time === 0 ? 'seu' : 'da CPU') : 'das ' + nome(L.time)), cm(sit.ds[L.time][0]) + ' do bolim', 1.4);
+    aviso('Ponto ' + (ehVoce(L.time) ? 'seu' : doLado(L.time)), cm(sit.ds[L.time][0]) + ' do bolim', 1.4);
   }
   return false;
 }
@@ -1835,9 +2156,10 @@ function contarRodada() {
     P.placar[quem] += pts;
     P.saida = quem;
     const txt = n => n === 1 ? '1 ponto' : `${n} pontos`;
-    const frase = P.modo === 'cpu' ? (quem === 0 ? `Você marca ${txt(pts)}` : `A CPU marca ${txt(pts)}`) : `${nome(quem)} marcam ${txt(pts)}`;
+    const frase = `${ehVoce(quem) ? 'Você' : oLado(quem)} marca ${txt(pts)}`;
     aviso(frase, `${P.placar[0]} × ${P.placar[1]}`, 2.8);
     if (humano(quem)) sons.palmas(10 + pts * 6);
+    humor(quem, 'win', 3.4); humor(1 - quem, 'lose', 3.4);
   } else aviso('Ninguém marca', 'A rodada fica sem pontos', 2.4);
   P.vez = -1;
   atualizarPlacar();
@@ -1870,12 +2192,13 @@ function fimPartida() {
     gravar('stats', stats);
   }
   const niveis = { facil: 'fácil', normal: 'normal', dificil: 'difícil' };
-  $('fimTitulo').textContent = P.modo === 'cpu' ? (venc === 0 ? 'Você venceu!' : 'A CPU venceu') : `As ${nome(venc)} venceram!`;
+  $('fimTitulo').textContent = `${ehVoce(venc) ? 'Você' : oLado(venc)} venceu!`;
   $('fimTexto').textContent = `${P.placar[0]} × ${P.placar[1]}` + (P.modo === 'cpu' ? ` · nível ${niveis[P.nivel]}` : '');
   $('fimStats').innerHTML = extras.join('<br>');
   $('fDeNovo').textContent = 'Revanche';
   $('fProximo').hidden = $('fLista').hidden = true;
   mostrarTela('fim');
+  encenarFim([[venc, 'win'], [1 - venc, 'lose']]);
   if (venc === 0 || P.modo === '2j') sons.vitoria(); else sons.derrota();
 }
 
@@ -1945,7 +2268,21 @@ function terminarDesafio() {
   $('fProximo').hidden = i >= DESAFIOS.length - 1;
   $('fLista').hidden = false;
   mostrarTela('fim');
+  encenarFim([[0, est >= 2 ? 'win' : est === 0 ? 'lose' : null]]);
   if (est >= 2) sons.vitoria(); else if (est === 1) sons.palmas(10); else sons.derrota();
+}
+function encenarFim(lista) {
+  for (const f of figuras) f.g.visible = false;
+  lista.forEach(([t, h], i) => {
+    const f = figuras[t], x = lista.length > 1 ? (i ? 0.6 : -0.6) : 0;
+    f.g.visible = true;
+    f.g.position.set(x, 0, 2.6);
+    f.g.rotation.y = -x * 0.4;
+    f.naMao.visible = false;
+    f.humor = h; f.humorAte = 0;
+  });
+  modoCam = 'fim';
+  sombraSuja = true;
 }
 function abrirListaDesafios() {
   const grade = $('gradeDesafios');
@@ -2038,7 +2375,7 @@ function cpuJogar() {
   const P = partida;
   if (estado !== 'cpu') return;
   if (P.fase === 'bolim') miraCPU({ x0: 0, tipo: 'rasteira', tx: (Math.random() - 0.5) * 1.6, tz: -14.5 - Math.random() * 5.5 });
-  else { planoCPU = planejarCPU(P, P.vez); textoVez('A CPU estuda a jogada…'); }
+  else { planoCPU = planejarCPU(P, P.vez); textoVez(oLado(P.vez) + ' estuda a jogada…'); }
 }
 function pensarCPU() {
   const t0 = performance.now();
@@ -2047,7 +2384,7 @@ function pensarCPU() {
   if (r.done) { planoCPU = null; miraCPU(r.value); }
 }
 function miraCPU(jog) {
-  textoVez('A CPU mira…');
+  textoVez(oLado(partida.vez) + ' mira…');
   animMira = { de: { ...mira }, para: jog, t: 0 };
   miraPrincipal.visible = miraMapa.visible = true;
   if (jog.tipo !== mira.tipo) mira.tipo = jog.tipo;
@@ -2095,6 +2432,12 @@ function atualizarCamera(dt, t) {
       vAlvo.set(c.x, 0, c.z - 0.15);
       break;
     }
+    case 'fim':
+      // os bonecos ficam na parte de cima da tela, acima do painel
+      vPos.set(0, 1.2, 2.6 + (retrato ? 10 : 8.5));
+      vAlvo.set(0, retrato ? -2.6 : -1.1, 2.6);
+      k = 2;
+      break;
     case 'contagem': {
       const c = centroCabeca();
       vPos.set(c.x + 0.35, 2.1 * afasta, c.z + 1.35 * afasta);
@@ -2119,7 +2462,7 @@ function atualizarJogo(dt) {
     animMira.t += dt;
     const e = sstep(0, 1, animMira.t / 0.9), a = animMira.de, b = animMira.para;
     mira.x0 = lerp(a.x0, b.x0, e); mira.tx = lerp(a.tx, b.tx, e); mira.tz = lerp(a.tz, b.tz, e);
-    figuras[partida.vez].g.position.x = mira.x0 - 0.235;
+    noLancamento(figuras[partida.vez], mira.x0);
     miraPrincipal.position.set(mira.tx, 0.004, mira.tz);
     miraMapa.position.copy(miraPrincipal.position);
     sombraSuja = true;
@@ -2127,16 +2470,8 @@ function atualizarJogo(dt) {
   }
   if (swing) {
     swing.t += dt;
-    const p = swing.t / 0.8, f = figuras[swing.time], fim = swing.alto ? 1.0 : 0.35, inc = swing.alto ? -0.15 : -0.42;
-    let br, cp;
-    if (p < 0.45) { const e = sstep(0, 1, p / 0.45); br = -1.25 * e; cp = -0.12 * e; }
-    else if (p < 0.68) { const e = (p - 0.45) / 0.23; br = lerp(-1.25, fim, e); cp = lerp(-0.12, inc, e); }
-    else if (p < 1) { const e = (p - 0.68) / 0.32; br = lerp(fim, fim + 0.5, e); cp = inc; }
-    else { const e = sstep(0, 1, (p - 1) / 0.7); br = lerp(fim + 0.5, 0, e); cp = lerp(inc, 0, e); }
-    f.ombro.rotation.x = br;
-    f.corpo.rotation.x = cp;
-    if (p >= 0.66 && !swing.solto) { swing.solto = true; swing.soltar(); }
-    if (p >= 1.7) swing = null;
+    if (swing.t >= DUR_ARREMESSO * SOLTA_EM && !swing.solto) { swing.solto = true; swing.soltar(); }
+    if (swing.t >= DUR_ARREMESSO) swing = null;
     sombraSuja = true;
   }
   if (estado === 'rolando') {
@@ -2207,7 +2542,7 @@ function quadro(agora) {
   const dt = Math.min(0.05, (agora - ultimo) / 1000);
   ultimo = agora;
   relogio += dt;
-  if (!pausado) { tempo += dt; processarAgenda(); atualizarJogo(dt); }
+  if (!pausado) { tempo += dt; processarAgenda(); atualizarJogo(dt); animarFiguras(dt); }
   animarCenario(relogio);
   atualizarCamera(pausado ? 0 : dt, relogio);
   ceu.position.copy(camera.position);
@@ -2339,6 +2674,9 @@ function irMenu() {
 function atualizarMenu() {
   for (const b of document.querySelectorAll('#segNivel button')) b.classList.toggle('on', b.dataset.v === config.nivel);
   for (const b of document.querySelectorAll('#segMeta button')) b.classList.toggle('on', +b.dataset.v === config.meta);
+  for (const b of document.querySelectorAll('#segEu button')) b.classList.toggle('on', b.dataset.v === config.eu);
+  for (const b of document.querySelectorAll('#segRival button')) b.classList.toggle('on', b.dataset.v === config.rival);
+  { const r = personagem(config.rival); $('mJogar').textContent = `Jogar contra ${r.fem ? 'a' : 'o'} ${r.nome}`; }
   $('mSom').textContent = $('pSom').textContent = config.som ? 'Som: sim' : 'Som: não';
   const tot = Object.values(estrelasDesafio).reduce((a, b) => a + b, 0);
   $('mEstrelas').textContent = `★ ${tot} de ${DESAFIOS.length * 3}`;
@@ -2351,6 +2689,23 @@ function atualizarMenu() {
   $('mStats').innerHTML = l.join('<br>');
 }
 for (const b of document.querySelectorAll('#segNivel button')) b.addEventListener('click', () => { sons.clique(); config.nivel = b.dataset.v; gravar('config', config); atualizarMenu(); });
+// Escolha da turma: se os dois ficarem iguais, o outro troca de lugar
+for (const [id, chave, outra] of [['segEu', 'eu', 'rival'], ['segRival', 'rival', 'eu']]) {
+  for (const p of PERSONAGENS) {
+    const b = document.createElement('button');
+    b.dataset.v = p.id;
+    b.textContent = p.curto;
+    b.addEventListener('click', () => {
+      sons.clique();
+      if (config[outra] === p.id) config[outra] = config[chave];
+      config[chave] = p.id;
+      gravar('config', config);
+      atualizarMenu();
+      montarDemo();
+    });
+    $(id).appendChild(b);
+  }
+}
 for (const b of document.querySelectorAll('#segMeta button')) b.addEventListener('click', () => { sons.clique(); config.meta = +b.dataset.v; gravar('config', config); atualizarMenu(); });
 botao('mJogar', () => novaPartida('cpu'));
 botao('m2j', () => novaPartida('2j'));
@@ -2400,9 +2755,10 @@ function montarDemo() {
   partida.bolim = pos('bolim', -1, 0.2, -16.4);
   [[0.31, -16.25], [-0.15, -16.7], [0.7, -15.4]].forEach(([x, z]) => pos('bola', 0, x, z));
   [[0.05, -16.2], [0.5, -16.9], [-0.4, -15.9]].forEach(([x, z]) => pos('bola', 1, x, z));
-  figuras[0].g.position.set(-2.55, 0, 0.7); figuras[0].g.rotation.y = -0.7;
-  figuras[1].g.position.set(0.3 - 0.235, 0, 0.45); figuras[1].g.rotation.y = 0;
-  for (const f of figuras) { f.naMao.visible = false; f.ombro.rotation.x = 0; f.corpo.rotation.x = 0; }
+  escolherFiguras([config.eu, config.rival]);
+  partida.personagens = [personagem(config.eu), personagem(config.rival)];
+  figuras[0].g.position.set(-0.75, 0, 2.5); figuras[0].g.rotation.y = 0.25;
+  figuras[1].g.position.set(0.75, 0, 2.5); figuras[1].g.rotation.y = -0.25;
   mostrarNaMao(1, false);
   sombraSuja = true;
 }
