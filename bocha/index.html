@@ -564,7 +564,7 @@ function iniciarAudio() {
   rolarGanho = ac.createGain(); rolarGanho.gain.value = 0;
   fonte.connect(rolarFiltro).connect(rolarGanho).connect(mestre);
   fonte.start();
-  setTimeout(passarinho, 1500);
+  setTimeout(tacadaDeGolfe, 15000);
 }
 function aplicarSom() { if (mestre) mestre.gain.value = config.som ? 0.8 : 0; }
 function envelope(g, t, pico, dur) {
@@ -630,20 +630,14 @@ const sons = {
     rolarFiltro.frequency.setTargetAtTime(160 + v * 80, t, 0.05);
   },
 };
-function passarinho() { // bem-te-vis e sabiás de fundo
+function tacadaDeGolfe() { // de vez em quando, uma tacada lá longe no campo
   if (!ac) return;
   if (config.som && !document.hidden) {
-    const t = ac.currentTime, base = 2600 + Math.random() * 1600, notas = 2 + (Math.random() * 4 | 0);
-    for (let i = 0; i < notas; i++) {
-      const ti = t + i * (0.09 + Math.random() * 0.07);
-      tom(ti, 'sine', base * (1 + Math.random() * 0.25), base * (0.8 + Math.random() * 0.5), 0.025, 0.07 + Math.random() * 0.06);
-    }
-    if (Math.random() < 0.12) { // tacada lá longe no golfe
-      ruidoFiltrado(t + 0.8, 'bandpass', 1800, 3, 0.05, 0.03);
-      tom(t + 0.8, 'sine', 1300, 900, 0.03, 0.05);
-    }
+    const t = ac.currentTime;
+    ruidoFiltrado(t, 'bandpass', 1800, 3, 0.05, 0.03);
+    tom(t, 'sine', 1300, 900, 0.03, 0.05);
   }
-  setTimeout(passarinho, 2500 + Math.random() * 6000);
+  setTimeout(tacadaDeGolfe, 20000 + Math.random() * 30000);
 }
 
 // ============================================================
