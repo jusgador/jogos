@@ -156,6 +156,19 @@
     bottom: calc(70px + var(--seguro-base)); font-size: 12.5px; background: rgba(0, 0, 0, .45); padding: 4px 10px; border-radius: 10px;
     max-width: calc(100% - 24px); transition: opacity .4s;
   }
+  #forca {
+    position: fixed; left: 50%; transform: translateX(-50%); z-index: 10; pointer-events: none;
+    bottom: calc(66px + var(--seguro-base)); width: min(440px, calc(100% - 24px)); display: flex; align-items: center; gap: 10px;
+    background: var(--painel); border: 1px solid var(--linha); border-radius: 12px; padding: 7px 12px 17px;
+  }
+  #forca .rot { font-size: 12px; font-weight: 700; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+  #forcaTrilho { position: relative; flex: 1; height: 14px; border-radius: 7px; background: rgba(0, 0, 0, .38); }
+  #forcaEnche { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 7px; background: linear-gradient(90deg, #8fd16a, var(--ouro) 60%, #e0603c); }
+  #forcaZona { position: absolute; top: -3px; bottom: -3px; border-radius: 4px; background: rgba(255, 255, 255, .25); border: 1px solid rgba(255, 255, 255, .85); }
+  #forcaUltima { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .4); }
+  #forca .tique { position: absolute; top: 100%; width: 1px; height: 5px; background: rgba(255, 255, 255, .7); }
+  #forca .tique b { position: absolute; top: 5px; left: 50%; transform: translateX(-50%); font: 500 9.5px system-ui, sans-serif; white-space: nowrap; opacity: .85; }
+  body.modoForca #dica { bottom: calc(124px + var(--seguro-base)); }
   #vezTxt {
     position: fixed; left: 50%; transform: translateX(-50%); z-index: 9; pointer-events: none;
     top: calc(64px + var(--seguro-topo)); font: 600 14px system-ui, sans-serif; text-shadow: 0 1px 4px rgba(0, 0, 0, .7);
@@ -181,6 +194,10 @@
     .bolas i { width: 7px; height: 7px; }
     .tipos button { padding: 9px 9px; font-size: 13px; }
     #dica { bottom: calc(118px + var(--seguro-base)); }
+    #forca { bottom: calc(114px + var(--seguro-base)); }
+    #hud { right: calc(8px + var(--seguro-dir)); left: calc(60px + var(--seguro-esq)); }
+    .meta { white-space: nowrap; padding: 0 5px; }
+    body.modoForca #dica { bottom: calc(170px + var(--seguro-base)); }
     #vezTxt { left: calc(12px + var(--seguro-esq)); transform: none; max-width: calc(100% - 160px); font-size: 13px; }
     h1 { font-size: 31px; }
     #menu { justify-content: center; background: rgba(8, 24, 14, .3); }
@@ -221,6 +238,13 @@
   <div class="pos"><button id="bEsq" aria-label="Lançar mais à esquerda">◀</button><span id="posTxt">centro</span><button id="bDir" aria-label="Lançar mais à direita">▶</button></div>
   <button id="bLancar">LANÇAR</button>
 </div>
+<div id="forca" hidden>
+  <div id="forcaTrilho">
+    <div id="forcaZona" hidden></div><div id="forcaEnche"></div><div id="forcaUltima" hidden></div>
+    <i class="tique" id="tiqueMeio"><b>meio</b></i><i class="tique" id="tiqueLimite"><b>última linha</b></i><i class="tique" id="tiqueFundo"><b>fundo</b></i>
+  </div>
+  <span class="rot" id="forcaTxt">0%</span>
+</div>
 <div id="dica"></div>
 <div id="aviso"></div>
 <div id="rotulos"></div>
@@ -233,6 +257,7 @@
     <div class="opcao"><span>Adversário</span><div class="seg" id="segRival"></div></div>
     <button class="bt principal" id="mJogar">Jogar contra o computador</button>
     <div class="opcao"><span>Nível</span><div class="seg" id="segNivel"><button data-v="facil">Fácil</button><button data-v="normal">Normal</button><button data-v="dificil">Difícil</button></div></div>
+    <div class="opcao"><span>Mira</span><div class="seg" id="segMira"><button data-v="forca">Força na mão</button><button data-v="circulo">Círculo</button></div></div>
     <div class="opcao"><span>Partida até</span><div class="seg" id="segMeta"><button data-v="7">7 pontos</button><button data-v="12">12 pontos</button></div></div>
     <button class="bt" id="m2j">Dois jogadores <small>no mesmo aparelho</small></button>
     <button class="bt" id="mDesafios">Desafios <small id="mEstrelas"></small></button>
@@ -286,10 +311,11 @@
     <p><b>Objetivo:</b> deixar suas bolas mais perto do bolim, a bolinha amarela, do que as do adversário.</p>
     <p><b>A rodada:</b> quem começa joga o bolim, que precisa parar depois da linha do meio e antes da última linha. Depois joga sempre o lado que está perdendo o ponto, até acabarem as bolas.</p>
     <p><b>Os pontos:</b> o lado com a bola mais perto marca um ponto para cada bola sua mais perto que a melhor do adversário. Bola que bate na tábua do fundo sem encostar em outra é bola morta e sai.</p>
-    <p><b>A mira:</b> o círculo branco no gramado é onde a bola deve parar. Arraste em qualquer lugar para mexer nele (devagar, ele anda pouco), ou toque direto no lugar. No quadro do bolim, no canto, o ajuste é de perto.</p>
+    <p><b>Mirar e lançar:</b> arraste para os lados, toque no lugar ou use o quadro do bolim, no canto, para escolher a direção. Depois segure LANÇAR: a barra de força enche e esvazia, e a bola vai mais longe quanto mais cheia ela estiver quando você soltar. A marca branca mostra onde você soltou da última vez. No fácil, a faixa clara mostra a força para chegar no bolim.</p>
+    <p><b>Mira de círculo:</b> quem preferir pode trocar no menu. O círculo marca onde a bola deve parar, e o jogo calcula a força.</p>
     <p><b>Os lançamentos:</b> <i>Rasteira</i> rola o caminho todo. <i>Por cima</i> voa, cai antes da mira e rola pouco: passa por cima das bolas do caminho. <i>Bochada</i> voa direto até a mira, para tirar uma bola do lugar. Com ◀ ▶ você muda o lugar de onde lança.</p>
     <p><b>O caimento:</b> o gramado tem leve inclinação, e a bola puxa para o lado no fim. A seta no quadro do bolim mostra para onde.</p>
-    <p><b>Teclado:</b> setas mexem a mira (com Shift, mais rápido), A e D mudam o lugar de lançar, T troca o lançamento, Espaço lança, P pausa. Segure o clique ou o dedo para acelerar a bola rolando.</p>
+    <p><b>Teclado:</b> setas mexem a mira (com Shift, mais rápido), A e D mudam o lugar de lançar, T troca o lançamento, segure e solte o Espaço para lançar, P pausa. Segure o clique ou o dedo para acelerar a bola rolando.</p>
     <button class="bt principal" id="aFechar">Entendi</button>
   </div>
 </div>
@@ -356,7 +382,7 @@ function ler(chave, padrao) {
   return structuredClone(padrao);
 }
 function gravar(chave, valor) { try { localStorage.setItem(PREFIXO + chave, JSON.stringify(valor)); } catch (e) {} }
-const config = ler('config', { nivel: 'normal', meta: 12, som: true, viuAjuda: false, eu: 'ric', rival: 'bia' });
+const config = ler('config', { nivel: 'normal', meta: 12, som: true, viuAjuda: false, eu: 'ric', rival: 'bia', mira: 'forca' });
 const stats = ler('stats', {
   partidas: 0, vitorias: { facil: 0, normal: 0, dificil: 0 }, derrotas: { facil: 0, normal: 0, dificil: 0 },
   seq: 0, seqMelhor: 0, melhorEncostada: null, bochadas: 0, rodadasLimpas: 0,
@@ -1689,7 +1715,8 @@ function animarFiguras(dt) {
     if (f.humor && f.humorAte && tempo > f.humorAte) f.humor = null;
     T.fill(0);
     let k = 8;
-    if (swing && swing.time === t) { poseKeys(T, swing.alto ? CHAVES.alto : CHAVES.rasteira, clamp(swing.t / DUR_ARREMESSO, 0, 1)); k = 30; }
+    if (carga && t === partida.vez) { poseKeys(T, CHAVES.rasteira, clamp((tempo - carga.t0) / 0.45, 0, 1) * 0.42); k = 20; }
+    else if (swing && swing.time === t) { poseKeys(T, swing.alto ? CHAVES.alto : CHAVES.rasteira, clamp(swing.t / DUR_ARREMESSO, 0, 1)); k = 30; }
     else if (f.humor === 'win') { poseCelebrate(T, relogio); k = 10; }
     else if (f.humor === 'lose') { poseDefeat(T, relogio); k = 6; }
     else {
@@ -1770,7 +1797,7 @@ const matrizTmp = new THREE.Matrix4(), vTmp = new THREE.Vector3(), sTmp = new TH
 // Estado do jogo
 // ============================================================
 const RUIDO = { // desvio padrão do ângulo (graus) e da distância (fração)
-  jogador: [0.12, 0.008], facil: [0.8, 0.04], normal: [0.32, 0.016], dificil: [0.12, 0.0065],
+  jogador: [0.12, 0.008], forca: [0.12, 0], facil: [0.8, 0.04], normal: [0.32, 0.016], dificil: [0.12, 0.0065],
 };
 let estado = 'menu';
 let partida = null;
@@ -1822,7 +1849,8 @@ function mostrarJogoUI(sim) { $('hud').hidden = $('bPausa').hidden = $('mapa').h
 function mostrarControles(sim) {
   $('controles').hidden = !sim;
   $('dica').style.opacity = sim ? 1 : 0;
-  miraPrincipal.visible = miraMapa.visible = sim || !!animMira;
+  miraPrincipal.visible = (sim && !usaForca()) || !!animMira;
+  miraMapa.visible = sim || !!animMira;
   if (!sim && !animMira) { pontos.count = 0; marcaQueda.visible = false; }
 }
 let avisoTimer = 0;
@@ -1888,6 +1916,8 @@ function atualizarMira() {
   limitarMira();
   miraPrincipal.position.set(mira.tx, 0.004, mira.tz);
   miraMapa.position.set(mira.tx, 0.004, mira.tz);
+  document.body.classList.toggle('modoForca', usaForca());
+  if (usaForca() && !animMira) { miraDeForca(); return; }
   // trajetória: no fácil, com o caimento; nos outros níveis, como se o gramado fosse plano
   const cai = partida.nivel === 'facil' || partida.modo === 'desafio' && partida.desafio.ajuda ? partida.cai : PLANO;
   const b = criarBola(partida.fase === 'bolim' ? 'bolim' : 'bola', 0);
@@ -1917,8 +1947,48 @@ function atualizarMira() {
   $('posTxt').textContent = Math.abs(mira.x0) < 0.01 ? 'centro' : `${Math.round(Math.abs(mira.x0) * 100)} cm ${mira.x0 < 0 ? 'à esq.' : 'à dir.'}`;
   atualizarCaimento();
 }
+// Mira de força: só a direção, uma linha de pontinhos até a tábua do fundo
+function miraDeForca() {
+  miraPrincipal.visible = marcaQueda.visible = false;
+  const [ux, uz] = direcaoMira();
+  trajeto = [];
+  for (let d = 0.6; trajeto.length / 3 < MAX_PONTOS; d += 0.6) {
+    const x = mira.x0 + ux * d, z = Z_SOLTURA + uz * d;
+    if (z < Z_FUNDO + 0.2 || Math.abs(x) > MEIA) break;
+    trajeto.push(x, 0.01, z);
+  }
+  pontos.count = trajeto.length / 3;
+  const F = faixa(mira.tipo);
+  for (const [id, d] of [['tiqueMeio', -Z_MEIO], ['tiqueLimite', -Z_LIMITE], ['tiqueFundo', -Z_FUNDO]]) {
+    const el = $(id);
+    el.style.left = (distParaForca(d, mira.tipo) * 100).toFixed(1) + '%';
+    el.hidden = partida.fase === 'bolim' ? id === 'tiqueFundo' : id === 'tiqueLimite';
+  }
+  const zona = $('forcaZona');
+  zona.hidden = partida.nivel !== 'facil';
+  if (!zona.hidden) {
+    let a, b;
+    if (partida.fase === 'bolim') { a = distParaForca(-Z_MEIO + 1, mira.tipo); b = distParaForca(-Z_LIMITE - 1, mira.tipo); }
+    else {
+      const bl = partida.bolim, d = Math.hypot(bl.x - mira.x0, bl.z - Z_SOLTURA) - (mira.tipo === 'bochada' ? 0 : 0.08);
+      a = distParaForca(d - 0.4, mira.tipo); b = distParaForca(d + 0.4, mira.tipo);
+    }
+    zona.style.left = (a * 100).toFixed(1) + '%';
+    zona.style.width = ((b - a) * 100).toFixed(1) + '%';
+  }
+  const ult = marcas[partida.vez]?.[partida.fase === 'bolim' ? 'bolim' : mira.tipo];
+  $('forcaUltima').hidden = ult == null;
+  if (ult != null) $('forcaUltima').style.left = (ult * 100).toFixed(1) + '%';
+  for (const bt of document.querySelectorAll('#tipos button')) {
+    bt.classList.toggle('on', bt.dataset.tipo === mira.tipo);
+    bt.disabled = partida.fase === 'bolim' && bt.dataset.tipo !== 'rasteira';
+    bt.style.opacity = bt.disabled ? 0.4 : 1;
+  }
+  $('posTxt').textContent = Math.abs(mira.x0) < 0.01 ? 'centro' : `${Math.round(Math.abs(mira.x0) * 100)} cm ${mira.x0 < 0 ? 'à esq.' : 'à dir.'}`;
+  atualizarCaimento();
+}
 function escalarMira() {
-  if (!miraPrincipal.visible) return;
+  if (!miraPrincipal.visible && !usaForca()) return;
   const s = clamp(camera.position.distanceTo(miraPrincipal.position) * 0.16, 1, 5);
   miraPrincipal.scale.setScalar(s);
   marcaQueda.scale.setScalar(clamp(camera.position.distanceTo(marcaQueda.position) * 0.12, 1, 4.5));
@@ -1999,6 +2069,7 @@ function iniciarVez() {
     textoVez((ehVoce(t) ? 'Sua vez' : 'Vez ' + doLado(t)) + ponto);
     $('dica').textContent = P.fase === 'bolim'
       ? 'Jogue o bolim: ele tem que parar entre a linha do meio e a última linha.'
+      : usaForca() ? (TOQUE ? 'Arraste para os lados para mirar. Segure LANÇAR e solte na força certa.' : 'Arraste ou use as setas para mirar. Segure o Espaço (ou LANÇAR) e solte na força certa.')
       : TOQUE ? 'Arraste para mexer na mira, ou toque no lugar. Depois, LANÇAR.' : 'Arraste, toque ou use as setas para mirar. Espaço lança.';
   } else {
     estado = 'cpu';
@@ -2020,6 +2091,52 @@ function trocarTipo(tipo) {
   mira.tipo = tipo || ordem[(ordem.indexOf(mira.tipo) + 1) % 3];
   atualizarMira();
 }
+// Controle de força: a barra enche e esvazia enquanto o botão fica apertado, e a força vira distância.
+// Metade da barra cobre a zona do bolim (do meio até a última linha), para dar mais precisão ali.
+const FAIXAS = { rasteira: [[0, 2], [0.25, 12], [0.75, 22], [1, 32]], alto: [[0, 2], [0.25, 12], [0.75, 22], [1, 26]] };
+const VOLTA_BARRA = { facil: 3.6, normal: 3.0, dificil: 2.4 };  // segundos para ir de 0 a 100%
+const usaForca = () => config.mira === 'forca';
+const faixa = tipo => tipo === 'rasteira' || partida.fase === 'bolim' ? FAIXAS.rasteira : FAIXAS.alto;
+function forcaParaDist(f, tipo) {
+  const F = faixa(tipo);
+  for (let i = 1; i < F.length; i++) if (f <= F[i][0]) return lerp(F[i - 1][1], F[i][1], (f - F[i - 1][0]) / (F[i][0] - F[i - 1][0]));
+  return F[F.length - 1][1];
+}
+function distParaForca(d, tipo) {
+  const F = faixa(tipo);
+  for (let i = 1; i < F.length; i++) if (d <= F[i][1]) return clamp(lerp(F[i - 1][0], F[i][0], (d - F[i - 1][1]) / (F[i][1] - F[i - 1][1])), 0, 1);
+  return 1;
+}
+function direcaoMira() {
+  const dx = mira.tx - mira.x0, dz = mira.tz - Z_SOLTURA, L = Math.hypot(dx, dz) || 1;
+  return [dx / L, dz / L];
+}
+let carga = null;                 // { t0 } enquanto o botão está apertado
+const marcas = [{}, {}];          // onde cada lado soltou da última vez, por tipo de lançamento
+function valorCarga() {
+  const c = ((tempo - carga.t0) / VOLTA_BARRA[partida.nivel]) % 2;
+  return c < 1 ? c : 2 - c;
+}
+function iniciarCarga() { if (usaForca() && estado === 'mira' && !pausado && !carga) carga = { t0: tempo }; }
+function cancelarCarga() { carga = null; }
+function soltarCarga() {
+  if (!carga) return;
+  const f = valorCarga();
+  carga = null;
+  if (estado !== 'mira' || pausado) return;
+  const D = forcaParaDist(f, mira.tipo), [ux, uz] = direcaoMira();
+  marcas[partida.vez][partida.fase === 'bolim' ? 'bolim' : mira.tipo] = f;
+  executarLancamento({ x0: mira.x0, tipo: mira.tipo, tx: mira.x0 + ux * D, tz: Z_SOLTURA + uz * D }, RUIDO.forca, DUR_ARREMESSO * 0.42);
+}
+let forcaVisivel = false;
+function atualizarBarra() {
+  const ver = usaForca() && estado === 'mira' && !pausado;
+  if (ver !== forcaVisivel) { forcaVisivel = ver; $('forca').hidden = !ver; }
+  if (!ver) return;
+  const f = carga ? valorCarga() : 0;
+  $('forcaEnche').style.width = (f * 100).toFixed(1) + '%';
+  $('forcaTxt').textContent = Math.round(f * 100) + '%';
+}
 function lancarHumano() { if (estado === 'mira' && !pausado) executarLancamento({ ...mira }, RUIDO.jogador); }
 function ruidoAleatorio(esc, tipo) {
   return {
@@ -2027,7 +2144,7 @@ function ruidoAleatorio(esc, tipo) {
     ret: tipo === 'rasteira' ? 1 : clamp(1 + gauss() * 0.13, 0.7, 1.3), desvio: tipo === 'rasteira' ? 0 : gauss() * 0.018,
   };
 }
-function executarLancamento(jog, esc) {
+function executarLancamento(jog, esc, inicio = 0) {
   const P = partida, t = P.vez, bolim = P.fase === 'bolim';
   estado = 'arremesso';
   animMira = null;
@@ -2040,7 +2157,7 @@ function executarLancamento(jog, esc) {
   atualizarPlacar();
   const ruido = ruidoAleatorio(esc, jog.tipo);
   swing = {
-    t: 0, time: t, alto: jog.tipo !== 'rasteira', solto: false,
+    t: inicio, time: t, alto: jog.tipo !== 'rasteira', solto: false,
     soltar() {
       figuras[t].naMao.visible = false;
       const sit = situacao(P.bolas);
@@ -2486,6 +2603,7 @@ function atualizarJogo(dt) {
     }
   } else escalaTempo = 1;
   atualizarVisuais(dt);
+  atualizarBarra();
   if (estado === 'mira' || animMira) escalarMira();
   const bl = partida?.bolim;
   setaBolim.visible = !!bl?.ativa && partida.modo !== 'demo' && (estado === 'mira' || estado === 'cpu');
@@ -2591,7 +2709,7 @@ tela.addEventListener('pointermove', e => {
   } else { // quanto mais devagar o dedo, mais fino o ajuste
     const ganho = clamp(0.22 + Math.hypot(dx, dy) / dtm * 1.1, 0.22, 3) * fatorTela();
     mira.tx += dx * 0.0035 * ganho;
-    mira.tz += dy * 0.02 * ganho;
+    if (!usaForca()) mira.tz += dy * 0.02 * ganho;   // na força, arrastar só muda a direção
   }
   atualizarMira();
 });
@@ -2605,7 +2723,7 @@ function soltar(e) {
 tela.addEventListener('pointerup', soltar);
 tela.addEventListener('pointercancel', soltar);
 tela.addEventListener('wheel', e => {
-  if (estado !== 'mira' || pausado) return;
+  if (estado !== 'mira' || pausado || usaForca()) return;
   e.preventDefault();
   mira.tz += e.deltaY * (e.shiftKey ? 0.01 : 0.0025);
   atualizarMira();
@@ -2625,17 +2743,35 @@ addEventListener('keydown', e => {
     case 'a': case 'A': moverPosicao(-1); break;
     case 'd': case 'D': moverPosicao(1); break;
     case 't': case 'T': trocarTipo(); break;
-    case ' ': case 'Enter': e.preventDefault(); lancarHumano(); return;
+    case ' ': case 'Enter':
+      e.preventDefault();
+      if (!usaForca()) lancarHumano(); else if (!e.repeat) iniciarCarga();
+      return;
     default: return;
   }
   e.preventDefault();
   atualizarMira();
 });
-addEventListener('keyup', e => { if (e.key === ' ') acelerando = false; });
+addEventListener('keyup', e => {
+  if (e.key === ' ') acelerando = false;
+  if (e.key === ' ' || e.key === 'Enter') soltarCarga();
+});
 function botao(id, fn) {
   $(id).addEventListener('click', e => { iniciarAudio(); sons.clique(); e.currentTarget.blur(); fn(e); });
 }
-botao('bLancar', lancarHumano);
+{ // LANÇAR: na força, segura e solta; no círculo, um clique
+  const bt = $('bLancar');
+  bt.addEventListener('pointerdown', e => {
+    iniciarAudio();
+    if (!usaForca()) return;
+    e.preventDefault();
+    try { bt.setPointerCapture(e.pointerId); } catch (erro) {}
+    iniciarCarga();
+  });
+  bt.addEventListener('pointerup', soltarCarga);
+  bt.addEventListener('pointercancel', cancelarCarga);
+  bt.addEventListener('click', () => { bt.blur(); if (!usaForca()) { sons.clique(); lancarHumano(); } });
+}
 botao('bEsq', () => moverPosicao(-1));
 botao('bDir', () => moverPosicao(1));
 for (const bt of document.querySelectorAll('#tipos button')) bt.addEventListener('click', () => { iniciarAudio(); sons.clique(); bt.blur(); trocarTipo(bt.dataset.tipo); });
@@ -2643,6 +2779,7 @@ function emJogo() { return partida && partida.modo !== 'demo' && estado !== 'fim
 function alternarPausa() {
   if (!emJogo() || !$('ajuda').hidden) return;
   pausado = !pausado;
+  cancelarCarga();
   mostrarTela(pausado ? 'pausa' : null);
   arrasto = null; acelerando = false;
   if (pausado) sons.rolar(0);
@@ -2668,6 +2805,7 @@ function irMenu() {
 function atualizarMenu() {
   for (const b of document.querySelectorAll('#segNivel button')) b.classList.toggle('on', b.dataset.v === config.nivel);
   for (const b of document.querySelectorAll('#segMeta button')) b.classList.toggle('on', +b.dataset.v === config.meta);
+  for (const b of document.querySelectorAll('#segMira button')) b.classList.toggle('on', b.dataset.v === config.mira);
   for (const b of document.querySelectorAll('#segEu button')) b.classList.toggle('on', b.dataset.v === config.eu);
   for (const b of document.querySelectorAll('#segRival button')) b.classList.toggle('on', b.dataset.v === config.rival);
   { const r = personagem(config.rival); $('mJogar').textContent = `Jogar contra ${r.fem ? 'a' : 'o'} ${r.nome}`; }
@@ -2700,6 +2838,7 @@ for (const [id, chave, outra] of [['segEu', 'eu', 'rival'], ['segRival', 'rival'
     $(id).appendChild(b);
   }
 }
+for (const b of document.querySelectorAll('#segMira button')) b.addEventListener('click', () => { sons.clique(); config.mira = b.dataset.v; gravar('config', config); atualizarMenu(); });
 for (const b of document.querySelectorAll('#segMeta button')) b.addEventListener('click', () => { sons.clique(); config.meta = +b.dataset.v; gravar('config', config); atualizarMenu(); });
 botao('mJogar', () => novaPartida('cpu'));
 botao('m2j', () => novaPartida('2j'));
