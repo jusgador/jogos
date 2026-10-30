@@ -1518,9 +1518,6 @@ function buildHair(head, def, M) {
     box(head, 0.5, 0.09, 0.12, H, 0, -0.13, -0.2, 0.04);
     box(head, 0.3, 0.09, 0.07, H, -0.05, 0.41, 0.18, 0.03).rotation.z = 0.15;
     box(head, 0.06, 0.1, 0.43, plastic(0xb8b8b8, 0.6), 0.09, 0.495, 0, 0.02);       // mecha grisalha
-    const V = plastic(def.visor, 0.35);
-    box(head, 0.45, 0.07, 0.03, V, 0, 0.44, 0.205, 0.015);
-    box(head, 0.38, 0.025, 0.17, V, 0, 0.415, 0.28, 0.012);
   }
   if (st === 'short' || st === 'band' || st === 'bandShort') {
     box(head, 0.44, 0.09, 0.42, H, 0, 0.465, 0, 0.04);                                   // topo curto
@@ -1593,7 +1590,7 @@ const PERSONAGENS = [
     skirt: true, lashes: true, blush: true, fem: true },
   { id: 'lic', nome: 'Lícia', curto: 'Lícia', height: 1.56,
     skin: 0xeab98a, hair: 0xc9a46e, brow: '#8a6640', style: 'bob', shorts: 0xffffff, shirt: 0xffb31a, trim: 0xffffff,
-    skirt: true, lashes: true, blush: true, fem: true, visor: 0x14b8c4 },
+    skirt: true, lashes: true, blush: true, fem: true },
 ];
 const personagem = id => PERSONAGENS.find(p => p.id === id) || PERSONAGENS[1];
 const NP = 22;
