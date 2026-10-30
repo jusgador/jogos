@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icone-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>Truco do Clube</title>
+<style>
+  :root {
+    --nos: #6fe39a; --eles: #ff7a6b; --ouro: #f2c14e; --texto: #f6f1e4; --fraco: #b9cbbd;
+    --painel: #0f2a1c; --borda: #2f6346;
+    --seguro-topo: env(safe-area-inset-top, 0px);
+    --seguro-dir: env(safe-area-inset-right, 0px);
+    --seguro-baixo: env(safe-area-inset-bottom, 0px);
+    --seguro-esq: env(safe-area-inset-left, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1f14; color: var(--texto);
+    font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  button { font: inherit; color: inherit; }
+
+  /* A mesa: feltro verde com borda de madeira */
+  #mesa { position: fixed; inset: 0; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 46%, #2c8f59 0%, #1d6b42 48%, #0f4429 100%);
+    box-shadow: inset 0 0 0 7px #5a3418, inset 0 0 0 9px #3d220e, inset 0 0 80px rgba(0,0,0,.55); }
+  #mesa::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.018) 0 2px, transparent 2px 6px); }
+
+  /* Cartas */
+  .carta { position: absolute; width: var(--w); height: calc(var(--w) * 1.45); border-radius: calc(var(--w) * .08);
+    background: linear-gradient(160deg, #fffdf7, #efe8d6); color: #1b1b1b;
+    box-shadow: 0 1px 0 rgba(0,0,0,.25), 0 3px 8px rgba(0,0,0,.35);
+    font: 700 calc(var(--w) * .22)/1 Georgia, "Times New Roman", serif;
+    transition: left .35s ease, top .35s ease, transform .35s ease, opacity .35s ease, box-shadow .2s; }
+  .carta .c1 { position: absolute; left: .22em; top: .22em; width: 1em; text-align: center; }
+  .carta .c1 i { display: block; font-style: normal; font-size: .85em; margin-top: .06em; }
+  .carta .c2 { left: auto; top: auto; right: .22em; bottom: .22em; transform: rotate(180deg); }
+  .carta .meio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 2.3em; font-weight: 400; }
+  .carta .meio.fig { flex-direction: column; font-size: 1.8em; font-weight: 700; line-height: .95; }
+  .carta .meio.fig small { font-size: .6em; font-weight: 400; }
+  .carta.vermelha { color: #c41e2a; }
+  .carta.manilha { box-shadow: 0 0 0 2px var(--ouro), 0 3px 8px rgba(0,0,0,.35); }
+  .carta.manilha::after { content: '★'; position: absolute; right: .22em; top: .2em; font-size: .7em; color: #d39b12; }
+  .carta.verso { background-color: #8f1d22; border: calc(var(--w) * .05) solid #fbf8f0;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.13) 0 2px, transparent 2px 7px),
+                      repeating-linear-gradient(-45deg, rgba(255,255,255,.13) 0 2px, transparent 2px 7px); }
+  .carta.verso::after { display: none; }
+  .carta .logo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,.6); font-size: 1.5em; font-weight: 400; }
+  .carta.ganha { box-shadow: 0 0 0 3px var(--ouro), 0 0 20px rgba(242,193,78,.75); z-index: 2; }
+  .carta.mini { position: relative; display: inline-block; vertical-align: top; }
+  .carta.mini + .carta.mini { margin-left: calc(var(--w) * -.45); }
+  .carta.mini.aberta + .carta.mini.aberta { margin-left: calc(var(--w) * .08); }
+
+  #mao { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+  #mao .carta { pointer-events: auto; cursor: default; }
+  #mao.vez .carta { cursor: pointer; }
+  #mao.vez .carta:hover { transform: translateY(-9px); }
+  #mao .carta.entra { animation: entra .45s ease-out backwards; }
+  @keyframes entra { from { transform: translateY(-38vh) scale(.5); opacity: 0; } }
+  #mesaCartas { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+
+  /* Jogadores */
+  .jog { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    transform: translateX(-50%); z-index: 4; pointer-events: none; }
+  .jog .av { width: var(--av); height: var(--av); border-radius: 50%; overflow: hidden; background: #0c2f1f;
+    border: 2px solid rgba(255,255,255,.28); box-shadow: 0 2px 6px rgba(0,0,0,.4); transition: box-shadow .2s, border-color .2s; }
+  .jog .av svg { display: block; width: 100%; height: 100%; }
+  .jog .nome { font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 9px; background: rgba(0,0,0,.35); white-space: nowrap; }
+  .jog.t1 .nome { color: #ffd2cb; }
+  .jog.t0 .nome { color: #d5f7e1; }
+  .jog.vez .av { border-color: var(--ouro); box-shadow: 0 0 0 3px rgba(242,193,78,.55), 0 0 16px rgba(242,193,78,.6); }
+  .jog .costas { margin-top: 3px; white-space: nowrap; }
+  #j0, #mesa:not(.jogando) .jog { display: none; }
+
+  /* Placar e vira */
+  #placar { position: absolute; z-index: 6; left: calc(12px + var(--seguro-esq)); top: calc(10px + var(--seguro-topo));
+    background: rgba(5,25,15,.72); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 6px 9px; min-width: 104px; }
+  #placar .lin { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  #placar .lin b { font-size: 11px; letter-spacing: .08em; }
+  #placar .lin span { font: 800 20px/1.1 ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  #placar .nos { color: var(--nos); } #placar .eles { color: var(--eles); }
+  #vale { font-size: 11.5px; color: var(--fraco); margin-top: 2px; }
+  #vale b { color: var(--ouro); }
+  #dots { display: flex; gap: 4px; margin-top: 4px; }
+  #dots i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.35); }
+  #dots i.d0 { background: var(--nos); border-color: var(--nos); }
+  #dots i.d1 { background: var(--eles); border-color: var(--eles); }
+  #dots i.dE { background: #c9c3b0; border-color: #c9c3b0; }
+  #topoDir { position: absolute; z-index: 6; right: calc(12px + var(--seguro-dir)); top: calc(10px + var(--seguro-topo));
+    display: flex; gap: 8px; align-items: flex-start; }
+  #viraBox { background: rgba(5,25,15,.72); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 6px 8px;
+    display: flex; gap: 7px; align-items: center; }
+  #viraBox .carta { position: relative; }
+  #viraBox .txt { font-size: 11px; color: var(--fraco); line-height: 1.25; }
+  #viraBox .txt b { display: block; color: var(--ouro); font-size: 14px; }
+  .btIcone { width: 38px; height: 38px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(5,25,15,.72);
+    cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+
+  /* Ações, balões e avisos */
+  #acoes { position: absolute; z-index: 7; transform: translate(-50%, -50%); display: none; gap: 8px; align-items: center; }
+  #acoes.ver { display: flex; }
+  #acoes .vez { font-size: 13px; color: var(--ouro); font-weight: 700; padding: 0 4px; }
+  .bt { background: #1c4a31; border: 1px solid #3e7c58; border-radius: 10px; padding: 9px 15px; cursor: pointer; font-weight: 600; }
+  .bt:hover, .bt:focus-visible { border-color: var(--ouro); outline: none; }
+  .bt.truco { background: #c8352b; border-color: #ff8a7a; font-weight: 900; letter-spacing: .06em; font-size: 16px; padding: 9px 18px;
+    box-shadow: 0 3px 0 #7d1912; }
+  .bt.ativo { background: #f2c14e; color: #2a1c00; border-color: #fff0b8; }
+  .bt.grande { padding: 13px 18px; font-size: 17px; font-weight: 700; }
+  .bt.grande small { display: block; font-weight: 400; font-size: 12px; opacity: .8; }
+  .bt.prim { background: #2e8b57; border-color: #7cf2a6; }
+  .balao { position: absolute; z-index: 9; max-width: min(46vw, 230px); background: #fffef8; color: #1d1d1d; font-weight: 700;
+    padding: 7px 11px; border-radius: 14px; box-shadow: 0 3px 10px rgba(0,0,0,.4); font-size: 14px; opacity: 0;
+    transition: opacity .2s; pointer-events: none; }
+  .balao.ver { opacity: 1; }
+  #grito { position: absolute; z-index: 10; transform: translate(-50%, -50%); pointer-events: none; opacity: 0;
+    font: 900 clamp(40px, 13vw, 104px)/1 Impact, "Arial Black", system-ui, sans-serif; letter-spacing: .04em;
+    -webkit-text-stroke: 3px #2a0d08; text-shadow: 0 6px 0 rgba(0,0,0,.35); white-space: nowrap; }
+  #grito.t0 { color: var(--nos); } #grito.t1 { color: #ff5b47; }
+  #grito.ver { animation: grito 1.25s ease-out; }
+  @keyframes grito {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(2.4) rotate(-8deg); }
+    14% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-4deg); }
+    22% { transform: translate(-52%, -50%) scale(1.04) rotate(-3deg); }
+    30% { transform: translate(-48%, -50%) scale(1) rotate(-5deg); }
+    75% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1) rotate(-4deg); }
+  }
+  #aviso { position: absolute; z-index: 8; transform: translate(-50%, -50%); max-width: min(90vw, 460px); text-align: center;
+    background: rgba(5,22,13,.9); border: 1px solid var(--borda); border-radius: 12px; padding: 10px 16px; font-weight: 600;
+    opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #aviso.ver { opacity: 1; }
+  #aviso small { display: block; font-weight: 400; color: var(--fraco); margin-top: 2px; }
+  #painel { position: absolute; z-index: 11; transform: translate(-50%, -100%); width: min(92vw, 440px); display: none;
+    background: rgba(9,30,19,.96); border: 1px solid #4b8a65; border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  #painel.ver { display: block; }
+  #painel p { margin: 0 0 10px; }
+  #painel .cartasPainel { display: flex; gap: 8px; justify-content: center; margin: 0 0 10px; }
+  #painel .cartasPainel .carta { position: relative; }
+  .botoes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .botoes.col { flex-direction: column; align-items: stretch; }
+
+  /* Telas (menu, regras, turma, pausa, fim) */
+  .tela { position: fixed; inset: 0; z-index: 30; display: none; align-items: flex-start; justify-content: center; overflow: auto;
+    background: rgba(4,16,10,.9);
+    padding: calc(16px + var(--seguro-topo)) calc(16px + var(--seguro-dir)) calc(16px + var(--seguro-baixo)) calc(16px + var(--seguro-esq)); }
+  .tela.ver { display: flex; }
+  .caixa { width: 100%; max-width: 540px; margin: auto; background: var(--painel); border: 1px solid var(--borda); border-radius: 16px;
+    padding: 18px 18px 16px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .caixa h1 { margin: 0; font: 900 34px/1 Impact, "Arial Black", system-ui, sans-serif; letter-spacing: .05em; color: #ff6a55;
+    -webkit-text-stroke: 1px #3a0f09; }
+  .caixa h1 span { color: var(--texto); font-size: .62em; letter-spacing: .12em; -webkit-text-stroke: 0; }
+  .caixa h2 { margin: 0 0 10px; font-size: 22px; }
+  .caixa h3 { margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--fraco); }
+  .sub, .fraco { color: var(--fraco); font-size: 14px; }
+  .sub { margin: 6px 0 4px; }
+  .turma { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .turma button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 2px 6px; border-radius: 12px;
+    background: #143522; border: 2px solid transparent; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .turma button svg { width: 48px; height: 48px; border-radius: 50%; background: #0c2f1f; }
+  .turma button.sel { border-color: var(--ouro); background: #1d4a30; }
+  .turma button:disabled { opacity: .3; cursor: default; }
+  .opcoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; justify-content: center; }
+  .opcoes .bt { font-size: 13px; padding: 6px 10px; font-weight: 500; }
+  .caixa .botoes.col { margin-top: 16px; }
+  .regras p { margin: 0 0 9px; font-size: 14.5px; }
+  .regras b { color: var(--ouro); }
+  .ficha { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--borda); }
+  .ficha svg { width: 56px; height: 56px; flex: none; border-radius: 50%; background: #0c2f1f; }
+  .ficha h4 { margin: 0 0 3px; font-size: 16px; }
+  .ficha p { margin: 0; font-size: 13.5px; color: var(--fraco); }
+  .ficha p.leitura { color: var(--texto); margin-top: 5px; font-style: italic; }
+  .placarFim { font: 800 44px/1.1 ui-monospace, "Cascadia Mono", Consolas, monospace; text-align: center; margin: 8px 0; }
+  .placarFim .n { color: var(--nos); } .placarFim .e { color: var(--eles); }
+  .centro { text-align: center; }
+</style>
+</head>
+<body>
+<div id="mesa">
+  <div id="placar" aria-live="polite">
+    <div class="lin nos"><b>NÓS</b><span id="pNos">0</span></div>
+    <div class="lin eles"><b>ELES</b><span id="pEles">0</span></div>
+    <div id="vale"></div>
+    <div id="dots"></div>
+  </div>
+  <div id="topoDir">
+    <div id="viraBox" hidden><div id="viraCarta"></div><div class="txt">Manilha<b id="manilhaTxt"></b></div></div>
+    <button class="btIcone" id="btPausa" aria-label="Pausa">☰</button>
+  </div>
+  <div class="jog t0" id="j0"><div class="av"></div><span class="nome"></span><div class="costas" id="k0"></div></div>
+  <div class="jog t1" id="j1"><div class="av"></div><span class="nome"></span><div class="costas" id="k1"></div></div>
+  <div class="jog t0" id="j2"><div class="av"></div><span class="nome"></span><div class="costas" id="k2"></div></div>
+  <div class="jog t1" id="j3"><div class="av"></div><span class="nome"></span><div class="costas" id="k3"></div></div>
+  <div id="mesaCartas"></div>
+  <div id="mao"></div>
+  <div id="acoes"><span class="vez">Sua vez</span><button class="bt" id="bCobrir">Coberta</button><button class="bt truco" id="bTruco">TRUCO!</button></div>
+  <div class="balao" id="b0"></div><div class="balao" id="b1"></div><div class="balao" id="b2"></div><div class="balao" id="b3"></div>
+  <div id="aviso"></div>
+  <div id="grito"></div>
+  <div id="painel" role="dialog"><p id="painelTxt"></p><div class="cartasPainel" id="painelCartas"></div><div class="botoes" id="painelBotoes"></div></div>
+</div>
+
+<div class="tela ver" id="menu">
+  <div class="caixa">
+    <h1>TRUCO <span>DO CLUBE</span></h1>
+    <p class="sub">Truco paulista com a turma do clube: você e um parceiro contra uma dupla. Cada um tem o seu jeito de jogar. Aprenda a ler a turma.</p>
+    <h3>Você é</h3>
+    <div class="turma" id="escEu"></div>
+    <h3>Seu parceiro</h3>
+    <div class="turma" id="escParc"></div>
+    <p class="fraco" id="contra"></p>
+    <div class="botoes col">
+      <button class="bt grande prim" id="mContinuar" hidden>Continuar partida<small id="mContTxt"></small></button>
+      <button class="bt grande" id="mJogar">Nova partida<small id="mJogarTxt"></small></button>
+      <div class="botoes"><button class="bt" id="mTurma">A turma</button><button class="bt" id="mRegras">Regras</button><button class="bt" id="mJogos">Jogos</button></div>
+    </div>
+    <div class="opcoes" id="opcoesMenu"></div>
+    <p class="fraco centro" id="estatTxt"></p>
+  </div>
+</div>
+
+<div class="tela" id="pausa">
+  <div class="caixa">
+    <h2>Pausa</h2>
+    <div class="botoes col">
+      <button class="bt grande prim" id="pContinuar">Continuar</button>
+      <div class="botoes"><button class="bt" id="pRegras">Regras</button><button class="bt" id="pTurma">A turma</button><button class="bt" id="pJogos">Jogos</button></div>
+    </div>
+    <div class="opcoes" id="opcoesPausa"></div>
+    <div class="botoes col"><button class="bt" id="pAbandonar">Abandonar a partida<small class="fraco"> (conta como derrota)</small></button></div>
+    <p class="fraco centro">Saindo pelo botão Jogos, a partida fica guardada e recomeça na mão em que parou.</p>
+  </div>
+</div>
+
+<div class="tela" id="regras">
+  <div class="caixa regras">
+    <h2>Regras do truco paulista</h2>
+    <p><b>Times.</b> Você e o seu parceiro, à sua frente, contra a dupla dos lados. A vez passa para a direita: depois de você, joga quem está à sua direita.</p>
+    <p><b>Baralho.</b> 40 cartas, sem 8, 9 e 10. Da mais fraca para a mais forte: 4, 5, 6, 7, Q, J, K, A, 2, 3.</p>
+    <p><b>Vira e manilha.</b> Depois de dar as cartas, vira-se uma: a vira. A manilha é o valor seguinte ao dela (vira 7, manilha Q; vira 3, manilha 4). As quatro manilhas ganham de todas as outras cartas e, entre si, valem pelo naipe: ♦ ouros (pica-fumo), ♠ espadas (espadilha), ♥ copas e ♣ paus (zap), a mais forte do jogo.</p>
+    <p><b>Vazas.</b> Cada um recebe 3 cartas, e ganha a mão quem fizer duas das três vazas. Cartas do mesmo valor de times diferentes empatam a vaza. Com a primeira empatada, leva quem ganhar a segunda. Se a primeira tem dono e uma das seguintes empata, leva quem fez a primeira. Com três empates, ninguém pontua. Depois de uma vaza empatada, começa a próxima quem jogou primeiro a carta do empate.</p>
+    <p><b>Truco.</b> Na sua vez, antes de jogar, você pode pedir truco: a mão passa a valer 3. Os outros aceitam, correm (e você ganha o que a mão valia antes) ou aumentam para seis. Depois vêm nove e doze. Quem pediu por último não pode aumentar de novo: o próximo aumento é do outro time.</p>
+    <p><b>Pagou para ver.</b> Nesta mesa, quando um pedido é aceito, as cartas que sobraram nas mãos são mostradas no fim da mão. É assim que dá para descobrir quem estava blefando.</p>
+    <p><b>Carta coberta.</b> Da segunda vaza em diante, você pode jogar a carta virada para baixo. Ela perde de todas, mas esconde o seu jogo.</p>
+    <p><b>Mão de onze.</b> O time que chega a 11 vê as cartas do parceiro e decide se joga a mão, valendo 3, ou corre, dando 1 ponto aos outros. Nessa mão não há truco.</p>
+    <p><b>Mão de ferro.</b> No 11 a 11, todos jogam com as cartas viradas, sem ver nem as próprias. Quem ganhar a mão leva a partida.</p>
+    <p><b>Partida.</b> Vence quem fizer 12 pontos.</p>
+    <p><b>Controles.</b> Clique ou toque na carta para jogar. No teclado: 1, 2 e 3 jogam as cartas, T pede truco (ou aumenta), C liga a carta coberta, e na resposta A aceita e C corre. Esc pausa.</p>
+    <div class="botoes col"><button class="bt grande" data-voltar>Voltar</button></div>
+  </div>
+</div>
+
+<div class="tela" id="turmaTela">
+  <div class="caixa">
+    <h2>A turma</h2>
+    <p class="fraco">O que você já viu de cada um. Com o tempo, dá para ler o jeito de cada um jogar.</p>
+    <div id="fichas"></div>
+    <div class="botoes col"><button class="bt grande" data-voltar>Voltar</button></div>
+  </div>
+</div>
+
+<div class="tela" id="fim">
+  <div class="caixa centro">
+    <h2 id="fimTitulo"></h2>
+    <div class="placarFim"><span class="n" id="fimNos"></span> x <span class="e" id="fimEles"></span></div>
+    <p class="fraco" id="fimTxt"></p>
+    <div class="botoes col"><button class="bt grande prim" id="fNova">Jogar de novo</button><div class="botoes"><button class="bt" id="fMenu">Menu</button><button class="bt" id="fJogos">Jogos</button></div></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// =====================================================================
+//  Truco do Clube: truco paulista para 4, você e um parceiro CPU contra dois CPUs
+// =====================================================================
+const $ = id => document.getElementById(id);
+const rnd = Math.random;
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const pick = a => a[Math.floor(rnd() * a.length)];
+const ABORTA = { abortou: true };
+
+// ---------------------------------------------------------------------
+// 1. Persistência (localStorage, sempre com o prefixo "truco-")
+// ---------------------------------------------------------------------
+const PFX = 'truco-';
+function ler(k, padrao) { try { const s = localStorage.getItem(PFX + k); return s ? JSON.parse(s) : padrao; } catch (e) { return padrao; } }
+function gravar(k, v) { try { localStorage.setItem(PFX + k, JSON.stringify(v)); } catch (e) { /* cheio ou bloqueado */ } }
+function apagar(k) { try { localStorage.removeItem(PFX + k); } catch (e) { /* ignora */ } }
+
+const cfg = Object.assign({ eu: 'ric', parceiro: 'lic', som: true, voz: true, ritmo: 'normal', destacar: true }, ler('config', {}));
+const estat = Object.assign({ partidas: 0, vitorias: 0, derrotas: 0, seq: 0, recorde: 0, maos: 0 }, ler('estat', {}));
+const fichas = ler('fichas', {});
+// Como a turma lê você: pedidos seus que acabaram mostrados na mesa, e quantos eram blefe
+const voce = Object.assign({ pedidos: 0, mostrados: 0, blefes: 0 }, ler('voce', {}));
+function ficha(id) {
+  return fichas[id] || (fichas[id] = { maos: 0, maosPediu: 0, mostrados: 0, blefes: 0, seusPedidos: 0, correu: 0, aceitou: 0,
+    aumentou: 0, partidas: 0, vitoriasSuas: 0, comVoce: 0, vitoriasJuntos: 0 });
+}
+function gravarTudo() { gravar('estat', estat); gravar('fichas', fichas); gravar('voce', voce); }
+
+// ---------------------------------------------------------------------
+// 2. A turma (a mesma do Campos Tennis e da Bocha do Clube) e o jeito de cada um
+// ---------------------------------------------------------------------
+const TURMA = [
+  { id: 'leo', nome: 'Leonardo', curto: 'Leo', pele: '#f2c48d', cabelo: '#a0682f', sobr: '#6b4421', estilo: 'swoop', camisa: '#2f7bff' },
+  { id: 'ric', nome: 'Ricardo', curto: 'Ricardo', pele: '#e5b07a', cabelo: '#3d2a1c', sobr: '#3d2a1c', estilo: 'swoopGray', camisa: '#22b573' },
+  { id: 'bia', nome: 'Beatriz', curto: 'Bia', pele: '#f5d2ad', cabelo: '#6b3b1e', sobr: '#4a2814', estilo: 'princess', camisa: '#ff5fa8', fem: true },
+  { id: 'lic', nome: 'Lícia', curto: 'Lícia', pele: '#eab98a', cabelo: '#c9a46e', sobr: '#8a6640', estilo: 'bob', camisa: '#ffb31a', fem: true, viseira: '#14b8c4' },
+];
+const pessoa = id => TURMA.find(t => t.id === id) || TURMA[0];
+
+// chamar: chance mínima de ganhar a mão para pedir truco de verdade; blefe: chance de pedir sem jogo;
+// coragem: desloca o limite para aceitar; aumentar: chance mínima para devolver o aumento;
+// fidelidade: quanto a fala entrega a mão (1 = sempre); leitura: quanto presta atenção nos blefes dos outros;
+// tempoForte/tempoFraco: quanto demora para responder um truco, com mão boa e com mão fraca.
+const PERS = {
+  leo: { chamar: .6, blefe: .24, coragem: .12, aumentar: .74, fidelidade: .8, leitura: .2, cobre: .3, tempoForte: 450, tempoFraco: 450,
+    leituraTxt: 'Pede truco com qualquer coisa e quase nunca corre. Quando ele grita demais, é blefe.',
+    falas: {
+      forte: { pede: ['Truco.', 'Truco. Vai encarar?', 'Truco, e é sério.'], aumenta: ['{v}. Pode vir.', '{v}. Desce, se tiver coragem.'] },
+      fraco: { pede: ['Truco, marreco!', 'TRUCO! Corre que é melhor!', 'Truco, truco, truco!'], aumenta: ['{v}! {v}! {v}!', '{v}, marreco! Corre!'] },
+      aceita: ['Desce!', 'Cai pra dentro!', 'Manda!'], corre: ['Essa eu deixo...', 'Vai, leva.'],
+      ganhou: ['Ê, beleza!', 'Toma!', 'Sabia!'], perdeu: ['Sorte...', 'Na próxima.'], pego: ['Ih, me pegaram!', 'Era pra colar...'] } },
+  bia: { chamar: .78, blefe: .04, coragem: -.14, aumentar: .86, fidelidade: .85, leitura: .3, cobre: .2, tempoForte: 600, tempoFraco: 1900,
+    leituraTxt: 'Só pede truco quando tem jogo e corre fácil. Quando ela demora para responder, é porque está fraca.',
+    falas: {
+      forte: { pede: ['Truco!', 'Agora vai: truco!', 'Truco, gente!'], aumenta: ['{v}!', '{v}, e não volto atrás!'] },
+      fraco: { pede: ['Tru... truco?', 'Truco... eu acho.', 'Truco! Será?'], aumenta: ['{v}...?', 'Ai... {v}!'] },
+      aceita: ['Tá bom, desce.', 'Aceito!', 'Vamos ver.'], corre: ['Ai, não. Corro.', 'Tô fora.', 'Melhor não.'],
+      ganhou: ['Eba!', 'Isso!', 'Viu só?'], perdeu: ['Poxa...', 'Ah, não!'], pego: ['Fui pega...', 'Não conta pra ninguém.'] } },
+  lic: { chamar: .66, blefe: .09, coragem: 0, aumentar: .8, fidelidade: .5, leitura: 1, cobre: .55, tempoForte: 1000, tempoFraco: 1050, placar: true,
+    leituraTxt: 'Joga pela conta e pelo placar: arrisca mais quando está perdendo. A fala dela não entrega nada.',
+    falas: {
+      forte: { pede: ['Truco. Faz a conta.', 'Truco, minha gente.', 'Truco.'], aumenta: ['{v}. Calculado.', '{v}.'] },
+      fraco: { pede: ['Truco. Pensa bem.', 'Truco, minha gente.', 'Truco.'], aumenta: ['{v}. Pensa bem.', '{v}.'] },
+      aceita: ['Aceito.', 'Desce.', 'Pode ser.'], corre: ['Não compensa.', 'Passo.'],
+      ganhou: ['Como previsto.', 'Probabilidade.'], perdeu: ['Faz parte.', 'Estatística.'], pego: ['Valeu a tentativa.', 'Risco calculado.'] } },
+  ric: { chamar: .9, blefe: .06, coragem: .05, aumentar: .68, fidelidade: .7, leitura: .5, cobre: .4, tempoForte: 1800, tempoFraco: 700,
+    leituraTxt: 'Quase nunca pede truco primeiro, mas, quando você pede, aumenta se tiver jogo. Quando ele demora para responder, cuidado.',
+    falas: {
+      forte: { pede: ['Truco.', 'Hmm... truco.'], aumenta: ['{v}.', 'Hmm... {v}.', '{v}. Pensa bem.'] },
+      fraco: { pede: ['Truco!', 'TRUCO, rapaz!'], aumenta: ['{v}!', '{v}, rapaz!'] },
+      aceita: ['Desce.', 'Hmm... desce.', 'Pode vir.'], corre: ['Leva.', 'Essa não.'],
+      ganhou: ['Hehe.', 'Experiência.'], perdeu: ['Hmm.', 'Tá bom.'], pego: ['Hehe, quase.', 'Tentei.'] } },
+};
+
+function avatarSVG(p) {
+  const c = p.cabelo;
+  let tras = '', frente = '';
+  if (p.estilo === 'princess') tras = `<path d="M17 28c-3 12-1 22 4 30h22c5-8 7-18 4-30Z" fill="${c}"/>`;
+  if (p.estilo === 'bob') tras = `<path d="M16 30c-1 8 0 13 3 16h26c3-3 4-8 3-16Z" fill="${c}"/>`;
+  if (p.estilo === 'swoop' || p.estilo === 'swoopGray') {
+    frente = `<path d="M18.5 28c-1-10 5-16 13.5-16s14.5 6 13.5 15c-4-5-9-6-15-5 2 1 3 2 3 4-6-3-11-1-15 2Z" fill="${c}"/>`;
+    if (p.estilo === 'swoopGray') frente += '<path d="M19.5 29c-.6-2-.6-4 0-6M44.5 29c.6-2 .6-4 0-6" stroke="#a8a8a8" stroke-width="2.2" fill="none" stroke-linecap="round"/>';
+  } else if (p.estilo === 'princess') {
+    frente = `<path d="M18.5 31c-1-11 5.5-19 13.5-19s14.5 8 13.5 19c-3-6-7-9-13.5-9-6 0-10.5 3-13.5 9Z" fill="${c}"/>`;
+  } else if (p.estilo === 'bob') {
+    frente = `<path d="M18.5 32c-1-11 4.5-19 13.5-19s14.5 8 13.5 19c-2-5-3-7-5-8-5 1-12 1-17-1-2 3-4 6-5 9Z" fill="${c}"/>` +
+      `<path d="M17.5 21.5c7-3.5 22-3.5 29 0v3.5c-8-3-21-3-29 0Z" fill="${p.viseira}"/><path d="M19 25c6-2 20-2 26 0l3 3c-10-2.5-22-2.5-32 0Z" fill="${p.viseira}" opacity=".85"/>`;
+  }
+  const rubor = p.fem ? '<circle cx="24.5" cy="35.5" r="2.1" fill="#ff8fa3" opacity=".45"/><circle cx="39.5" cy="35.5" r="2.1" fill="#ff8fa3" opacity=".45"/>' : '';
+  const cilios = p.fem ? '<path d="M25 30.2l-1.2-1M39 30.2l1.2-1" stroke="#2a1a10" stroke-width=".9"/>' : '';
+  return `<svg viewBox="0 0 64 64" aria-hidden="true">${tras}` +
+    `<path d="M8 66c1-11 10-18 24-18s23 7 24 18Z" fill="${p.camisa}"/>` +
+    `<rect x="28" y="40" width="8" height="9" fill="${p.pele}"/><path d="M26.5 47.5l5.5 5 5.5-5" stroke="#fff" stroke-width="1.8" fill="none"/>` +
+    `<circle cx="19.5" cy="31" r="2.6" fill="${p.pele}"/><circle cx="44.5" cy="31" r="2.6" fill="${p.pele}"/>` +
+    `<circle cx="32" cy="29.5" r="13" fill="${p.pele}"/>${frente}` +
+    `<circle cx="27" cy="31" r="1.6" fill="#2a1a10"/><circle cx="37" cy="31" r="1.6" fill="#2a1a10"/>${cilios}` +
+    `<path d="M24.5 27.4h5M34.5 27.4h5" stroke="${p.sobr}" stroke-width="1.4" stroke-linecap="round"/>` +
+    `<path d="M28.5 36.5q3.5 2.6 7 0" stroke="#7a3b2a" stroke-width="1.4" fill="none" stroke-linecap="round"/>${rubor}</svg>`;
+}
+
+// ---------------------------------------------------------------------
+// 3. Cartas e regras
+// ---------------------------------------------------------------------
+const VAL = ['4', '5', '6', '7', 'Q', 'J', 'K', 'A', '2', '3'];
+const NAIPE = ['♦', '♠', '♥', '♣'];                  // ordem das manilhas: ouros < espadas < copas < paus
+const NOME_NAIPE = ['ouros', 'espadas', 'copas', 'paus'];
+const NOME_VAL = { Q: 'dama', J: 'valete', K: 'rei', A: 'ás' };
+const VALOR_NOME = { 3: 'Truco', 6: 'Seis', 9: 'Nove', 12: 'Doze' };
+const PROX = { 1: 3, 3: 6, 6: 9, 9: 12 };
+const time = s => s % 2;                              // 0 = nós (lugares 0 e 2), 1 = eles (1 e 3)
+
+function baralho() { const b = []; for (let v = 0; v < 10; v++) for (let n = 0; n < 4; n++) b.push({ v, n, id: v * 4 + n }); return b; }
+function embaralhar(a, ate = a.length) {
+  for (let i = 0; i < ate && i < a.length - 1; i++) { const j = i + Math.floor(rnd() * (a.length - i)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+// Força de uma carta: 0 a 9 pela ordem normal; manilhas de 10 (ouros) a 13 (zap). Carta coberta vale -1.
+const forcaDe = (c, manilha) => c.v === manilha ? 10 + c.n : c.v;
+const nomeCarta = c => `${NOME_VAL[VAL[c.v]] || VAL[c.v]} de ${NOME_NAIPE[c.n]}`;
+
+// Resultado de uma vaza: mesa = [{ s, f }] na ordem em que foram jogadas
+function resultadoVaza(mesa) {
+  let max = -2; for (const j of mesa) if (j.f > max) max = j.f;
+  let primeiro = null, t0 = false, t1 = false;
+  for (const j of mesa) if (j.f === max) { if (!primeiro) primeiro = j; if (time(j.s)) t1 = true; else t0 = true; }
+  return { time: t0 && t1 ? 'E' : time(primeiro.s), seat: primeiro.s };
+}
+// Quem ganhou a mão, pelas vazas até aqui (0, 1 ou 'E' de empate): 0, 1, 'N' (ninguém) ou undefined (segue)
+function decidir(vz) {
+  let g0 = 0, g1 = 0; for (const r of vz) { if (r === 0) g0++; else if (r === 1) g1++; }
+  if (g0 >= 2) return 0; if (g1 >= 2) return 1;
+  if (vz.length === 2) {
+    if (vz[0] === 'E' && vz[1] !== 'E') return vz[1];
+    if (vz[0] !== 'E' && vz[1] === 'E') return vz[0];
+  }
+  if (vz.length === 3) return vz[2] !== 'E' ? vz[2] : vz[0] !== 'E' ? vz[0] : 'N';
+  return undefined;
+}
+
+// ---------------------------------------------------------------------
+// 4. A cabeça da CPU: simula o resto da mão muitas vezes com as cartas que ela não conhece
+// ---------------------------------------------------------------------
+// Jogada simples usada nas simulações: ganha barato, poupa carta quando o parceiro já está ganhando
+function jogadaSimples(mao, mesa, s, vz) {
+  if (mao.length === 1) return 0;
+  let iMax = 0, iMin = 0;
+  for (let i = 1; i < mao.length; i++) { if (mao[i] > mao[iMax]) iMax = i; if (mao[i] < mao[iMin]) iMin = i; }
+  if (!mesa.length) return vz.length && vz[0] === time(s) ? iMin : iMax;
+  let best = -2, bs = -1; for (const j of mesa) if (j.f > best) { best = j.f; bs = j.s; }
+  if (time(bs) === time(s)) return iMin;
+  let iw = -1; for (let i = 0; i < mao.length; i++) if (mao[i] > best && (iw < 0 || mao[i] < mao[iw])) iw = i;
+  if (iw >= 0) return iw;
+  for (let i = 0; i < mao.length; i++) if (mao[i] === best) return i;
+  return iMin;
+}
+function rollout(maos, mesa, prox, vz) {
+  vz = vz.slice();
+  while (true) {
+    while (mesa.length < 4) {
+      const h = maos[prox], i = jogadaSimples(h, mesa, prox, vz);
+      mesa.push({ s: prox, f: h[i] }); h.splice(i, 1);
+      prox = (prox + 1) % 4;
+    }
+    const r = resultadoVaza(mesa); vz.push(r.time);
+    const d = decidir(vz);
+    if (d !== undefined) return d;
+    mesa = []; prox = r.seat;
+  }
+}
+const parceiroVisivel = s => G.mao.tipo === 'onze' && time(s) === G.mao.timeOnze;
+// Sorteia as mãos que s não conhece, a partir das cartas que ainda podem estar com os outros
+function amostras(s, n, ver) {
+  const M = G.mao, conhecidas = new Set([M.vira.id]);
+  for (const c of M.cartas[s]) conhecidas.add(c.id);
+  if (ver) for (const c of M.cartas[(s + 2) % 4]) conhecidas.add(c.id);
+  for (const j of M.jogadas) if (!j.coberta || j.s === s) conhecidas.add(j.c.id);
+  const pool = baralho().filter(c => !conhecidas.has(c.id)).map(c => forcaDe(c, M.manilha));
+  let precisa = 0; for (let t = 0; t < 4; t++) if (t !== s && !(ver && t === (s + 2) % 4)) precisa += M.cartas[t].length;
+  const res = [];
+  for (let k = 0; k < n; k++) {
+    embaralhar(pool, precisa);
+    let p = 0; const maos = [];
+    for (let t = 0; t < 4; t++) {
+      if (t === s || (ver && t === (s + 2) % 4)) maos.push(null);
+      else { const q = M.cartas[t].length; maos.push(pool.slice(p, p + q)); p += q; }
+    }
+    res.push(maos);
+  }
+  return res;
+}
+// Chance de o time de s ganhar a mão; com "jogar", s joga essa carta agora
+function chance(s, jogar, amos, ver) {
+  const M = G.mao, f = c => forcaDe(c, M.manilha);
+  const minhas = M.cartas[s].map(f), parc = ver ? M.cartas[(s + 2) % 4].map(f) : null;
+  const mesa0 = M.mesa.map(j => ({ s: j.s, f: j.coberta ? -1 : f(j.c) }));
+  let soma = 0;
+  for (const a of amos) {
+    const maos = a.map((h, t) => t === s ? minhas.slice() : h ? h.slice() : parc.slice());
+    const mesa = mesa0.slice(); let prox = M.vez;
+    if (jogar) { mesa.push({ s, f: jogar.coberta ? -1 : maos[s][jogar.i] }); maos[s].splice(jogar.i, 1); prox = (s + 1) % 4; }
+    const r = rollout(maos, mesa, prox, M.vz);
+    soma += r === time(s) ? 1 : r === 'N' ? .5 : 0;
+  }
+  return soma / amos.length;
+}
+const chanceDe = (s, n = 160) => { const ver = parceiroVisivel(s); return chance(s, null, amostras(s, n, ver), ver); };
+
+const podePedir = s => { const M = G.mao; return M.tipo === 'normal' && M.valor < 12 && M.ultimo !== time(s); };
+const podeCobrir = () => G.mao.tipo !== 'ferro' && G.mao.vz.length >= 1;
+
+function cpuQuerPedir(s) {
+  if (!podePedir(s)) return null;
+  const M = G.mao, P = PERS[G.seats[s]], p = chanceDe(s);
+  let lim = P.chamar;
+  if (P.placar) lim -= clamp((G.pontos[1 - time(s)] - G.pontos[time(s)]) * .015, -.06, .12);
+  if (p >= lim) return { forte: true, p };
+  if (rnd() < P.blefe * [.45, 1, 1.3][M.vz.length]) return { forte: false, p };
+  return null;
+}
+function cpuEscolhe(s) {
+  const M = G.mao, h = M.cartas[s], P = PERS[G.seats[s]];
+  if (M.tipo === 'ferro') return { i: Math.floor(rnd() * h.length), coberta: false };
+  let i = 0;
+  if (h.length > 1) {
+    const ver = parceiroVisivel(s), amos = amostras(s, 160, ver);   // as mesmas amostras para todas as cartas
+    let melhor = -9;
+    for (let k = 0; k < h.length; k++) {
+      const p = chance(s, { i: k }, amos, ver) - forcaDe(h[k], M.manilha) * .003;   // empate: guarda a carta forte
+      if (p > melhor) { melhor = p; i = k; }
+    }
+  }
+  // Cobre a carta que não faz diferença: perde da mesa, ou o parceiro já leva e ela é a última
+  let coberta = false;
+  if (podeCobrir() && M.mesa.length) {
+    const f = forcaDe(h[i], M.manilha);
+    let best = -2, bs = -1; for (const j of M.mesa) { const g = j.coberta ? -1 : forcaDe(j.c, M.manilha); if (g > best) { best = g; bs = j.s; } }
+    const inutil = f < best || (M.mesa.length === 3 && time(bs) === time(s));
+    coberta = inutil && rnd() < P.cobre;
+  }
+  return { i, coberta };
+}
+// Resposta de um time de CPUs a um pedido: fala quem tem a melhor mão
+function cpuResponde(t, pedido, quemPediu) {
+  const M = G.mao;
+  let best = null;
+  for (const s of [t, t + 2]) { const p = chanceDe(s); if (!best || p > best.p) best = { s, p }; }
+  const P = PERS[G.seats[best.s]];
+  // Quanto acreditar no pedido: de você, pelo que a turma já viu; dos amigos, pelo jeito de cada um
+  let taxa = quemPediu === 0 ? (voce.blefes + 1) / (voce.mostrados + 5) : PERS[G.seats[quemPediu]].blefe;
+  taxa = .15 + (taxa - .15) * P.leitura;
+  // Cada aumento é sinal de mão mais forte: no doze, quase ninguém está blefando
+  const nivel = { 3: 0, 6: 1, 9: 2, 12: 3 }[pedido];
+  const pa = best.p * (1 - Math.min(.85, clamp(.35 - taxa * .8, .05, .35) * (1 + nivel)));
+  const meus = G.pontos[t], deles = G.pontos[1 - t];
+  let lim = (pedido - M.valor) / (2 * pedido) + .08 - P.coragem;
+  if (P.placar) { if (deles + pedido >= 12) lim += .06; if (meus < deles - 4) lim -= .06; }
+  let resp = deles + M.valor >= 12 || pa >= lim ? 'aceita' : 'corre';     // correr que entrega a partida, nunca
+  if (pedido < 12) {
+    if (resp === 'aceita' && (pa >= P.aumentar + .1 * nivel || (nivel === 0 && rnd() < P.blefe * .35))) resp = 'aumenta';
+    else if (resp === 'corre' && nivel === 0 && rnd() < P.blefe * .25) resp = 'aumenta';
+  }
+  return { resp, s: best.s, p: best.p, forte: pa >= .5 };
+}
+
+// ---------------------------------------------------------------------
+// 5. Som e voz (feitos por código)
+// ---------------------------------------------------------------------
+let ac = null, ruidoBuf = null;
+function iniciarAudio() {
+  if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+  try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+  const n = ac.sampleRate * .5; ruidoBuf = ac.createBuffer(1, n, ac.sampleRate);
+  const d = ruidoBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+}
+function ruido(dur, freq, q, vol, tipo, t0 = 0) {
+  const t = ac.currentTime + t0, src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = ruidoBuf; f.type = tipo; f.frequency.value = freq; f.Q.value = q;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  src.connect(f).connect(g).connect(ac.destination); src.start(t, Math.random() * .3); src.stop(t + dur + .02);
+}
+function tom(freq, dur, vol, tipo = 'sine', t0 = 0, freqFim) {
+  const t = ac.currentTime + t0, o = ac.createOscillator(), g = ac.createGain();
+  o.type = tipo; o.frequency.setValueAtTime(freq, t); if (freqFim) o.frequency.exponentialRampToValueAtTime(freqFim, t + dur);
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + .02);
+}
+const SONS = {
+  carta() { ruido(.07, 2600, .8, .4, 'bandpass'); ruido(.05, 500, 1, .25, 'lowpass', .012); },
+  tapa() { tom(95, .28, .8, 'sine', 0, 42); ruido(.14, 1100, .7, .7, 'lowpass'); ruido(.05, 3000, 1, .25, 'bandpass'); },
+  embaralhar() { for (let i = 0; i < 12; i++) ruido(.03, 2800 + rnd() * 1200, 1, .14, 'bandpass', i * .04); },
+  vaza() { ruido(.06, 1800, .8, .25, 'bandpass'); },
+  ganhou() { tom(523, .14, .16, 'triangle'); tom(659, .14, .16, 'triangle', .11); tom(784, .26, .16, 'triangle', .22); },
+  perdeu() { tom(392, .2, .15, 'triangle'); tom(311, .36, .15, 'triangle', .17); },
+  vitoria() { [523, 659, 784, 1047].forEach((f, i) => tom(f, .3, .18, 'triangle', i * .13)); tom(1047, .7, .14, 'triangle', .55); },
+  derrota() { [392, 349, 311, 262].forEach((f, i) => tom(f, .35, .15, 'triangle', i * .18)); },
+};
+function som(nome) { if (!cfg.som || !ac) return; try { SONS[nome](); } catch (e) { /* sem áudio */ } }
+
+let vozPt = null;
+function carregarVozes() {
+  const vs = speechSynthesis.getVoices();
+  vozPt = vs.find(v => /^pt[-_]BR/i.test(v.lang)) || vs.find(v => /^pt/i.test(v.lang)) || null;
+  montarOpcoes();
+}
+if ('speechSynthesis' in window) { carregarVozes(); speechSynthesis.onvoiceschanged = carregarVozes; }
+function falarVoz(txt, s) {
+  if (!cfg.voz || !cfg.som || !vozPt) return;
+  try {
+    const u = new SpeechSynthesisUtterance(txt.replace(/\.\.\./g, ','));
+    u.voice = vozPt; u.lang = vozPt.lang; u.rate = 1.12;
+    u.pitch = { leo: 1.05, ric: .75, bia: 1.5, lic: 1.3 }[G.seats[s]] ?? 1;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch (e) { /* sem voz */ }
+}
+
+// ---------------------------------------------------------------------
+// 6. Mesa na tela: posições, cartas, balões
+// ---------------------------------------------------------------------
+const seguro = { topo: 0, dir: 0, baixo: 0, esq: 0 };
+let L = null;
+function layout() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k in seguro) seguro[k] = parseFloat(cs.getPropertyValue('--seguro-' + k)) || 0;
+  const W = Math.max(1, innerWidth), H = Math.max(1, innerHeight);
+  const topo = seguro.topo + 6, base = H - seguro.baixo - 10;
+  const hw = clamp(Math.min(W * .25, H * .16), 56, 108), hh = hw * 1.45;
+  const cw = clamp(Math.min(W * .18, H * .105), 42, 84), ch = cw * 1.45;
+  const av = clamp(Math.min(W * .13, H * .085), 40, 64);
+  const maoY = base - hh / 2, acoesY = base - hh - 30;
+  const cx = W / 2, cy = (topo + av + 70 + acoesY - 26) / 2;
+  const dx = Math.min(W / 2 - av / 2 - 14 - Math.max(seguro.esq, seguro.dir), cw * 3.4);
+  L = { W, H, hw, cw, ch, av, mw: cw * .5, maoY, acoesY, cx, cy,
+    slot: [{ x: cx, y: cy + ch * .62 }, { x: cx + cw * 1.18, y: cy }, { x: cx, y: cy - ch * .62 }, { x: cx - cw * 1.18, y: cy }],
+    avp: [{ x: cx, y: acoesY - 6 }, { x: cx + dx, y: cy - av * .55 }, { x: cx, y: topo + 8 + av / 2 }, { x: cx - dx, y: cy - av * .55 }] };
+  const raiz = $('mesa').style;
+  raiz.setProperty('--av', av + 'px');
+  for (let s = 1; s < 4; s++) { const el = $('j' + s); el.style.left = L.avp[s].x + 'px'; el.style.top = (L.avp[s].y - av / 2) + 'px'; }
+  $('acoes').style.left = cx + 'px'; $('acoes').style.top = acoesY + 'px';
+  const pn = $('painel').style; pn.left = cx + 'px'; pn.top = (acoesY + 24) + 'px';
+  const avs = $('aviso').style; avs.left = cx + 'px'; avs.top = cy + 'px';
+  const gr = $('grito').style; gr.left = cx + 'px'; gr.top = cy + 'px';
+  posicionarBaloes();
+  if (G && G.mao) { renderMao(); for (let s = 1; s < 4; s++) renderCostas(s); renderVira(); }
+  for (const j of naMesa) { j.el.style.setProperty('--w', L.cw + 'px'); moverPara(j.el, L.slot[j.s].x, L.slot[j.s].y, L.cw); }
+}
+addEventListener('resize', layout);
+document.addEventListener('fullscreenchange', layout);
+document.addEventListener('webkitfullscreenchange', layout);
+
+function moverPara(el, x, y, w) { el.style.left = (x - w / 2) + 'px'; el.style.top = (y - w * .725) + 'px'; }
+function criarCarta(c, { verso = false, manilha = false, w } = {}) {
+  const el = document.createElement('div');
+  el.className = 'carta';
+  if (w) el.style.setProperty('--w', w + 'px');
+  if (verso || !c) { el.classList.add('verso'); el.innerHTML = '<span class="logo">♣</span>'; return el; }
+  const v = VAL[c.v], n = NAIPE[c.n], fig = c.v >= 4 && c.v <= 6;
+  if (c.n === 0 || c.n === 2) el.classList.add('vermelha');
+  if (manilha) el.classList.add('manilha');
+  el.innerHTML = `<span class="c1">${v}<i>${n}</i></span><span class="meio${fig ? ' fig' : ''}">${fig ? v + '<small>' + n + '</small>' : n}</span><span class="c1 c2">${v}<i>${n}</i></span>`;
+  return el;
+}
+const ehManilha = c => cfg.destacar && c.v === G.mao.manilha;
+
+const posMao = (i, n) => ({ x: L.cx + (i - (n - 1) / 2) * L.hw * 1.12, y: L.maoY });
+function renderMao(entrada) {
+  const el = $('mao'); el.innerHTML = '';
+  if (!G || !G.mao) return;
+  const M = G.mao, h = M.cartas[0], ferro = M.tipo === 'ferro';
+  h.forEach((c, i) => {
+    const d = criarCarta(c, { verso: ferro, manilha: !ferro && ehManilha(c), w: L.hw });
+    d.dataset.i = i; moverPara(d, posMao(i, h.length).x, L.maoY, L.hw);
+    d.setAttribute('role', 'button'); d.setAttribute('aria-label', ferro ? `Carta ${i + 1}, virada` : nomeCarta(c));
+    if (entrada) { d.classList.add('entra'); d.style.animationDelay = (i * .12) + 's'; }
+    el.appendChild(d);
+  });
+}
+function renderCostas(s) {
+  const el = $('k' + s); el.innerHTML = '';
+  if (!G || !G.mao) return;
+  const M = G.mao, aberta = M.revelar || (s === 2 && M.tipo === 'onze' && M.timeOnze === 0);
+  for (const c of M.cartas[s]) {
+    const d = criarCarta(c, { verso: !aberta, manilha: aberta && ehManilha(c), w: aberta ? L.cw * .72 : L.mw });
+    d.classList.add('mini'); if (aberta) d.classList.add('aberta');
+    el.appendChild(d);
+  }
+}
+function renderVira() {
+  const box = $('viraBox');
+  if (!G || !G.mao) { box.hidden = true; return; }
+  box.hidden = false;
+  const vc = $('viraCarta'); vc.innerHTML = '';
+  vc.appendChild(criarCarta(G.mao.vira, { w: clamp(L.cw * .6, 30, 46) }));
+  $('manilhaTxt').textContent = VAL[G.mao.manilha];
+}
+function montarJogadores() {
+  for (let s = 0; s < 4; s++) {
+    const p = pessoa(G.seats[s]), el = $('j' + s);
+    el.querySelector('.av').innerHTML = avatarSVG(p);
+    el.querySelector('.nome').textContent = s === 0 ? 'Você' : p.curto;
+  }
+}
+function marcarVez(s) { for (let k = 1; k < 4; k++) $('j' + k).classList.toggle('vez', k === s); }
+
+let naMesa = [];
+function limparMesa() { $('mesaCartas').innerHTML = ''; naMesa = []; }
+function animarParaMesa(s, c, coberta, de, escala) {
+  const w = L.cw, el = criarCarta(c, { verso: coberta, w });
+  const rot = (rnd() - .5) * 14;
+  el.style.transition = 'none'; moverPara(el, de.x, de.y, w); el.style.transform = `scale(${escala}) rotate(${rot * 2}deg)`; el.style.opacity = '.9';
+  $('mesaCartas').appendChild(el); el.getBoundingClientRect();
+  el.style.transition = ''; moverPara(el, L.slot[s].x, L.slot[s].y, w); el.style.transform = `rotate(${rot}deg)`; el.style.opacity = '1';
+  naMesa.push({ el, s });
+}
+
+const timersBalao = [];
+function posicionarBaloes() {
+  if (!L) return;
+  const a = L.avp, av = L.av;
+  const pos = [
+    [a[0].x, a[0].y - 22, 'translate(-50%,-100%)'],
+    [a[1].x - av / 2 - 8, a[1].y, 'translate(-100%,-50%)'],
+    [a[2].x, a[2].y + av / 2 + 22, 'translate(-50%,0)'],
+    [a[3].x + av / 2 + 8, a[3].y, 'translate(0,-50%)'],
+  ];
+  pos.forEach(([x, y, t], s) => { const b = $('b' + s).style; b.left = x + 'px'; b.top = y + 'px'; b.transform = t; });
+}
+function balao(s, txt, ms = 2300) {
+  const b = $('b' + s); b.textContent = txt; b.classList.add('ver');
+  clearTimeout(timersBalao[s]); timersBalao[s] = setTimeout(() => b.classList.remove('ver'), ms);
+}
+function calarBaloes() { for (let s = 0; s < 4; s++) { clearTimeout(timersBalao[s]); $('b' + s).classList.remove('ver'); } }
+function grito(txt, t) {
+  const g = $('grito'); g.textContent = txt; g.className = 't' + t;
+  g.getBoundingClientRect(); g.classList.add('ver');
+}
+let timerAviso = 0;
+function aviso(txt, sub = '', ms = 1900) {
+  const a = $('aviso'); a.innerHTML = ''; a.append(txt);
+  if (sub) { const sm = document.createElement('small'); sm.textContent = sub; a.appendChild(sm); }
+  a.classList.add('ver'); clearTimeout(timerAviso); timerAviso = setTimeout(() => a.classList.remove('ver'), ms);
+}
+function atualizarPlacar() {
+  $('pNos').textContent = G ? Math.min(12, G.pontos[0]) : 0;
+  $('pEles').textContent = G ? Math.min(12, G.pontos[1]) : 0;
+  const M = G && G.mao;
+  $('vale').innerHTML = !M ? '' : M.tipo === 'ferro' ? 'mão de <b>ferro</b>' : `mão vale <b>${M.valor}</b>` + (M.tipo === 'onze' ? ' · onze' : '');
+  const dots = $('dots'); dots.innerHTML = '';
+  if (M) for (let i = 0; i < 3; i++) { const d = document.createElement('i'); if (i < M.vz.length) d.className = 'd' + M.vz[i]; dots.appendChild(d); }
+}
+
+// Painel de decisão (resposta ao truco, mão de onze)
+function mostrarPainel(txt, botoes, cartas) {
+  $('painelTxt').textContent = txt;
+  const pc = $('painelCartas'); pc.innerHTML = '';
+  if (cartas) for (const c of cartas) pc.appendChild(criarCarta(c, { manilha: ehManilha(c), w: clamp(L.cw * .9, 48, 72) }));
+  pc.hidden = !cartas;
+  const pb = $('painelBotoes'); pb.innerHTML = '';
+  for (const b of botoes) {
+    const el = document.createElement('button');
+    el.className = 'bt' + (b.classe ? ' ' + b.classe : ''); el.textContent = b.rotulo;
+    el.addEventListener('click', () => responderAguardo(b.valor));
+    pb.appendChild(el);
+  }
+  $('painel').classList.add('ver');
+}
+function esconderPainel() { $('painel').classList.remove('ver'); }
+
+// ---------------------------------------------------------------------
+// 7. A partida
+// ---------------------------------------------------------------------
+let G = null;            // { seats, pontos, dealer, mao, aguardo, abortada, cobrir }
+let pausado = false;
+const RITMO = { normal: 1, rapido: .55, calmo: 1.45 };
+
+async function esperar(ms) {
+  const g = G; let resta = ms * (RITMO[cfg.ritmo] || 1);
+  while (resta > 0) {
+    await new Promise(r => setTimeout(r, Math.min(40, resta)));
+    if (!g || g.abortada) throw ABORTA;
+    if (!pausado) resta -= 40;
+  }
+}
+function aguardarHumano(tipo, extra = {}) {
+  return new Promise((res, rej) => { G.aguardo = { tipo, res, rej, ...extra }; atualizarControles(); });
+}
+function responderAguardo(v) {
+  const a = G && G.aguardo; if (!a) return;
+  G.aguardo = null; esconderPainel(); atualizarControles(); a.res(v);
+}
+function atualizarControles() {
+  const a = G && G.aguardo, turno = !!a && a.tipo === 'turno';
+  $('acoes').classList.toggle('ver', turno);
+  $('mao').classList.toggle('vez', turno);
+  if (turno) {
+    const pode = podePedir(0), bt = $('bTruco');
+    bt.hidden = !pode; if (pode) bt.textContent = VALOR_NOME[PROX[G.mao.valor]].toUpperCase() + '!';
+    const pc = podeCobrir(); $('bCobrir').hidden = !pc; $('bCobrir').classList.toggle('ativo', pc && G.cobrir);
+  }
+}
+
+function fraseDe(s, tipo, forte) {
+  const F = PERS[G.seats[s]].falas;
+  if (tipo === 'pede' || tipo === 'aumenta') {
+    const fiel = rnd() < PERS[G.seats[s]].fidelidade;
+    return pick(F[forte === fiel ? 'forte' : 'fraco'][tipo]);
+  }
+  return pick(F[tipo]);
+}
+function nomeDe(s) { return s === 0 ? 'Você' : pessoa(G.seats[s]).curto; }
+const dupla = t => t === 0 ? 'Vocês' : `${nomeDe(1)} e ${nomeDe(3)}`;
+
+function salvarPartida() { gravar('partida', { seats: G.seats, pontos: G.pontos, dealer: G.dealer }); }
+
+function iniciarPartida(salva) {
+  encerrarPartida();
+  const outros = TURMA.map(t => t.id).filter(id => id !== cfg.eu && id !== cfg.parceiro);
+  G = { seats: salva ? salva.seats : [cfg.eu, outros[0], cfg.parceiro, outros[1]],
+    pontos: salva ? salva.pontos.slice() : [0, 0], dealer: salva ? salva.dealer : Math.floor(rnd() * 4),
+    mao: null, aguardo: null, abortada: false, cobrir: false };
+  montarJogadores(); esconderTelas(); pausado = false;
+  $('mesa').classList.add('jogando');
+  layout(); atualizarPlacar();
+  rodarPartida();
+}
+// Para a partida em andamento sem contar nada (os laços pendentes param no próximo await)
+function encerrarPartida() {
+  if (!G) return;
+  G.abortada = true;
+  if (G.aguardo) { const a = G.aguardo; G.aguardo = null; a.rej(ABORTA); }
+  G = null;
+  $('mesa').classList.remove('jogando');
+  limparMesa(); renderMao(); for (let s = 1; s < 4; s++) renderCostas(s); renderVira();
+  marcarVez(-1); calarBaloes(); esconderPainel(); atualizarControles(); atualizarPlacar();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+}
+async function rodarPartida() {
+  try {
+    while (G.pontos[0] < 12 && G.pontos[1] < 12) {
+      salvarPartida();
+      await jogarMao();
+      G.dealer = (G.dealer + 1) % 4;
+    }
+    fimPartida();
+  } catch (e) { if (e !== ABORTA) throw e; }
+}
+
+function novaMao() {
+  const b = embaralhar(baralho());
+  const M = { cartas: [[], [], [], []], vira: null, manilha: 0, valor: 1, ultimo: null, vz: [], mesa: [], jogadas: [],
+    pedidos: [], vez: -1, tipo: 'normal', timeOnze: null };
+  for (let r = 0; r < 3; r++) for (let k = 1; k <= 4; k++) M.cartas[(G.dealer + k) % 4].push(b.pop());
+  M.vira = b.pop(); M.manilha = (M.vira.v + 1) % 10; M.vez = (G.dealer + 1) % 4;
+  const [a, e] = G.pontos;
+  if (a === 11 && e === 11) M.tipo = 'ferro';
+  else if (a === 11 || e === 11) { M.tipo = 'onze'; M.timeOnze = a === 11 ? 0 : 1; }
+  if (M.tipo !== 'ferro') M.cartas[0].sort((x, y) => forcaDe(x, M.manilha) - forcaDe(y, M.manilha));
+  G.mao = M; G.cobrir = false;
+}
+
+async function jogarMao() {
+  novaMao();
+  const M = G.mao;
+  limparMesa(); marcarVez(-1); atualizarPlacar(); renderVira();
+  som('embaralhar');
+  renderMao(true); for (let s = 1; s < 4; s++) renderCostas(s);
+  await esperar(700);
+  if (M.tipo === 'ferro') { aviso('Mão de ferro!', '11 a 11: ninguém vê as cartas, nem as próprias. Quem ganhar leva a partida.', 3200); await esperar(2600); }
+  if (M.tipo === 'onze') {
+    const joga = await decidirOnze();
+    if (!joga) { await fimMao(1 - M.timeOnze, 1, `${dupla(M.timeOnze)} correram da mão de onze`); return; }
+    M.valor = 3; atualizarPlacar();
+  }
+  let lead = (G.dealer + 1) % 4;
+  for (let v = 0; v < 3; v++) {
+    M.mesa = [];
+    for (let k = 0; k < 4; k++) {
+      const r = await turno((lead + k) % 4);
+      if (r) { await fimMao(r.vencedor, M.valor, r.txt); return; }
+    }
+    marcarVez(-1);
+    const res = resultadoVaza(M.mesa.map(j => ({ s: j.s, f: j.coberta ? -1 : forcaDe(j.c, M.manilha) })));
+    M.vz.push(res.time); atualizarPlacar();
+    await recolherVaza(res);
+    const d = decidir(M.vz);
+    if (d !== undefined) { await fimMao(d, M.valor); return; }
+    lead = res.seat;
+  }
+}
+
+async function turno(s) {
+  const M = G.mao; M.vez = s; marcarVez(s);
+  while (true) {
+    let acao;
+    if (s === 0) acao = await aguardarHumano('turno');
+    else {
+      await esperar(550 + rnd() * 400);
+      const q = cpuQuerPedir(s);
+      acao = q ? { tipo: 'truco', forte: q.forte, p: q.p } : { tipo: 'carta', ...cpuEscolhe(s) };
+    }
+    if (acao.tipo === 'truco') {
+      if (s === 0) acao.p = chanceDe(0, 120);
+      const r = await negociar(s, acao.forte, acao.p);
+      if (r) return r;
+      continue;       // pedido aceito: agora joga a carta (e não pode pedir de novo)
+    }
+    await jogarCarta(s, acao.i, acao.coberta);
+    return null;
+  }
+}
+
+async function jogarCarta(s, i, coberta) {
+  const M = G.mao;
+  const de = s === 0 ? posMao(i, M.cartas[0].length) : L.avp[s];
+  const c = M.cartas[s].splice(i, 1)[0];
+  if (M.tipo === 'ferro' || !podeCobrir()) coberta = false;
+  const j = { s, c, coberta }; M.mesa.push(j); M.jogadas.push(j);
+  if (s === 0) { G.cobrir = false; renderMao(); } else renderCostas(s);
+  animarParaMesa(s, c, coberta, de, s === 0 ? L.hw / L.cw : .5);
+  som('carta');
+  await esperar(420);
+}
+
+async function recolherVaza(res) {
+  await esperar(450);
+  if (res.time === 'E') aviso('Empatou a vaza!', 'Cartas do mesmo valor: a vaza fica sem dono.', 1500);
+  else { const j = naMesa.find(x => x.s === res.seat); if (j) j.el.classList.add('ganha'); }
+  await esperar(res.time === 'E' ? 1300 : 900);
+  som('vaza');
+  const alvo = res.time === 'E' ? { x: L.cx, y: L.cy } : L.avp[res.seat];
+  for (const j of naMesa) {
+    j.el.style.transition = 'left .45s ease-in, top .45s ease-in, opacity .45s, transform .45s';
+    moverPara(j.el, alvo.x, alvo.y, L.cw); j.el.style.opacity = '0'; j.el.style.transform = 'scale(.45)';
+  }
+  await esperar(470);
+  limparMesa();
+}
+
+// Pedido de truco (e os aumentos que vierem). Devolve null se alguém aceitou, ou o fim da mão se alguém correu.
+async function negociar(s, forte, p) {
+  const M = G.mao;
+  let pedeTime = time(s), quem = s, pedido = PROX[M.valor];
+  while (true) {
+    registrarPedido(quem, p);
+    await anunciar(quem, pedido, forte);
+    const respTime = 1 - pedeTime;
+    let r;
+    if (respTime === 0) r = await humanoResponde(pedido, quem);
+    else {
+      r = cpuResponde(respTime, pedido, quem);
+      balao(r.s, '...', 5000);
+      await esperar(r.forte ? PERS[G.seats[r.s]].tempoForte : PERS[G.seats[r.s]].tempoFraco);
+      if (quem === 0) { const f = ficha(G.seats[r.s]); f.seusPedidos++; f[{ corre: 'correu', aceita: 'aceitou', aumenta: 'aumentou' }[r.resp]]++; }
+    }
+    if (r.resp === 'corre') {
+      if (r.s !== 0) balao(r.s, fraseDe(r.s, 'corre'));
+      return { vencedor: pedeTime, txt: `${respTime === 0 ? 'Vocês correram' : dupla(1) + ' correram'} do ${VALOR_NOME[pedido].toLowerCase()}` };
+    }
+    M.valor = pedido; M.ultimo = pedeTime; atualizarPlacar();
+    if (r.resp === 'aceita') {
+      if (r.s !== 0) balao(r.s, fraseDe(r.s, 'aceita')); else balao(0, 'Desce!');
+      await esperar(700);
+      atualizarControles();
+      return null;
+    }
+    pedeTime = respTime; quem = r.s; pedido = PROX[pedido]; forte = r.forte; p = r.p;
+  }
+}
+function registrarPedido(s, p) {
+  const M = G.mao;
+  M.pedidos.push({ s, p, ids: M.cartas[s].map(c => c.id) });
+  if (s === 0) voce.pedidos++;
+  else if (time(s) === 1 && !M.pedidos.some((x, i) => i < M.pedidos.length - 1 && x.s === s)) ficha(G.seats[s]).maosPediu++;
+}
+async function anunciar(s, valor, forte) {
+  const nome = VALOR_NOME[valor];
+  som('tapa');
+  grito(nome.toUpperCase() + '!', time(s));
+  const txt = s === 0 ? nome + '!' : fraseDe(s, valor === 3 ? 'pede' : 'aumenta', forte).replace(/\{v\}/g, nome);
+  balao(s, txt, 2600);
+  falarVoz(txt, s);
+  await esperar(1150);
+}
+async function humanoResponde(pedido, quem) {
+  const M = G.mao, nome = VALOR_NOME[pedido];
+  const botoes = [{ rotulo: 'Aceitar', valor: 'aceita', classe: 'prim' }, { rotulo: 'Correr', valor: 'corre' }];
+  if (pedido < 12) botoes.push({ rotulo: VALOR_NOME[PROX[pedido]].toUpperCase() + '!', valor: 'aumenta', classe: 'truco' });
+  const txt = `${nomeDe(quem)} pediu ${nome.toLowerCase()}. Aceitando, a mão vale ${pedido}. Correndo, eles ganham ${M.valor}.`;
+  mostrarPainel(txt, botoes);
+  // O parceiro dá um palpite, como na mesa de verdade
+  const pp = chanceDe(2);
+  setTimeout(() => { if (G && G.aguardo && G.aguardo.tipo === 'resposta')
+    balao(2, pp > .62 ? pick(['Desce que eu tenho!', 'Pode aceitar!']) : pp > .4 ? pick(['Tô mais ou menos...', 'Você que sabe.']) : pick(['Eu não tenho nada...', 'Tô fraco aqui.']), 3200); }, 500);
+  const resp = await aguardarHumano('resposta');
+  const r = { resp, s: 0, forte: true, p: null };
+  if (resp === 'aumenta') r.p = chanceDe(0, 120);
+  if (resp === 'corre') balao(0, 'Corro.');
+  return r;
+}
+
+async function decidirOnze() {
+  const M = G.mao, t = M.timeOnze;
+  if (t === 0) {
+    const pp = chanceDe(2, 200);
+    mostrarPainel(`Mão de onze! Vocês estão com 11. Estas são as cartas de ${nomeDe(2)}. Jogar vale 3 pontos; correr dá 1 ponto a eles.`,
+      [{ rotulo: 'Jogar', valor: true, classe: 'prim' }, { rotulo: 'Correr', valor: false }], M.cartas[2]);
+    setTimeout(() => { if (G && G.aguardo && G.aguardo.tipo === 'onze')
+      balao(2, pp > .55 ? 'Vamos jogar!' : pp > .38 ? 'Dá pra arriscar.' : 'Hmm, tá difícil.', 3500); }, 600);
+    return await aguardarHumano('onze');
+  }
+  aviso('Mão de onze', `${dupla(1)} estão com 11 e veem as cartas um do outro.`, 2400);
+  const p = chanceDe(1, 220);
+  const coragem = (PERS[G.seats[1]].coragem + PERS[G.seats[3]].coragem) / 2;
+  let lim = .38 - coragem * .5;
+  if (G.pontos[0] + 3 >= 12) lim += .12;
+  const joga = G.pontos[0] + 1 >= 12 || p >= lim;
+  const fala = p >= lim + .2 ? 1 : 3;
+  await esperar(1500);
+  balao(fala, joga ? pick(['Vamos jogar!', 'Essa a gente joga.']) : pick(['Melhor correr.', 'Essa não dá.']));
+  await esperar(1100);
+  return joga;
+}
+
+async function fimMao(t, valor, txt) {
+  const M = G.mao;
+  marcarVez(-1); esconderPainel(); atualizarControles();
+  // Truco aceito é pago para ver: no fim da mão, as cartas que sobraram vão para a mesa (as cobertas, não)
+  if (!txt && M.valor > 1 && M.tipo === 'normal') { M.revelar = true; for (let s = 1; s < 4; s++) renderCostas(s); }
+  // Pedidos cujas cartas acabaram à vista: dá para saber se eram blefe
+  const vistos = new Set();
+  for (const pd of M.pedidos) {
+    if (vistos.has(pd.s) || pd.p == null) continue;
+    vistos.add(pd.s);
+    const mostrou = pd.ids.every(id => M.jogadas.some(j => j.c.id === id && !j.coberta) || (M.revelar && M.cartas[pd.s].some(c => c.id === id)));
+    if (!mostrou) continue;
+    const blefe = pd.p < .42;
+    if (pd.s === 0) { voce.mostrados++; if (blefe) voce.blefes++; }
+    else if (time(pd.s) === 1) {
+      const f = ficha(G.seats[pd.s]); f.mostrados++;
+      if (blefe) { f.blefes++; if (t !== 1) setTimeout(() => G && balao(pd.s, fraseDe(pd.s, 'pego')), 900); }
+    }
+  }
+  if (t === 'N') aviso('Ninguém pontua', 'Três vazas empatadas.', 2200);
+  else {
+    G.pontos[t] += valor;
+    const ganhou = t === 0;
+    aviso(`${ganhou ? 'Vocês ganharam' : dupla(1) + ' ganharam'} a mão: +${valor}`, txt || '', 2200);
+    som(ganhou ? 'ganhou' : 'perdeu');
+    const fala = 1 + 2 * Math.floor(rnd() * 2);
+    if (!txt || rnd() < .5) balao(fala, fraseDe(fala, ganhou ? 'perdeu' : 'ganhou'));
+  }
+  estat.maos++; ficha(G.seats[1]).maos++; ficha(G.seats[3]).maos++;
+  gravarTudo(); atualizarPlacar();
+  await esperar(M.revelar ? 3400 : 2300);
+  limparMesa();
+}
+
+function contarFim(venceu) {
+  estat.partidas++;
+  if (venceu) { estat.vitorias++; estat.seq++; estat.recorde = Math.max(estat.recorde, estat.seq); }
+  else { estat.derrotas++; estat.seq = 0; }
+  for (const s of [1, 3]) { const f = ficha(G.seats[s]); f.partidas++; if (venceu) f.vitoriasSuas++; }
+  const fp = ficha(G.seats[2]); fp.comVoce++; if (venceu) fp.vitoriasJuntos++;
+  gravarTudo(); apagar('partida');
+}
+function fimPartida() {
+  const venceu = G.pontos[0] >= 12;
+  contarFim(venceu);
+  som(venceu ? 'vitoria' : 'derrota');
+  $('fimTitulo').textContent = venceu ? `Vocês venceram! ${nomeDe(2)} comemora.` : `${dupla(1)} venceram.`;
+  $('fimNos').textContent = Math.min(12, G.pontos[0]); $('fimEles').textContent = Math.min(12, G.pontos[1]);
+  $('fimTxt').textContent = venceu
+    ? `Sequência de vitórias: ${estat.seq}${estat.seq === estat.recorde && estat.seq > 1 ? ' (recorde!)' : ''}. Vitórias: ${estat.vitorias} de ${estat.partidas}.`
+    : `A sequência voltou a zero. Recorde: ${estat.recorde}. Vitórias: ${estat.vitorias} de ${estat.partidas}.`;
+  mostrarTela('fim');
+}
+
+// ---------------------------------------------------------------------
+// 8. Telas e controles
+// ---------------------------------------------------------------------
+const TELAS = ['menu', 'pausa', 'regras', 'turmaTela', 'fim'];
+let telaVolta = 'menu';
+function mostrarTela(id) { for (const t of TELAS) $(t).classList.toggle('ver', t === id); }
+function esconderTelas() { for (const t of TELAS) $(t).classList.remove('ver'); }
+const telaAberta = () => TELAS.find(t => $(t).classList.contains('ver'));
+
+function montarEscolha() {
+  if (cfg.parceiro === cfg.eu) cfg.parceiro = TURMA.find(t => t.id !== cfg.eu).id;
+  for (const [cx, chave] of [['escEu', 'eu'], ['escParc', 'parceiro']]) {
+    const el = $(cx); el.innerHTML = '';
+    for (const p of TURMA) {
+      const b = document.createElement('button');
+      b.innerHTML = avatarSVG(p) + `<span>${p.curto}</span>`;
+      b.classList.toggle('sel', cfg[chave] === p.id);
+      b.disabled = chave === 'parceiro' && p.id === cfg.eu;
+      b.setAttribute('aria-pressed', cfg[chave] === p.id);
+      b.addEventListener('click', () => { cfg[chave] = p.id; gravar('config', cfg); montarEscolha(); });
+      el.appendChild(b);
+    }
+  }
+  const outros = TURMA.filter(t => t.id !== cfg.eu && t.id !== cfg.parceiro).map(t => t.curto);
+  $('contra').textContent = `Contra: ${outros.join(' e ')}.`;
+  const salva = ler('partida', null);
+  $('mContinuar').hidden = !salva;
+  if (salva) $('mContTxt').textContent = `Nós ${salva.pontos[0]} x ${salva.pontos[1]} ${salva.seats.filter((_, i) => i % 2).map(id => pessoa(id).curto).join(' e ')}`;
+  $('mJogarTxt').textContent = salva ? 'a partida guardada conta como derrota' : '';
+  $('estatTxt').textContent = estat.partidas
+    ? `Partidas: ${estat.partidas} · Vitórias: ${estat.vitorias} · Sequência: ${estat.seq} · Recorde: ${estat.recorde}`
+    : 'Partida a 12 pontos. Boa sorte!';
+}
+function montarOpcoes() {
+  for (const id of ['opcoesMenu', 'opcoesPausa']) {
+    const el = $(id); if (!el) continue; el.innerHTML = '';
+    const ops = [
+      ['som', () => 'Som: ' + (cfg.som ? 'ligado' : 'desligado'), () => { cfg.som = !cfg.som; }],
+      ['voz', () => 'Voz: ' + (!vozPt ? 'indisponível' : cfg.voz ? 'ligada' : 'desligada'), () => { cfg.voz = !cfg.voz; }],
+      ['ritmo', () => 'Ritmo: ' + { normal: 'normal', rapido: 'rápido', calmo: 'calmo' }[cfg.ritmo], () => { cfg.ritmo = { normal: 'rapido', rapido: 'calmo', calmo: 'normal' }[cfg.ritmo] || 'normal'; }],
+      ['destacar', () => 'Manilhas: ' + (cfg.destacar ? 'com estrela' : 'sem destaque'), () => { cfg.destacar = !cfg.destacar; if (G && G.mao) { renderMao(); renderCostas(2); } }],
+    ];
+    for (const [k, rot, acao] of ops) {
+      const b = document.createElement('button'); b.className = 'bt'; b.textContent = rot();
+      if (k === 'voz' && !vozPt) b.disabled = true;
+      b.addEventListener('click', () => { acao(); gravar('config', cfg); montarOpcoes(); });
+      el.appendChild(b);
+    }
+  }
+}
+function montarFichas() {
+  const el = $('fichas'); el.innerHTML = '';
+  for (const p of TURMA) {
+    const f = ficha(p.id), P = PERS[p.id], d = document.createElement('div'); d.className = 'ficha';
+    const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '-';
+    const linhas = [];
+    if (p.id === cfg.eu) linhas.push('É você na mesa agora.');
+    if (f.maos) linhas.push(`Contra você: ${f.maos} mãos. Pediu truco em ${f.maosPediu} delas (${pct(f.maosPediu, f.maos)}).`);
+    else linhas.push('Ainda não jogou contra você.');
+    if (f.mostrados) linhas.push(`Pedidos que ele${p.fem ? 'a' : ''} teve de mostrar: ${f.mostrados}. Eram blefe: ${f.blefes} (${pct(f.blefes, f.mostrados)}).`);
+    if (f.seusPedidos) linhas.push(`Contra os seus pedidos: correu ${f.correu}, aceitou ${f.aceitou}, aumentou ${f.aumentou}.`);
+    if (f.partidas) linhas.push(`Partidas contra: ${f.partidas}, você venceu ${f.vitoriasSuas}.`);
+    if (f.comVoce) linhas.push(`Como seu parceiro: ${f.vitoriasJuntos} vitórias em ${f.comVoce} partidas.`);
+    const falta = 20 - f.maos;
+    const leitura = falta <= 0 ? P.leituraTxt : `Jogue mais ${falta} ${falta === 1 ? 'mão' : 'mãos'} contra ${p.fem ? 'ela' : 'ele'} para ter uma leitura.`;
+    d.innerHTML = avatarSVG(p) + '<div><h4></h4></div>';
+    const box = d.querySelector('div'); box.querySelector('h4').textContent = p.nome;
+    for (const t of linhas) { const q = document.createElement('p'); q.textContent = t; box.appendChild(q); }
+    const q = document.createElement('p'); q.className = 'leitura'; q.textContent = leitura; box.appendChild(q);
+    el.appendChild(d);
+  }
+  const d = document.createElement('div'); d.className = 'ficha';
+  d.innerHTML = '<div><h4>E a turma lê você</h4><p></p></div>';
+  d.querySelector('p').textContent = voce.mostrados
+    ? `Dos seus pedidos que acabaram na mesa (${voce.mostrados}), ${voce.blefes} eram blefe. A Lícia presta muita atenção nisso; o Leo, quase nada.`
+    : 'Quando você pede truco e as suas cartas acabam na mesa, a turma vê se era blefe e passa a acreditar mais ou menos em você.';
+  el.appendChild(d);
+}
+
+function abrirMenu() { encerrarPartida(); montarEscolha(); montarOpcoes(); mostrarTela('menu'); }
+function pausar() { if (!G || telaAberta()) return; pausado = true; montarOpcoes(); mostrarTela('pausa'); }
+function continuar() { pausado = false; esconderTelas(); }
+let saindo = false;
+function voltarAosJogos() { saindo = true; location.href = '../'; }
+
+$('mJogar').addEventListener('click', () => {
+  const salva = ler('partida', null);
+  if (salva) { G = { seats: salva.seats, pontos: salva.pontos, abortada: true }; contarFim(false); G = null; }
+  iniciarPartida(null);
+});
+$('mContinuar').addEventListener('click', () => { const s = ler('partida', null); if (s) iniciarPartida(s); });
+$('mRegras').addEventListener('click', () => { telaVolta = 'menu'; mostrarTela('regras'); });
+$('mTurma').addEventListener('click', () => { telaVolta = 'menu'; montarFichas(); mostrarTela('turmaTela'); });
+$('mJogos').addEventListener('click', voltarAosJogos);
+$('pContinuar').addEventListener('click', continuar);
+$('pRegras').addEventListener('click', () => { telaVolta = 'pausa'; mostrarTela('regras'); });
+$('pTurma').addEventListener('click', () => { telaVolta = 'pausa'; montarFichas(); mostrarTela('turmaTela'); });
+$('pJogos').addEventListener('click', voltarAosJogos);
+$('pAbandonar').addEventListener('click', () => { if (G) contarFim(false); abrirMenu(); });
+$('fNova').addEventListener('click', () => iniciarPartida(null));
+$('fMenu').addEventListener('click', abrirMenu);
+$('fJogos').addEventListener('click', voltarAosJogos);
+for (const b of document.querySelectorAll('[data-voltar]')) b.addEventListener('click', () => mostrarTela(telaVolta));
+$('btPausa').addEventListener('click', pausar);
+
+function jogarHumano(i) {
+  const a = G && G.aguardo;
+  if (!a || a.tipo !== 'turno' || i >= G.mao.cartas[0].length) return;
+  responderAguardo({ tipo: 'carta', i, coberta: G.cobrir });
+}
+$('mao').addEventListener('click', e => { const c = e.target.closest('.carta'); if (c) jogarHumano(+c.dataset.i); });
+$('bTruco').addEventListener('click', () => { if (G && G.aguardo && G.aguardo.tipo === 'turno' && podePedir(0)) responderAguardo({ tipo: 'truco', forte: true }); });
+$('bCobrir').addEventListener('click', () => { if (G && G.aguardo && G.aguardo.tipo === 'turno') { G.cobrir = !G.cobrir; atualizarControles(); } });
+
+addEventListener('keydown', e => {
+  const tela = telaAberta();
+  if (e.key === 'Escape') {
+    if (tela === 'pausa') continuar();
+    else if (tela === 'regras' || tela === 'turmaTela') mostrarTela(telaVolta);
+    else if (!tela) pausar();
+    return;
+  }
+  if (tela || !G || !G.aguardo) return;
+  const k = e.key.toLowerCase(), a = G.aguardo;
+  if (a.tipo === 'turno') {
+    if (k >= '1' && k <= '3') jogarHumano(+k - 1);
+    else if (k === 't') $('bTruco').click();
+    else if (k === 'c') $('bCobrir').click();
+  } else if (a.tipo === 'resposta') {
+    if (k === 'a') responderAguardo('aceita');
+    else if (k === 'c') responderAguardo('corre');
+    else if ((k === 't' || k === 's') && $('painelBotoes').children.length > 2) responderAguardo('aumenta');
+  } else if (a.tipo === 'onze') {
+    if (k === 'j' || k === 'a') responderAguardo(true);
+    else if (k === 'c') responderAguardo(false);
+  }
+});
+
+// Áudio e tela cheia só depois de um gesto. O Chrome nem sempre aceita a tela cheia no touchstart, por isso o touchend.
+addEventListener('pointerdown', iniciarAudio);
+addEventListener('keydown', iniciarAudio);
+function pedirTelaCheia() {
+  if (saindo || document.fullscreenElement || document.webkitFullscreenElement) return;
+  const el = document.documentElement;
+  try {
+    const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen && el.webkitRequestFullscreen();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) { /* sem tela cheia */ }
+}
+addEventListener('touchend', pedirTelaCheia);
+document.addEventListener('visibilitychange', () => { if (document.hidden) pausar(); });
+
+layout();
+montarEscolha();
+montarOpcoes();
+</script>
+</body>
+</html>
