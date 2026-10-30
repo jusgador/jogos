@@ -11,6 +11,7 @@ Página inicial e jogos, publicados no GitHub Pages: https://jusgador.github.io/
 | Poker Texas Hold'em | `poker/` |
 | Sinuca de Bico | `sinuca/` |
 | Bocha do Clube | `bocha/` |
+| Truco do Clube | `truco/` |
 
 Cada jogo é desenvolvido direto na sua pasta, num único `index.html`. Os jogos começaram em repositórios próprios, e o histórico de cada um veio junto (`git log --follow asas/index.html`).
 
@@ -61,6 +62,7 @@ Roteiro para uma sessão aberta em `D:\dev\jogos` para criar um jogo novo, do co
   | `poker-` | Poker Texas Hold'em |
   | `sinuca-` | Sinuca de Bico |
   | `bocha-` | Bocha do Clube |
+  | `truco-` | Truco do Clube |
 
 ### 2. O arquivo do jogo
 
