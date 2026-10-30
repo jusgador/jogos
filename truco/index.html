@@ -341,7 +341,7 @@ const TURMA = [
   { id: 'leo', nome: 'Leonardo', curto: 'Leo', pele: '#f2c48d', cabelo: '#a0682f', sobr: '#6b4421', estilo: 'swoop', camisa: '#2f7bff' },
   { id: 'ric', nome: 'Ricardo', curto: 'Ricardo', pele: '#e5b07a', cabelo: '#3d2a1c', sobr: '#3d2a1c', estilo: 'swoopGray', camisa: '#22b573' },
   { id: 'bia', nome: 'Beatriz', curto: 'Bia', pele: '#f5d2ad', cabelo: '#6b3b1e', sobr: '#4a2814', estilo: 'princess', camisa: '#ff5fa8', fem: true },
-  { id: 'lic', nome: 'Lícia', curto: 'Lícia', pele: '#eab98a', cabelo: '#c9a46e', sobr: '#8a6640', estilo: 'bob', camisa: '#ffb31a', fem: true, viseira: '#14b8c4' },
+  { id: 'lic', nome: 'Lícia', curto: 'Lícia', pele: '#eab98a', cabelo: '#c9a46e', sobr: '#8a6640', estilo: 'bob', camisa: '#ffb31a', fem: true },
 ];
 const pessoa = id => TURMA.find(t => t.id === id) || TURMA[0];
 
@@ -391,8 +391,7 @@ function avatarSVG(p, expr) {
   } else if (p.estilo === 'princess') {
     frente = `<path d="M18.5 31c-1-11 5.5-19 13.5-19s14.5 8 13.5 19c-3-6-7-9-13.5-9-6 0-10.5 3-13.5 9Z" fill="${c}"/>`;
   } else if (p.estilo === 'bob') {
-    frente = `<path d="M18.5 32c-1-11 4.5-19 13.5-19s14.5 8 13.5 19c-2-5-3-7-5-8-5 1-12 1-17-1-2 3-4 6-5 9Z" fill="${c}"/>` +
-      `<path d="M17.5 21.5c7-3.5 22-3.5 29 0v3.5c-8-3-21-3-29 0Z" fill="${p.viseira}"/><path d="M19 25c6-2 20-2 26 0l3 3c-10-2.5-22-2.5-32 0Z" fill="${p.viseira}" opacity=".85"/>`;
+    frente = `<path d="M18.5 32c-1-11 4.5-19 13.5-19s14.5 8 13.5 19c-2-5-3-7-5-8-5 1-12 1-17-1-2 3-4 6-5 9Z" fill="${c}"/>`;
   }
   const rubor = p.fem ? '<circle cx="24.5" cy="35.5" r="2.1" fill="#ff8fa3" opacity=".45"/><circle cx="39.5" cy="35.5" r="2.1" fill="#ff8fa3" opacity=".45"/>' : '';
   const cilios = p.fem && expr !== 'olhos' ? '<path d="M25 30.2l-1.2-1M39 30.2l1.2-1" stroke="#2a1a10" stroke-width=".9"/>' : '';
