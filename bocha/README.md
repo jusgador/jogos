@@ -16,9 +16,12 @@ A mesma turma do Campos Tennis: Leonardo, Ricardo, Beatriz e Lícia. No menu se 
 
 ## Controles
 
-- **Mira:** o círculo no gramado é onde a bola deve parar (ou cair, na bochada), como se o gramado fosse plano. Arraste para mexer nele (quanto mais devagar, mais fino o ajuste), toque direto no lugar ou use o quadro do bolim, visto de cima, no canto.
-- **Lançamentos:** Rasteira (rola o caminho todo), Por cima (voa, cai antes da mira e rola pouco) e Bochada (voa direto até a mira, para tirar uma bola do lugar). ◀ ▶ mudam o lugar de onde se lança.
-- **Teclado:** setas (Shift: mais rápido), roda do mouse para a distância, A e D para o lugar, T troca o lançamento, Espaço lança, P ou Esc pausa. Segurar o clique, o dedo ou o Espaço acelera a bola rolando.
+Há duas miras, escolhidas no menu (`Mira`):
+
+- **Força na mão** (padrão): arrastar para os lados, tocar no lugar ou usar o quadro do bolim, visto de cima no canto, só escolhe a direção, que aparece como uma linha de pontinhos. A força vem da barra: segurando LANÇAR (ou o Espaço), ela enche e esvazia sem parar, e a bola vai mais longe quanto mais cheia estiver ao soltar. Metade da barra cobre a zona do bolim (da linha do meio à última linha), para dar mais precisão ali; os tracinhos marcam o meio, a última linha e o fundo. A marca branca mostra onde aquele lado soltou da última vez, por tipo de lançamento. A barra leva 3,6 s para encher no fácil, 3 s no normal e 2,4 s no difícil, e no fácil uma faixa clara mostra a força para chegar no bolim.
+- **Círculo:** o círculo no gramado é onde a bola deve parar (ou cair, na bochada), como se o gramado fosse plano, e o jogo calcula a força. Arraste para mexer nele (quanto mais devagar, mais fino o ajuste), toque direto no lugar ou use o quadro do bolim. Um clique em LANÇAR lança.
+- **Lançamentos:** Rasteira (rola o caminho todo), Por cima (voa, cai e rola pouco) e Bochada (voa direto, para tirar uma bola do lugar). ◀ ▶ mudam o lugar de onde se lança.
+- **Teclado:** setas (Shift: mais rápido), A e D para o lugar, T troca o lançamento, Espaço lança (na força, segure e solte), P ou Esc pausa. No círculo, a roda do mouse muda a distância. Segurar o clique, o dedo ou o Espaço acelera a bola rolando.
 
 ## Níveis
 
@@ -32,4 +35,4 @@ Nove situações de jogo, com até três estrelas cada. A melhor nota de cada um
 
 ## Dados salvos
 
-Prefixo `bocha-` no `localStorage`: `bocha-config` (nível, pontos da partida, som, jogadores escolhidos), `bocha-stats` (vitórias, sequência, melhor encostada, bochadas) e `bocha-desafios` (estrelas).
+Prefixo `bocha-` no `localStorage`: `bocha-config` (nível, pontos da partida, mira, som, jogadores escolhidos), `bocha-stats` (vitórias, sequência, melhor encostada, bochadas) e `bocha-desafios` (estrelas).
