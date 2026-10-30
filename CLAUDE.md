@@ -1,6 +1,6 @@
 # Jogos
 
-Um repositório só para a página inicial e todos os jogos, publicado no GitHub Pages (https://jusgador.github.io/jogos/). Cada jogo é desenvolvido direto na sua pasta, num único `index.html`: `tenis/` (Campos Tennis), `lander/` (Lunar Lander Vetorial), `asas/` (Asas de Aço), `fortaleza/` (Bruce Lee 64 - A Fortaleza), `poker/` (Poker Texas Hold'em) e `sinuca/` (Sinuca de Bico). Os detalhes estão no README.md.
+Um repositório só para a página inicial e todos os jogos, publicado no GitHub Pages (https://jusgador.github.io/jogos/). Cada jogo é desenvolvido direto na sua pasta, num único `index.html`: `tenis/` (Campos Tennis), `lander/` (Lunar Lander Vetorial), `asas/` (Asas de Aço), `fortaleza/` (Bruce Lee 64 - A Fortaleza), `poker/` (Poker Texas Hold'em), `sinuca/` (Sinuca de Bico) e `bocha/` (Bocha do Clube). Os detalhes estão no README.md.
 
 ## Os jogos andam juntos
 
