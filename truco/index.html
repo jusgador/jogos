@@ -70,7 +70,7 @@
 
   /* Jogadores */
   .jog { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 2px;
-    transform: translateX(-50%); z-index: 4; pointer-events: none; }
+    transform: translateX(-50%); z-index: 6; pointer-events: none; }
   .jog .av { width: var(--av); height: var(--av); border-radius: 50%; overflow: hidden; background: #0c2f1f;
     border: 2px solid rgba(255,255,255,.28); box-shadow: 0 2px 6px rgba(0,0,0,.4); transition: box-shadow .2s, border-color .2s; }
   .jog .av svg { display: block; width: 100%; height: 100%; }
@@ -79,6 +79,25 @@
   .jog.t0 .nome { color: #d5f7e1; }
   .jog.vez .av { border-color: var(--ouro); box-shadow: 0 0 0 3px rgba(242,193,78,.55), 0 0 16px rgba(242,193,78,.6); }
   .jog .costas { margin-top: 3px; white-space: nowrap; }
+  .jog .av { transition: box-shadow .2s, border-color .2s, transform .18s; }
+  .jog .av.sinal { transform: scale(1.22); }
+  .jog .leg { position: absolute; top: calc(var(--av) + 1px); left: 50%; transform: translateX(-50%); z-index: 2; white-space: nowrap;
+    font-size: 11.5px; font-weight: 700; background: var(--ouro); color: #2a1c00; border-radius: 9px; padding: 1px 7px;
+    opacity: 0; transition: opacity .2s; }
+  .jog .leg.ver { opacity: 1; }
+  #j1 .leg { left: auto; right: 0; transform: none; }
+  #j3 .leg { left: 0; transform: none; }
+  #btSinal { position: absolute; z-index: 7; transform: translateY(-50%); font-size: 20px; }
+  #sinais .grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+  #sinais .grade button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 2px; cursor: pointer;
+    background: #143522; border: 1px solid #2f6346; border-radius: 10px; font-size: 13px; }
+  #sinais .grade button:hover, #sinais .grade button:focus-visible { border-color: var(--ouro); outline: none; }
+  #sinais .grade svg { width: 46px; height: 46px; border-radius: 50%; background: #0c2f1f; }
+  #sinais .grade small { font-size: 10.5px; color: var(--fraco); text-align: center; line-height: 1.15; }
+  .regra { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .regra button { padding: 8px 6px; border-radius: 12px; background: #143522; border: 2px solid transparent; cursor: pointer; font-weight: 700; }
+  .regra button small { display: block; font-weight: 400; font-size: 11.5px; color: var(--fraco); }
+  .regra button.sel { border-color: var(--ouro); background: #1d4a30; }
   #j0, #mesa:not(.jogando) .jog { display: none; }
 
   /* Placar e vira */
@@ -139,10 +158,10 @@
     opacity: 0; transition: opacity .25s; pointer-events: none; }
   #aviso.ver { opacity: 1; }
   #aviso small { display: block; font-weight: 400; color: var(--fraco); margin-top: 2px; }
-  #painel { position: absolute; z-index: 11; transform: translate(-50%, -100%); width: min(92vw, 440px); display: none;
+  #painel, #sinais { position: absolute; z-index: 11; transform: translate(-50%, -100%); width: min(92vw, 440px); display: none;
     background: rgba(9,30,19,.96); border: 1px solid #4b8a65; border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
-  #painel.ver { display: block; }
-  #painel p { margin: 0 0 10px; }
+  #painel.ver, #sinais.ver { display: block; }
+  #painel p, #sinais p { margin: 0 0 10px; }
   #painel .cartasPainel { display: flex; gap: 8px; justify-content: center; margin: 0 0 10px; }
   #painel .cartasPainel .carta { position: relative; }
   .botoes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
@@ -192,15 +211,17 @@
     <div id="dots"></div>
   </div>
   <div id="topoDir">
-    <div id="viraBox" hidden><div id="viraCarta"></div><div class="txt">Manilha<b id="manilhaTxt"></b></div></div>
+    <div id="viraBox" hidden><div id="viraCarta"></div><div class="txt" id="viraTxt"></div></div>
     <button class="btIcone" id="btPausa" aria-label="Pausa">☰</button>
   </div>
-  <div class="jog t0" id="j0"><div class="av"></div><span class="nome"></span><div class="costas" id="k0"></div></div>
-  <div class="jog t1" id="j1"><div class="av"></div><span class="nome"></span><div class="costas" id="k1"></div></div>
-  <div class="jog t0" id="j2"><div class="av"></div><span class="nome"></span><div class="costas" id="k2"></div></div>
-  <div class="jog t1" id="j3"><div class="av"></div><span class="nome"></span><div class="costas" id="k3"></div></div>
+  <div class="jog t0" id="j0"><div class="av"></div><span class="nome"></span><span class="leg"></span><div class="costas" id="k0"></div></div>
+  <div class="jog t1" id="j1"><div class="av"></div><span class="nome"></span><span class="leg"></span><div class="costas" id="k1"></div></div>
+  <div class="jog t0" id="j2"><div class="av"></div><span class="nome"></span><span class="leg"></span><div class="costas" id="k2"></div></div>
+  <div class="jog t1" id="j3"><div class="av"></div><span class="nome"></span><span class="leg"></span><div class="costas" id="k3"></div></div>
   <div id="mesaCartas"></div>
   <div id="mao"></div>
+  <button class="btIcone" id="btSinal" aria-label="Fazer sinal ao parceiro" hidden>😉</button>
+  <div id="sinais" role="dialog"><p>Sinal para <b id="sinalParc"></b>. Os adversários podem ver.</p><div class="grade" id="sinaisGrade"></div><div class="botoes"><button class="bt" id="sinaisFechar">Fechar</button></div></div>
   <div id="acoes"><span class="vez">Sua vez</span><button class="bt" id="bCobrir">Coberta</button><button class="bt truco" id="bTruco">TRUCO!</button></div>
   <div class="balao" id="b0"></div><div class="balao" id="b1"></div><div class="balao" id="b2"></div><div class="balao" id="b3"></div>
   <div id="aviso"></div>
@@ -211,12 +232,17 @@
 <div class="tela ver" id="menu">
   <div class="caixa">
     <h1>TRUCO <span>DO CLUBE</span></h1>
-    <p class="sub">Truco paulista com a turma do clube: você e um parceiro contra uma dupla. Cada um tem o seu jeito de jogar. Aprenda a ler a turma.</p>
+    <p class="sub">Truco paulista ou mineiro com a turma do clube: você e um parceiro contra uma dupla. Cada um tem o seu jeito de jogar. Aprenda a ler a turma.</p>
     <h3>Você é</h3>
     <div class="turma" id="escEu"></div>
     <h3>Seu parceiro</h3>
     <div class="turma" id="escParc"></div>
     <p class="fraco" id="contra"></p>
+    <h3>Regra</h3>
+    <div class="regra" id="escRegra">
+      <button data-regra="paulista">Paulista<small>manilha pela vira, mão vale 1</small></button>
+      <button data-regra="mineiro">Mineiro<small>manilhas fixas, mão vale 2</small></button>
+    </div>
     <div class="botoes col">
       <button class="bt grande prim" id="mContinuar" hidden>Continuar partida<small id="mContTxt"></small></button>
       <button class="bt grande" id="mJogar">Nova partida<small id="mJogarTxt"></small></button>
@@ -242,7 +268,7 @@
 
 <div class="tela" id="regras">
   <div class="caixa regras">
-    <h2>Regras do truco paulista</h2>
+    <h2>Regras</h2>
     <p><b>Times.</b> Você e o seu parceiro, à sua frente, contra a dupla dos lados. A vez passa para a direita: depois de você, joga quem está à sua direita.</p>
     <p><b>Baralho.</b> 40 cartas, sem 8, 9 e 10. Da mais fraca para a mais forte: 4, 5, 6, 7, Q, J, K, A, 2, 3.</p>
     <p><b>Vira e manilha.</b> Depois de dar as cartas, vira-se uma: a vira. A manilha é o valor seguinte ao dela (vira 7, manilha Q; vira 3, manilha 4). As quatro manilhas ganham de todas as outras cartas e, entre si, valem pelo naipe: ♦ ouros (pica-fumo), ♠ espadas (espadilha), ♥ copas e ♣ paus (zap), a mais forte do jogo.</p>
@@ -253,7 +279,9 @@
     <p><b>Mão de onze.</b> O time que chega a 11 vê as cartas do parceiro e decide se joga a mão, valendo 3, ou corre, dando 1 ponto aos outros. Nessa mão não há truco.</p>
     <p><b>Mão de ferro.</b> No 11 a 11, todos jogam com as cartas viradas, sem ver nem as próprias. Quem ganhar a mão leva a partida.</p>
     <p><b>Partida.</b> Vence quem fizer 12 pontos.</p>
-    <p><b>Controles.</b> Clique ou toque na carta para jogar. No teclado: 1, 2 e 3 jogam as cartas, T pede truco (ou aumenta), C liga a carta coberta, e na resposta A aceita e C corre. Esc pausa.</p>
+    <p><b>Truco mineiro.</b> Não há vira: as manilhas são sempre as mesmas, 4♣ (zap), 7♥ (copas), A♠ (espadilha) e 7♦ (pica-fumo). A mão vale 2, e os pedidos são truco (4), seis (8), nove (10) e doze (12). A mão especial é a de dez: quem chega a 10 vê as cartas do parceiro e joga valendo 4, ou corre e dá 2. No 10 a 10, mão de ferro. O resto é igual ao paulista.</p>
+    <p><b>Sinais.</b> Dá para avisar o parceiro com a cara, sem falar: piscar é zap, erguer as sobrancelhas é copas, torcer a boca é espadilha, encher as bochechas é pica-fumo, morder o lábio é três (ou dois, quando o três é manilha) e fechar os olhos é não ter nada. Toque em 😉 para fazer um sinal. O seu parceiro faz os dele no começo da mão. Os adversários também se sinalizam e às vezes deixam escapar; mas eles também podem pegar os seus. Com a cola ligada, o significado aparece embaixo do rosto.</p>
+    <p><b>Controles.</b> Clique ou toque na carta para jogar. No teclado: 1, 2 e 3 jogam as cartas, T pede truco (ou aumenta), C liga a carta coberta, S abre os sinais, e na resposta A aceita e C corre. Esc pausa.</p>
     <div class="botoes col"><button class="bt grande" data-voltar>Voltar</button></div>
   </div>
 </div>
@@ -295,14 +323,14 @@ function ler(k, padrao) { try { const s = localStorage.getItem(PFX + k); return 
 function gravar(k, v) { try { localStorage.setItem(PFX + k, JSON.stringify(v)); } catch (e) { /* cheio ou bloqueado */ } }
 function apagar(k) { try { localStorage.removeItem(PFX + k); } catch (e) { /* ignora */ } }
 
-const cfg = Object.assign({ eu: 'ric', parceiro: 'lic', som: true, voz: true, ritmo: 'normal', destacar: true }, ler('config', {}));
+const cfg = Object.assign({ eu: 'ric', parceiro: 'lic', regra: 'paulista', sinais: 'cola', som: true, voz: true, ritmo: 'normal', destacar: true }, ler('config', {}));
 const estat = Object.assign({ partidas: 0, vitorias: 0, derrotas: 0, seq: 0, recorde: 0, maos: 0 }, ler('estat', {}));
 const fichas = ler('fichas', {});
 // Como a turma lê você: pedidos seus que acabaram mostrados na mesa, e quantos eram blefe
-const voce = Object.assign({ pedidos: 0, mostrados: 0, blefes: 0 }, ler('voce', {}));
+const voce = Object.assign({ pedidos: 0, mostrados: 0, blefes: 0, sinaisPegos: 0 }, ler('voce', {}));
 function ficha(id) {
-  return fichas[id] || (fichas[id] = { maos: 0, maosPediu: 0, mostrados: 0, blefes: 0, seusPedidos: 0, correu: 0, aceitou: 0,
-    aumentou: 0, partidas: 0, vitoriasSuas: 0, comVoce: 0, vitoriasJuntos: 0 });
+  return fichas[id] = Object.assign({ maos: 0, maosPediu: 0, mostrados: 0, blefes: 0, seusPedidos: 0, correu: 0, aceitou: 0,
+    aumentou: 0, partidas: 0, vitoriasSuas: 0, comVoce: 0, vitoriasJuntos: 0, sinaisVistos: 0 }, fichas[id]);
 }
 function gravarTudo() { gravar('estat', estat); gravar('fichas', fichas); gravar('voce', voce); }
 
@@ -322,29 +350,29 @@ const pessoa = id => TURMA.find(t => t.id === id) || TURMA[0];
 // fidelidade: quanto a fala entrega a mão (1 = sempre); leitura: quanto presta atenção nos blefes dos outros;
 // tempoForte/tempoFraco: quanto demora para responder um truco, com mão boa e com mão fraca.
 const PERS = {
-  leo: { chamar: .6, blefe: .24, coragem: .12, aumentar: .74, fidelidade: .8, leitura: .2, cobre: .3, tempoForte: 450, tempoFraco: 450,
-    leituraTxt: 'Pede truco com qualquer coisa e quase nunca corre. Quando ele grita demais, é blefe.',
+  leo: { sinaliza: .9, descuido: .55, olho: .15, chamar: .6, blefe: .24, coragem: .12, aumentar: .74, fidelidade: .8, leitura: .2, cobre: .3, tempoForte: 450, tempoFraco: 450,
+    leituraTxt: 'Pede truco com qualquer coisa e quase nunca corre. Quando ele grita demais, é blefe. E faz os sinais sem disfarçar.',
     falas: {
       forte: { pede: ['Truco.', 'Truco. Vai encarar?', 'Truco, e é sério.'], aumenta: ['{v}. Pode vir.', '{v}. Desce, se tiver coragem.'] },
       fraco: { pede: ['Truco, marreco!', 'TRUCO! Corre que é melhor!', 'Truco, truco, truco!'], aumenta: ['{v}! {v}! {v}!', '{v}, marreco! Corre!'] },
       aceita: ['Desce!', 'Cai pra dentro!', 'Manda!'], corre: ['Essa eu deixo...', 'Vai, leva.'],
       ganhou: ['Ê, beleza!', 'Toma!', 'Sabia!'], perdeu: ['Sorte...', 'Na próxima.'], pego: ['Ih, me pegaram!', 'Era pra colar...'] } },
-  bia: { chamar: .78, blefe: .04, coragem: -.14, aumentar: .86, fidelidade: .85, leitura: .3, cobre: .2, tempoForte: 600, tempoFraco: 1900,
-    leituraTxt: 'Só pede truco quando tem jogo e corre fácil. Quando ela demora para responder, é porque está fraca.',
+  bia: { sinaliza: .75, descuido: .35, olho: .25, chamar: .78, blefe: .04, coragem: -.14, aumentar: .86, fidelidade: .85, leitura: .3, cobre: .2, tempoForte: 600, tempoFraco: 1900,
+    leituraTxt: 'Só pede truco quando tem jogo e corre fácil. Quando ela demora para responder, é porque está fraca. Às vezes deixa escapar um sinal.',
     falas: {
       forte: { pede: ['Truco!', 'Agora vai: truco!', 'Truco, gente!'], aumenta: ['{v}!', '{v}, e não volto atrás!'] },
       fraco: { pede: ['Tru... truco?', 'Truco... eu acho.', 'Truco! Será?'], aumenta: ['{v}...?', 'Ai... {v}!'] },
       aceita: ['Tá bom, desce.', 'Aceito!', 'Vamos ver.'], corre: ['Ai, não. Corro.', 'Tô fora.', 'Melhor não.'],
       ganhou: ['Eba!', 'Isso!', 'Viu só?'], perdeu: ['Poxa...', 'Ah, não!'], pego: ['Fui pega...', 'Não conta pra ninguém.'] } },
-  lic: { chamar: .66, blefe: .09, coragem: 0, aumentar: .8, fidelidade: .5, leitura: 1, cobre: .55, tempoForte: 1000, tempoFraco: 1050, placar: true,
-    leituraTxt: 'Joga pela conta e pelo placar: arrisca mais quando está perdendo. A fala dela não entrega nada.',
+  lic: { sinaliza: .85, descuido: .12, olho: .45, chamar: .66, blefe: .09, coragem: 0, aumentar: .8, fidelidade: .5, leitura: 1, cobre: .55, tempoForte: 1000, tempoFraco: 1050, placar: true,
+    leituraTxt: 'Joga pela conta e pelo placar: arrisca mais quando está perdendo. A fala dela não entrega nada, quase nunca deixa ver um sinal e é quem mais pega os seus.',
     falas: {
       forte: { pede: ['Truco. Faz a conta.', 'Truco, minha gente.', 'Truco.'], aumenta: ['{v}. Calculado.', '{v}.'] },
       fraco: { pede: ['Truco. Pensa bem.', 'Truco, minha gente.', 'Truco.'], aumenta: ['{v}. Pensa bem.', '{v}.'] },
       aceita: ['Aceito.', 'Desce.', 'Pode ser.'], corre: ['Não compensa.', 'Passo.'],
       ganhou: ['Como previsto.', 'Probabilidade.'], perdeu: ['Faz parte.', 'Estatística.'], pego: ['Valeu a tentativa.', 'Risco calculado.'] } },
-  ric: { chamar: .9, blefe: .06, coragem: .05, aumentar: .68, fidelidade: .7, leitura: .5, cobre: .4, tempoForte: 1800, tempoFraco: 700,
-    leituraTxt: 'Quase nunca pede truco primeiro, mas, quando você pede, aumenta se tiver jogo. Quando ele demora para responder, cuidado.',
+  ric: { sinaliza: .55, descuido: .25, olho: .35, chamar: .9, blefe: .06, coragem: .05, aumentar: .68, fidelidade: .7, leitura: .5, cobre: .4, tempoForte: 1800, tempoFraco: 700,
+    leituraTxt: 'Quase nunca pede truco primeiro, mas, quando você pede, aumenta se tiver jogo. Quando ele demora para responder, cuidado. Faz poucos sinais.',
     falas: {
       forte: { pede: ['Truco.', 'Hmm... truco.'], aumenta: ['{v}.', 'Hmm... {v}.', '{v}. Pensa bem.'] },
       fraco: { pede: ['Truco!', 'TRUCO, rapaz!'], aumenta: ['{v}!', '{v}, rapaz!'] },
@@ -352,7 +380,7 @@ const PERS = {
       ganhou: ['Hehe.', 'Experiência.'], perdeu: ['Hmm.', 'Tá bom.'], pego: ['Hehe, quase.', 'Tentei.'] } },
 };
 
-function avatarSVG(p) {
+function avatarSVG(p, expr) {
   const c = p.cabelo;
   let tras = '', frente = '';
   if (p.estilo === 'princess') tras = `<path d="M17 28c-3 12-1 22 4 30h22c5-8 7-18 4-30Z" fill="${c}"/>`;
@@ -367,15 +395,26 @@ function avatarSVG(p) {
       `<path d="M17.5 21.5c7-3.5 22-3.5 29 0v3.5c-8-3-21-3-29 0Z" fill="${p.viseira}"/><path d="M19 25c6-2 20-2 26 0l3 3c-10-2.5-22-2.5-32 0Z" fill="${p.viseira}" opacity=".85"/>`;
   }
   const rubor = p.fem ? '<circle cx="24.5" cy="35.5" r="2.1" fill="#ff8fa3" opacity=".45"/><circle cx="39.5" cy="35.5" r="2.1" fill="#ff8fa3" opacity=".45"/>' : '';
-  const cilios = p.fem ? '<path d="M25 30.2l-1.2-1M39 30.2l1.2-1" stroke="#2a1a10" stroke-width=".9"/>' : '';
+  const cilios = p.fem && expr !== 'olhos' ? '<path d="M25 30.2l-1.2-1M39 30.2l1.2-1" stroke="#2a1a10" stroke-width=".9"/>' : '';
+  // As caras dos sinais: piscar (zap), sobrancelhas (copas), boca torta (espadilha), bochechas (pica-fumo),
+  // morder o lábio (três) e olhos fechados (nada)
+  const olhoAberto = (x, r = 1.6) => `<circle cx="${x}" cy="31" r="${r}" fill="#2a1a10"/>`;
+  const olhoFechado = x => `<path d="M${x - 2.2} 31.2q2.2 1.5 4.4 0" stroke="#2a1a10" stroke-width="1.3" fill="none" stroke-linecap="round"/>`;
+  const olhos = expr === 'olhos' ? olhoFechado(27) + olhoFechado(37)
+    : expr === 'pisca' ? olhoAberto(27) + olhoFechado(37)
+    : expr === 'sobr' ? olhoAberto(27, 2) + olhoAberto(37, 2) : olhoAberto(27) + olhoAberto(37);
+  const sobr = expr === 'sobr' ? 'M24.3 25.4q2.7-1.8 5.4 0M34.3 25.4q2.7-1.8 5.4 0' : expr === 'pisca' ? 'M24.5 27.4h5M34.5 28.2l5-.6' : 'M24.5 27.4h5M34.5 27.4h5';
+  const traco = d => `<path d="${d}" stroke="#7a3b2a" stroke-width="1.4" fill="none" stroke-linecap="round"/>`;
+  const boca = expr === 'boca' ? traco('M28.5 37.6q3.5-.2 7.5-3')
+    : expr === 'boch' ? `<circle cx="20.8" cy="35.2" r="3.6" fill="${p.pele}"/><circle cx="43.2" cy="35.2" r="3.6" fill="${p.pele}"/><circle cx="32" cy="37" r="1.4" fill="#7a3b2a"/>`
+    : expr === 'labio' ? traco('M28.5 36q3.5 1.2 7 0') + '<rect x="30.4" y="35.5" width="3.2" height="1.7" rx=".4" fill="#fff"/>' + traco('M29.6 38q2.4.9 4.8 0')
+    : traco('M28.5 36.5q3.5 2.6 7 0');
   return `<svg viewBox="0 0 64 64" aria-hidden="true">${tras}` +
     `<path d="M8 66c1-11 10-18 24-18s23 7 24 18Z" fill="${p.camisa}"/>` +
     `<rect x="28" y="40" width="8" height="9" fill="${p.pele}"/><path d="M26.5 47.5l5.5 5 5.5-5" stroke="#fff" stroke-width="1.8" fill="none"/>` +
     `<circle cx="19.5" cy="31" r="2.6" fill="${p.pele}"/><circle cx="44.5" cy="31" r="2.6" fill="${p.pele}"/>` +
-    `<circle cx="32" cy="29.5" r="13" fill="${p.pele}"/>${frente}` +
-    `<circle cx="27" cy="31" r="1.6" fill="#2a1a10"/><circle cx="37" cy="31" r="1.6" fill="#2a1a10"/>${cilios}` +
-    `<path d="M24.5 27.4h5M34.5 27.4h5" stroke="${p.sobr}" stroke-width="1.4" stroke-linecap="round"/>` +
-    `<path d="M28.5 36.5q3.5 2.6 7 0" stroke="#7a3b2a" stroke-width="1.4" fill="none" stroke-linecap="round"/>${rubor}</svg>`;
+    `<circle cx="32" cy="29.5" r="13" fill="${p.pele}"/>${frente}${olhos}${cilios}` +
+    `<path d="${sobr}" stroke="${p.sobr}" stroke-width="1.4" fill="none" stroke-linecap="round"/>${boca}${rubor}</svg>`;
 }
 
 // ---------------------------------------------------------------------
@@ -385,8 +424,19 @@ const VAL = ['4', '5', '6', '7', 'Q', 'J', 'K', 'A', '2', '3'];
 const NAIPE = ['♦', '♠', '♥', '♣'];                  // ordem das manilhas: ouros < espadas < copas < paus
 const NOME_NAIPE = ['ouros', 'espadas', 'copas', 'paus'];
 const NOME_VAL = { Q: 'dama', J: 'valete', K: 'rei', A: 'ás' };
-const VALOR_NOME = { 3: 'Truco', 6: 'Seis', 9: 'Nove', 12: 'Doze' };
-const PROX = { 1: 3, 3: 6, 6: 9, 9: 12 };
+// As duas regras. Paulista: manilha pela vira, mão vale 1, mão de onze. Mineiro: manilhas fixas, mão vale 2, mão de dez.
+// escada: o valor de cada pedido (truco, seis, nove, doze); especial: o placar da mão de onze (ou dez),
+// que vale "joga" se o time jogar e dá "corre" aos outros se correr.
+const REGRAS = {
+  paulista: { nome: 'Paulista', base: 1, escada: [3, 6, 9, 12], especial: 11, joga: 3, corre: 1, nomeEspecial: 'onze' },
+  mineiro: { nome: 'Mineiro', base: 2, escada: [4, 8, 10, 12], especial: 10, joga: 4, corre: 2, nomeEspecial: 'dez' },
+};
+const NOMES_PEDIDO = ['Truco', 'Seis', 'Nove', 'Doze'];
+const R = () => REGRAS[G.regra];
+const nomePedido = v => NOMES_PEDIDO[R().escada.indexOf(v)];
+const proxPedido = v => v < R().escada[0] ? R().escada[0] : R().escada[R().escada.indexOf(v) + 1];
+// Manilhas fixas do mineiro, pelo id da carta (v * 4 + n): 4♣ zap, 7♥ copas, A♠ espadilha, 7♦ pica-fumo
+const MANILHAS_MINEIRO = { 3: 13, 14: 12, 29: 11, 12: 10 };
 const time = s => s % 2;                              // 0 = nós (lugares 0 e 2), 1 = eles (1 e 3)
 
 function baralho() { const b = []; for (let v = 0; v < 10; v++) for (let n = 0; n < 4; n++) b.push({ v, n, id: v * 4 + n }); return b; }
@@ -394,8 +444,11 @@ function embaralhar(a, ate = a.length) {
   for (let i = 0; i < ate && i < a.length - 1; i++) { const j = i + Math.floor(rnd() * (a.length - i)); const t = a[i]; a[i] = a[j]; a[j] = t; }
   return a;
 }
-// Força de uma carta: 0 a 9 pela ordem normal; manilhas de 10 (ouros) a 13 (zap). Carta coberta vale -1.
-const forcaDe = (c, manilha) => c.v === manilha ? 10 + c.n : c.v;
+// Força de uma carta: 0 a 9 pela ordem normal; manilhas de 10 (pica-fumo) a 13 (zap). Carta coberta vale -1.
+// No mineiro não há vira, e a manilha da mão fica -1.
+const forcaDe = (c, manilha) => manilha < 0 ? MANILHAS_MINEIRO[c.id] ?? c.v : c.v === manilha ? 10 + c.n : c.v;
+// A carta comum mais forte (o três, ou o dois quando o três é manilha): é o que o sinal de "três" anuncia
+const topoComum = manilha => manilha === 9 ? 8 : 9;
 const nomeCarta = c => `${NOME_VAL[VAL[c.v]] || VAL[c.v]} de ${NOME_NAIPE[c.n]}`;
 
 // Resultado de uma vaza: mesa = [{ s, f }] na ordem em que foram jogadas
@@ -448,21 +501,48 @@ function rollout(maos, mesa, prox, vz) {
   }
 }
 const parceiroVisivel = s => G.mao.tipo === 'onze' && time(s) === G.mao.timeOnze;
-// Sorteia as mãos que s não conhece, a partir das cartas que ainda podem estar com os outros
+// Sorteia as mãos que s não conhece, a partir das cartas que ainda podem estar com os outros.
+// Os sinais que s viu (M.info[s]) entram como certezas: a manilha anunciada vai para quem a anunciou,
+// o "três" garante uma carta comum de topo, e o "nada" tira manilhas e treses daquela mão.
 function amostras(s, n, ver) {
-  const M = G.mao, conhecidas = new Set([M.vira.id]);
+  const M = G.mao, f = c => forcaDe(c, M.manilha), topo = topoComum(M.manilha);
+  const conhecidas = new Set(M.vira ? [M.vira.id] : []);
   for (const c of M.cartas[s]) conhecidas.add(c.id);
   if (ver) for (const c of M.cartas[(s + 2) % 4]) conhecidas.add(c.id);
   for (const j of M.jogadas) if (!j.coberta || j.s === s) conhecidas.add(j.c.id);
-  const pool = baralho().filter(c => !conhecidas.has(c.id)).map(c => forcaDe(c, M.manilha));
-  let precisa = 0; for (let t = 0; t < 4; t++) if (t !== s && !(ver && t === (s + 2) % 4)) precisa += M.cartas[t].length;
-  const res = [];
+  const oculto = t => t !== s && !(ver && t === (s + 2) % 4);
+  const fixas = [[], [], [], []], tres = [0, 0, 0, 0], nada = [false, false, false, false];
+  for (const { de, sinal } of M.info[s]) {
+    if (!oculto(de)) continue;
+    if (sinal.id === 'nada') nada[de] = true;
+    else if (sinal.id === 'tres') { if (!M.jogadas.some(j => j.s === de && !j.coberta && f(j.c) === topo)) tres[de] = 1; }
+    else {
+      const c = baralho().find(x => f(x) === sinal.f);
+      if (!conhecidas.has(c.id) && !fixas.some(l => l.includes(c.id))) fixas[de].push(c.id);
+    }
+  }
+  for (let t = 0; t < 4; t++) {
+    const q = M.cartas[t].length;
+    if (fixas[t].length > q) fixas[t].length = q;
+    if (fixas[t].length + tres[t] > q) tres[t] = 0;
+    for (const id of fixas[t]) conhecidas.add(id);
+  }
+  const pool = baralho().filter(c => !conhecidas.has(c.id)).map(f);
+  const ordem = [0, 1, 2, 3].filter(oculto).sort((a, b) => (tres[b] + nada[b]) - (tres[a] + nada[a]));
+  const forcasFixas = fixas.map(l => l.map(id => f(baralho()[id])));
+  const usada = new Uint8Array(pool.length), res = [];
   for (let k = 0; k < n; k++) {
-    embaralhar(pool, precisa);
-    let p = 0; const maos = [];
-    for (let t = 0; t < 4; t++) {
-      if (t === s || (ver && t === (s + 2) % 4)) maos.push(null);
-      else { const q = M.cartas[t].length; maos.push(pool.slice(p, p + q)); p += q; }
+    embaralhar(pool); usada.fill(0);
+    const maos = [null, null, null, null];
+    for (const t of ordem) {
+      const h = forcasFixas[t].slice(), q = M.cartas[t].length;
+      const pegar = (ok, max) => {
+        for (let i = 0; i < pool.length && max > 0 && h.length < q; i++) if (!usada[i] && ok(pool[i])) { usada[i] = 1; h.push(pool[i]); max--; }
+      };
+      if (tres[t]) pegar(x => x === topo, 1);
+      if (nada[t]) pegar(x => x < topo, q);
+      pegar(() => true, q);
+      maos[t] = h;
     }
     res.push(maos);
   }
@@ -529,7 +609,7 @@ function cpuResponde(t, pedido, quemPediu) {
   let taxa = quemPediu === 0 ? (voce.blefes + 1) / (voce.mostrados + 5) : PERS[G.seats[quemPediu]].blefe;
   taxa = .15 + (taxa - .15) * P.leitura;
   // Cada aumento é sinal de mão mais forte: no doze, quase ninguém está blefando
-  const nivel = { 3: 0, 6: 1, 9: 2, 12: 3 }[pedido];
+  const nivel = R().escada.indexOf(pedido);
   const pa = best.p * (1 - Math.min(.85, clamp(.35 - taxa * .8, .05, .35) * (1 + nivel)));
   const meus = G.pontos[t], deles = G.pontos[1 - t];
   let lim = (pedido - M.valor) / (2 * pedido) + .08 - P.coragem;
@@ -616,7 +696,8 @@ function layout() {
   raiz.setProperty('--av', av + 'px');
   for (let s = 1; s < 4; s++) { const el = $('j' + s); el.style.left = L.avp[s].x + 'px'; el.style.top = (L.avp[s].y - av / 2) + 'px'; }
   $('acoes').style.left = cx + 'px'; $('acoes').style.top = acoesY + 'px';
-  const pn = $('painel').style; pn.left = cx + 'px'; pn.top = (acoesY + 24) + 'px';
+  for (const id of ['painel', 'sinais']) { const pn = $(id).style; pn.left = cx + 'px'; pn.top = (acoesY + 24) + 'px'; }
+  const bs = $('btSinal').style; bs.left = (12 + seguro.esq) + 'px'; bs.top = acoesY + 'px';
   const avs = $('aviso').style; avs.left = cx + 'px'; avs.top = cy + 'px';
   const gr = $('grito').style; gr.left = cx + 'px'; gr.top = cy + 'px';
   posicionarBaloes();
@@ -639,7 +720,7 @@ function criarCarta(c, { verso = false, manilha = false, w } = {}) {
   el.innerHTML = `<span class="c1">${v}<i>${n}</i></span><span class="meio${fig ? ' fig' : ''}">${fig ? v + '<small>' + n + '</small>' : n}</span><span class="c1 c2">${v}<i>${n}</i></span>`;
   return el;
 }
-const ehManilha = c => cfg.destacar && c.v === G.mao.manilha;
+const ehManilha = c => cfg.destacar && forcaDe(c, G.mao.manilha) >= 10;
 
 const posMao = (i, n) => ({ x: L.cx + (i - (n - 1) / 2) * L.hw * 1.12, y: L.maoY });
 function renderMao(entrada) {
@@ -669,13 +750,17 @@ function renderVira() {
   if (!G || !G.mao) { box.hidden = true; return; }
   box.hidden = false;
   const vc = $('viraCarta'); vc.innerHTML = '';
-  vc.appendChild(criarCarta(G.mao.vira, { w: clamp(L.cw * .6, 30, 46) }));
-  $('manilhaTxt').textContent = VAL[G.mao.manilha];
+  // No mineiro não há vira: o quadro mostra o zap e avisa que as manilhas são fixas
+  const M = G.mao, w = clamp(L.cw * .6, 30, 46);
+  vc.appendChild(criarCarta(M.vira || baralho()[3], { w, manilha: !M.vira && cfg.destacar }));
+  $('viraTxt').innerHTML = M.vira ? `Manilha<b>${VAL[M.manilha]}</b>` : 'Manilhas<b>fixas</b>';
 }
 function montarJogadores() {
   for (let s = 0; s < 4; s++) {
     const p = pessoa(G.seats[s]), el = $('j' + s);
     el.querySelector('.av').innerHTML = avatarSVG(p);
+    el.querySelector('.av').classList.remove('sinal');
+    el.querySelector('.leg').classList.remove('ver');
     el.querySelector('.nome').textContent = s === 0 ? 'Você' : p.curto;
   }
 }
@@ -723,7 +808,7 @@ function atualizarPlacar() {
   $('pNos').textContent = G ? Math.min(12, G.pontos[0]) : 0;
   $('pEles').textContent = G ? Math.min(12, G.pontos[1]) : 0;
   const M = G && G.mao;
-  $('vale').innerHTML = !M ? '' : M.tipo === 'ferro' ? 'mão de <b>ferro</b>' : `mão vale <b>${M.valor}</b>` + (M.tipo === 'onze' ? ' · onze' : '');
+  $('vale').innerHTML = !M ? '' : M.tipo === 'ferro' ? 'mão de <b>ferro</b>' : `mão vale <b>${M.valor}</b>` + (M.tipo === 'onze' ? ' · ' + R().nomeEspecial : '');
   const dots = $('dots'); dots.innerHTML = '';
   if (M) for (let i = 0; i < 3; i++) { const d = document.createElement('i'); if (i < M.vz.length) d.className = 'd' + M.vz[i]; dots.appendChild(d); }
 }
@@ -773,9 +858,12 @@ function atualizarControles() {
   $('mao').classList.toggle('vez', turno);
   if (turno) {
     const pode = podePedir(0), bt = $('bTruco');
-    bt.hidden = !pode; if (pode) bt.textContent = VALOR_NOME[PROX[G.mao.valor]].toUpperCase() + '!';
+    bt.hidden = !pode; if (pode) bt.textContent = nomePedido(proxPedido(G.mao.valor)).toUpperCase() + '!';
     const pc = podeCobrir(); $('bCobrir').hidden = !pc; $('bCobrir').classList.toggle('ativo', pc && G.cobrir);
   }
+  const ps = podeSinalizar();
+  $('btSinal').hidden = !ps;
+  if (!ps) $('sinais').classList.remove('ver');
 }
 
 function fraseDe(s, tipo, forte) {
@@ -789,12 +877,96 @@ function fraseDe(s, tipo, forte) {
 function nomeDe(s) { return s === 0 ? 'Você' : pessoa(G.seats[s]).curto; }
 const dupla = t => t === 0 ? 'Vocês' : `${nomeDe(1)} e ${nomeDe(3)}`;
 
-function salvarPartida() { gravar('partida', { seats: G.seats, pontos: G.pontos, dealer: G.dealer }); }
+// ---------------------------------------------------------------------
+// Sinais entre parceiros: cada cara anuncia uma carta. O parceiro sempre vê; os adversários
+// pegam conforme o descuido de quem faz e o olho de quem está do outro lado.
+// ---------------------------------------------------------------------
+const SINAIS = [
+  { id: 'zap', f: 13, nome: 'Zap', gesto: 'piscou', expr: 'pisca' },
+  { id: 'copas', f: 12, nome: 'Copas', gesto: 'ergueu as sobrancelhas', expr: 'sobr' },
+  { id: 'espadilha', f: 11, nome: 'Espadilha', gesto: 'torceu a boca', expr: 'boca' },
+  { id: 'picafumo', f: 10, nome: 'Pica-fumo', gesto: 'encheu as bochechas', expr: 'boch' },
+  { id: 'tres', nome: 'Três', gesto: 'mordeu o lábio', expr: 'labio' },
+  { id: 'nada', nome: 'Nada', gesto: 'fechou os olhos', expr: 'olhos' },
+];
+const sinalId = id => SINAIS.find(x => x.id === id);
+const nomeSinal = sg => sg.id === 'tres' && G.mao.manilha === 9 ? 'Dois' : sg.nome;   // com o três de manilha, o sinal é do dois
+const podeSinalizar = () => !!G && !!G.mao && G.mao.tipo === 'normal' && !G.mao.fim && cfg.sinais !== 'off' &&
+  G.mao.cartas[0].length > 0 && !(G.aguardo && G.aguardo.tipo !== 'turno');
+// O que um jogador sinaliza: as manilhas, da maior para a menor, e o três; sem nada disso, "nada"
+function sinaisDaMao(s) {
+  const M = G.mao, fs = M.cartas[s].map(c => forcaDe(c, M.manilha)).sort((a, b) => b - a), lista = [];
+  for (const f of fs) if (f >= 10) lista.push(SINAIS.find(x => x.f === f));
+  if (fs.includes(topoComum(M.manilha))) lista.push(sinalId('tres'));
+  return lista.length ? lista : [sinalId('nada')];
+}
+function conhecer(s, de, sinal) { const I = G.mao.info[s]; if (!I.some(x => x.de === de && x.sinal === sinal)) I.push({ de, sinal }); }
+const timersCara = [], timersLeg = [];
+function mostrarCara(s, sinal, ms) {
+  const el = $('j' + s), av = el.querySelector('.av'), leg = el.querySelector('.leg');
+  av.innerHTML = avatarSVG(pessoa(G.seats[s]), sinal.expr); av.classList.add('sinal');
+  if (cfg.sinais === 'cola') { leg.textContent = `${sinal.gesto}: ${nomeSinal(sinal).toLowerCase()}`; leg.classList.add('ver'); }
+  clearTimeout(timersCara[s]); clearTimeout(timersLeg[s]);
+  timersCara[s] = setTimeout(() => { if (G) av.innerHTML = avatarSVG(pessoa(G.seats[s])); av.classList.remove('sinal'); }, ms);
+  timersLeg[s] = setTimeout(() => leg.classList.remove('ver'), ms + 1500);
+}
+async function fazerSinal(d, sinal) {
+  const M = G.mao, desc = d === 0 ? .3 : PERS[G.seats[d]].descuido;
+  conhecer((d + 2) % 4, d, sinal);
+  if (time(d) === 1) {
+    // Sinal da dupla adversária: só aparece na tela se foi descuidado, e aí o seu parceiro também pode pegar
+    const visto = rnd() < desc * 1.2;
+    if (visto) {
+      conhecer(0, d, sinal);
+      if (rnd() < PERS[G.seats[2]].olho * 1.5) conhecer(2, d, sinal);
+      ficha(G.seats[d]).sinaisVistos++;
+      mostrarCara(d, sinal, 750);
+    }
+    await esperar(visto ? 1000 : 350);
+    return;
+  }
+  for (const o of [1, 3]) if (rnd() < clamp(PERS[G.seats[o]].olho * desc * 2.5, 0, .85)) {
+    conhecer(o, d, sinal);
+    if (d === 0) voce.sinaisPegos++;
+    if (PERS[G.seats[o]].descuido > .2 && rnd() < .45) setTimeout(() => G && G.mao === M && balao(o, pick(['Vi esse sinal, hein!', 'Eu vi isso aí!', 'Hmm, sei...'])), 900);
+  }
+  if (d === 2) { mostrarCara(2, sinal, 1300); await esperar(1500); }
+}
+async function rodadaDeSinais() {
+  if (cfg.sinais === 'off' || G.mao.tipo !== 'normal') return;
+  for (const s of [2, 1, 3]) {
+    if (rnd() > PERS[G.seats[s]].sinaliza) continue;
+    for (const sg of sinaisDaMao(s).slice(0, 2)) await fazerSinal(s, sg);
+  }
+}
+// O seu sinal: o parceiro confia nele, mesmo que seja mentira (e quem pegar do outro lado também)
+function sinalHumano(id) {
+  if (!podeSinalizar()) return;
+  const sg = sinalId(id);
+  $('sinais').classList.remove('ver');
+  fazerSinal(0, sg);
+  balao(0, `Você ${sg.gesto}` + (cfg.sinais === 'cola' ? ` (${nomeSinal(sg).toLowerCase()})` : '') + '.', 2000);
+}
+function abrirSinais() {
+  if (!podeSinalizar()) return;
+  const g = $('sinaisGrade'); g.innerHTML = '';
+  const eu = pessoa(G.seats[0]);
+  for (const sg of SINAIS) {
+    const b = document.createElement('button');
+    b.innerHTML = avatarSVG(eu, sg.expr) + `<b>${nomeSinal(sg)}</b><small>${sg.gesto}</small>`;
+    b.addEventListener('click', () => sinalHumano(sg.id));
+    g.appendChild(b);
+  }
+  $('sinalParc').textContent = nomeDe(2);
+  $('sinais').classList.add('ver');
+}
+
+function salvarPartida() { gravar('partida', { seats: G.seats, pontos: G.pontos, dealer: G.dealer, regra: G.regra }); }
 
 function iniciarPartida(salva) {
   encerrarPartida();
   const outros = TURMA.map(t => t.id).filter(id => id !== cfg.eu && id !== cfg.parceiro);
-  G = { seats: salva ? salva.seats : [cfg.eu, outros[0], cfg.parceiro, outros[1]],
+  G = { regra: salva ? salva.regra || 'paulista' : cfg.regra, seats: salva ? salva.seats : [cfg.eu, outros[0], cfg.parceiro, outros[1]],
     pontos: salva ? salva.pontos.slice() : [0, 0], dealer: salva ? salva.dealer : Math.floor(rnd() * 4),
     mao: null, aguardo: null, abortada: false, cobrir: false };
   montarJogadores(); esconderTelas(); pausado = false;
@@ -826,13 +998,15 @@ async function rodarPartida() {
 
 function novaMao() {
   const b = embaralhar(baralho());
-  const M = { cartas: [[], [], [], []], vira: null, manilha: 0, valor: 1, ultimo: null, vz: [], mesa: [], jogadas: [],
-    pedidos: [], vez: -1, tipo: 'normal', timeOnze: null };
+  // info[s]: os sinais que s viu ({ de, sinal }); tipo 'onze' vale também para a mão de dez do mineiro
+  const M = { cartas: [[], [], [], []], vira: null, manilha: -1, valor: R().base, ultimo: null, vz: [], mesa: [], jogadas: [],
+    pedidos: [], info: [[], [], [], []], vez: -1, tipo: 'normal', timeOnze: null };
   for (let r = 0; r < 3; r++) for (let k = 1; k <= 4; k++) M.cartas[(G.dealer + k) % 4].push(b.pop());
-  M.vira = b.pop(); M.manilha = (M.vira.v + 1) % 10; M.vez = (G.dealer + 1) % 4;
-  const [a, e] = G.pontos;
-  if (a === 11 && e === 11) M.tipo = 'ferro';
-  else if (a === 11 || e === 11) { M.tipo = 'onze'; M.timeOnze = a === 11 ? 0 : 1; }
+  if (G.regra === 'paulista') { M.vira = b.pop(); M.manilha = (M.vira.v + 1) % 10; }
+  M.vez = (G.dealer + 1) % 4;
+  const [a, e] = G.pontos, E = R().especial;
+  if (a === E && e === E) M.tipo = 'ferro';
+  else if (a === E || e === E) { M.tipo = 'onze'; M.timeOnze = a === E ? 0 : 1; }
   if (M.tipo !== 'ferro') M.cartas[0].sort((x, y) => forcaDe(x, M.manilha) - forcaDe(y, M.manilha));
   G.mao = M; G.cobrir = false;
 }
@@ -843,13 +1017,16 @@ async function jogarMao() {
   limparMesa(); marcarVez(-1); atualizarPlacar(); renderVira();
   som('embaralhar');
   renderMao(true); for (let s = 1; s < 4; s++) renderCostas(s);
+  atualizarControles();
   await esperar(700);
-  if (M.tipo === 'ferro') { aviso('Mão de ferro!', '11 a 11: ninguém vê as cartas, nem as próprias. Quem ganhar leva a partida.', 3200); await esperar(2600); }
+  const E = R().especial;
+  if (M.tipo === 'ferro') { aviso('Mão de ferro!', `${E} a ${E}: ninguém vê as cartas, nem as próprias. Quem ganhar leva a partida.`, 3200); await esperar(2600); }
   if (M.tipo === 'onze') {
     const joga = await decidirOnze();
-    if (!joga) { await fimMao(1 - M.timeOnze, 1, `${dupla(M.timeOnze)} correram da mão de onze`); return; }
-    M.valor = 3; atualizarPlacar();
+    if (!joga) { await fimMao(1 - M.timeOnze, R().corre, `${dupla(M.timeOnze)} correram da mão de ${R().nomeEspecial}`); return; }
+    M.valor = R().joga; atualizarPlacar();
   }
+  await rodadaDeSinais();
   let lead = (G.dealer + 1) % 4;
   for (let v = 0; v < 3; v++) {
     M.mesa = [];
@@ -918,7 +1095,7 @@ async function recolherVaza(res) {
 // Pedido de truco (e os aumentos que vierem). Devolve null se alguém aceitou, ou o fim da mão se alguém correu.
 async function negociar(s, forte, p) {
   const M = G.mao;
-  let pedeTime = time(s), quem = s, pedido = PROX[M.valor];
+  let pedeTime = time(s), quem = s, pedido = proxPedido(M.valor);
   while (true) {
     registrarPedido(quem, p);
     await anunciar(quem, pedido, forte);
@@ -933,7 +1110,7 @@ async function negociar(s, forte, p) {
     }
     if (r.resp === 'corre') {
       if (r.s !== 0) balao(r.s, fraseDe(r.s, 'corre'));
-      return { vencedor: pedeTime, txt: `${respTime === 0 ? 'Vocês correram' : dupla(1) + ' correram'} do ${VALOR_NOME[pedido].toLowerCase()}` };
+      return { vencedor: pedeTime, txt: `${respTime === 0 ? 'Vocês correram' : dupla(1) + ' correram'} do ${nomePedido(pedido).toLowerCase()}` };
     }
     M.valor = pedido; M.ultimo = pedeTime; atualizarPlacar();
     if (r.resp === 'aceita') {
@@ -942,7 +1119,7 @@ async function negociar(s, forte, p) {
       atualizarControles();
       return null;
     }
-    pedeTime = respTime; quem = r.s; pedido = PROX[pedido]; forte = r.forte; p = r.p;
+    pedeTime = respTime; quem = r.s; pedido = proxPedido(pedido); forte = r.forte; p = r.p;
   }
 }
 function registrarPedido(s, p) {
@@ -952,18 +1129,18 @@ function registrarPedido(s, p) {
   else if (time(s) === 1 && !M.pedidos.some((x, i) => i < M.pedidos.length - 1 && x.s === s)) ficha(G.seats[s]).maosPediu++;
 }
 async function anunciar(s, valor, forte) {
-  const nome = VALOR_NOME[valor];
+  const nome = nomePedido(valor);
   som('tapa');
   grito(nome.toUpperCase() + '!', time(s));
-  const txt = s === 0 ? nome + '!' : fraseDe(s, valor === 3 ? 'pede' : 'aumenta', forte).replace(/\{v\}/g, nome);
+  const txt = s === 0 ? nome + '!' : fraseDe(s, valor === R().escada[0] ? 'pede' : 'aumenta', forte).replace(/\{v\}/g, nome);
   balao(s, txt, 2600);
   falarVoz(txt, s);
   await esperar(1150);
 }
 async function humanoResponde(pedido, quem) {
-  const M = G.mao, nome = VALOR_NOME[pedido];
+  const M = G.mao, nome = nomePedido(pedido);
   const botoes = [{ rotulo: 'Aceitar', valor: 'aceita', classe: 'prim' }, { rotulo: 'Correr', valor: 'corre' }];
-  if (pedido < 12) botoes.push({ rotulo: VALOR_NOME[PROX[pedido]].toUpperCase() + '!', valor: 'aumenta', classe: 'truco' });
+  if (pedido < 12) botoes.push({ rotulo: nomePedido(proxPedido(pedido)).toUpperCase() + '!', valor: 'aumenta', classe: 'truco' });
   const txt = `${nomeDe(quem)} pediu ${nome.toLowerCase()}. Aceitando, a mão vale ${pedido}. Correndo, eles ganham ${M.valor}.`;
   mostrarPainel(txt, botoes);
   // O parceiro dá um palpite, como na mesa de verdade
@@ -978,21 +1155,21 @@ async function humanoResponde(pedido, quem) {
 }
 
 async function decidirOnze() {
-  const M = G.mao, t = M.timeOnze;
+  const M = G.mao, t = M.timeOnze, Rg = R();
   if (t === 0) {
     const pp = chanceDe(2, 200);
-    mostrarPainel(`Mão de onze! Vocês estão com 11. Estas são as cartas de ${nomeDe(2)}. Jogar vale 3 pontos; correr dá 1 ponto a eles.`,
+    mostrarPainel(`Mão de ${Rg.nomeEspecial}! Vocês estão com ${Rg.especial}. Estas são as cartas de ${nomeDe(2)}. Jogar vale ${Rg.joga} pontos; correr dá ${Rg.corre} ${Rg.corre === 1 ? 'ponto' : 'pontos'} a eles.`,
       [{ rotulo: 'Jogar', valor: true, classe: 'prim' }, { rotulo: 'Correr', valor: false }], M.cartas[2]);
     setTimeout(() => { if (G && G.aguardo && G.aguardo.tipo === 'onze')
       balao(2, pp > .55 ? 'Vamos jogar!' : pp > .38 ? 'Dá pra arriscar.' : 'Hmm, tá difícil.', 3500); }, 600);
     return await aguardarHumano('onze');
   }
-  aviso('Mão de onze', `${dupla(1)} estão com 11 e veem as cartas um do outro.`, 2400);
+  aviso('Mão de ' + Rg.nomeEspecial, `${dupla(1)} estão com ${Rg.especial} e veem as cartas um do outro.`, 2400);
   const p = chanceDe(1, 220);
   const coragem = (PERS[G.seats[1]].coragem + PERS[G.seats[3]].coragem) / 2;
   let lim = .38 - coragem * .5;
-  if (G.pontos[0] + 3 >= 12) lim += .12;
-  const joga = G.pontos[0] + 1 >= 12 || p >= lim;
+  if (G.pontos[0] + Rg.joga >= 12) lim += .12;
+  const joga = G.pontos[0] + Rg.corre >= 12 || p >= lim;
   const fala = p >= lim + .2 ? 1 : 3;
   await esperar(1500);
   balao(fala, joga ? pick(['Vamos jogar!', 'Essa a gente joga.']) : pick(['Melhor correr.', 'Essa não dá.']));
@@ -1002,9 +1179,10 @@ async function decidirOnze() {
 
 async function fimMao(t, valor, txt) {
   const M = G.mao;
+  M.fim = true;
   marcarVez(-1); esconderPainel(); atualizarControles();
   // Truco aceito é pago para ver: no fim da mão, as cartas que sobraram vão para a mesa (as cobertas, não)
-  if (!txt && M.valor > 1 && M.tipo === 'normal') { M.revelar = true; for (let s = 1; s < 4; s++) renderCostas(s); }
+  if (!txt && M.valor > R().base && M.tipo === 'normal') { M.revelar = true; for (let s = 1; s < 4; s++) renderCostas(s); }
   // Pedidos cujas cartas acabaram à vista: dá para saber se eram blefe
   const vistos = new Set();
   for (const pd of M.pedidos) {
@@ -1077,11 +1255,12 @@ function montarEscolha() {
       el.appendChild(b);
     }
   }
+  for (const b of $('escRegra').children) b.classList.toggle('sel', b.dataset.regra === cfg.regra);
   const outros = TURMA.filter(t => t.id !== cfg.eu && t.id !== cfg.parceiro).map(t => t.curto);
   $('contra').textContent = `Contra: ${outros.join(' e ')}.`;
   const salva = ler('partida', null);
   $('mContinuar').hidden = !salva;
-  if (salva) $('mContTxt').textContent = `Nós ${salva.pontos[0]} x ${salva.pontos[1]} ${salva.seats.filter((_, i) => i % 2).map(id => pessoa(id).curto).join(' e ')}`;
+  if (salva) $('mContTxt').textContent = `${REGRAS[salva.regra || 'paulista'].nome}: nós ${salva.pontos[0]} x ${salva.pontos[1]} ${salva.seats.filter((_, i) => i % 2).map(id => pessoa(id).curto).join(' e ')}`;
   $('mJogarTxt').textContent = salva ? 'a partida guardada conta como derrota' : '';
   $('estatTxt').textContent = estat.partidas
     ? `Partidas: ${estat.partidas} · Vitórias: ${estat.vitorias} · Sequência: ${estat.seq} · Recorde: ${estat.recorde}`
@@ -1094,6 +1273,7 @@ function montarOpcoes() {
       ['som', () => 'Som: ' + (cfg.som ? 'ligado' : 'desligado'), () => { cfg.som = !cfg.som; }],
       ['voz', () => 'Voz: ' + (!vozPt ? 'indisponível' : cfg.voz ? 'ligada' : 'desligada'), () => { cfg.voz = !cfg.voz; }],
       ['ritmo', () => 'Ritmo: ' + { normal: 'normal', rapido: 'rápido', calmo: 'calmo' }[cfg.ritmo], () => { cfg.ritmo = { normal: 'rapido', rapido: 'calmo', calmo: 'normal' }[cfg.ritmo] || 'normal'; }],
+      ['sinais', () => 'Sinais: ' + { cola: 'com cola', sem: 'sem cola', off: 'desligados' }[cfg.sinais], () => { cfg.sinais = { cola: 'sem', sem: 'off', off: 'cola' }[cfg.sinais] || 'cola'; atualizarControles(); }],
       ['destacar', () => 'Manilhas: ' + (cfg.destacar ? 'com estrela' : 'sem destaque'), () => { cfg.destacar = !cfg.destacar; if (G && G.mao) { renderMao(); renderCostas(2); } }],
     ];
     for (const [k, rot, acao] of ops) {
@@ -1116,6 +1296,7 @@ function montarFichas() {
     if (f.mostrados) linhas.push(`Pedidos que ele${p.fem ? 'a' : ''} teve de mostrar: ${f.mostrados}. Eram blefe: ${f.blefes} (${pct(f.blefes, f.mostrados)}).`);
     if (f.seusPedidos) linhas.push(`Contra os seus pedidos: correu ${f.correu}, aceitou ${f.aceitou}, aumentou ${f.aumentou}.`);
     if (f.partidas) linhas.push(`Partidas contra: ${f.partidas}, você venceu ${f.vitoriasSuas}.`);
+    if (f.sinaisVistos) linhas.push(`Sinais que você pegou: ${f.sinaisVistos}.`);
     if (f.comVoce) linhas.push(`Como seu parceiro: ${f.vitoriasJuntos} vitórias em ${f.comVoce} partidas.`);
     const falta = 20 - f.maos;
     const leitura = falta <= 0 ? P.leituraTxt : `Jogue mais ${falta} ${falta === 1 ? 'mão' : 'mãos'} contra ${p.fem ? 'ela' : 'ele'} para ter uma leitura.`;
@@ -1127,9 +1308,10 @@ function montarFichas() {
   }
   const d = document.createElement('div'); d.className = 'ficha';
   d.innerHTML = '<div><h4>E a turma lê você</h4><p></p></div>';
-  d.querySelector('p').textContent = voce.mostrados
+  d.querySelector('p').textContent = (voce.mostrados
     ? `Dos seus pedidos que acabaram na mesa (${voce.mostrados}), ${voce.blefes} eram blefe. A Lícia presta muita atenção nisso; o Leo, quase nada.`
-    : 'Quando você pede truco e as suas cartas acabam na mesa, a turma vê se era blefe e passa a acreditar mais ou menos em você.';
+    : 'Quando você pede truco e as suas cartas acabam na mesa, a turma vê se era blefe e passa a acreditar mais ou menos em você.') +
+    (voce.sinaisPegos ? ` Dos seus sinais, ${voce.sinaisPegos} foram pegos pelos adversários.` : '');
   el.appendChild(d);
 }
 
@@ -1158,6 +1340,9 @@ $('fMenu').addEventListener('click', abrirMenu);
 $('fJogos').addEventListener('click', voltarAosJogos);
 for (const b of document.querySelectorAll('[data-voltar]')) b.addEventListener('click', () => mostrarTela(telaVolta));
 $('btPausa').addEventListener('click', pausar);
+$('btSinal').addEventListener('click', () => $('sinais').classList.contains('ver') ? $('sinais').classList.remove('ver') : abrirSinais());
+$('sinaisFechar').addEventListener('click', () => $('sinais').classList.remove('ver'));
+for (const b of $('escRegra').children) b.addEventListener('click', () => { cfg.regra = b.dataset.regra; gravar('config', cfg); montarEscolha(); });
 
 function jogarHumano(i) {
   const a = G && G.aguardo;
@@ -1176,8 +1361,16 @@ addEventListener('keydown', e => {
     else if (!tela) pausar();
     return;
   }
-  if (tela || !G || !G.aguardo) return;
-  const k = e.key.toLowerCase(), a = G.aguardo;
+  if (tela || !G) return;
+  const k = e.key.toLowerCase();
+  if ($('sinais').classList.contains('ver')) {
+    const i = '123456'.indexOf(k);
+    if (i >= 0) sinalHumano(SINAIS[i].id); else if (k === 's') $('sinais').classList.remove('ver');
+    return;
+  }
+  if (k === 's' && (!G.aguardo || G.aguardo.tipo === 'turno')) { abrirSinais(); return; }
+  if (!G.aguardo) return;
+  const a = G.aguardo;
   if (a.tipo === 'turno') {
     if (k >= '1' && k <= '3') jogarHumano(+k - 1);
     else if (k === 't') $('bTruco').click();
