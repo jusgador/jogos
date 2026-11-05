@@ -87,7 +87,9 @@ const fmt = n => Math.floor(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
    Moedas, upgrades comprados, fases liberadas, estrelas e recordes.
    ===================================================================== */
 const SAVE_KEY = 'asasDeAco.save.v1';
-const save = { coins: 0, up: {}, unlocked: 1, stars: [0,0,0,0,0,0,0,0], best: [0,0,0,0,0,0,0,0], medal: [0,0,0,0,0,0,0,0], muted: false, done: false, diff: 'normal' };
+const N_STAGES = 10; // total de fases (tabela STAGES)
+const zeros = () => new Array(N_STAGES).fill(0);
+const save = { coins: 0, up: {}, unlocked: 1, stars: zeros(), best: zeros(), medal: zeros(), muted: false, done: false, diff: 'normal' };
 function loadSave() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
@@ -95,10 +97,13 @@ function loadSave() {
       Object.assign(save, s);
       save.up = Object.assign({}, s.up || {});
       for (const k of ['stars', 'best', 'medal']) {
-        const a = Array.isArray(s[k]) ? s[k].slice(0, 8) : [];
-        while (a.length < 8) a.push(0);
+        const a = Array.isArray(s[k]) ? s[k].slice(0, N_STAGES) : [];
+        while (a.length < N_STAGES) a.push(0);
         save[k] = a;
       }
+      // o jogo tinha 8 fases: quem já venceu a 8 ganha acesso à 9
+      if (save.stars[7] > 0) save.unlocked = Math.max(save.unlocked, 9);
+      save.unlocked = clamp(save.unlocked | 0, 1, N_STAGES);
       if (!DIFFS[save.diff]) save.diff = 'normal';
     }
   } catch (e) { /* armazenamento indisponível: segue sem salvar */ }
@@ -212,7 +217,7 @@ const RESCUE_REWARDS = { life: 2, shield: 3, coins: 4 };
 
 // ---- Chefes e mini-chefes ----
 // Coordenadas locais (sem escala); +y aponta para baixo (para o jogador).
-// hit: círculos [x,y,r] do núcleo. parts: peças destrutíveis com ataque próprio.
+// hit: círculos [x,y,r] do núcleo. parts: peças destrutíveis com ataque próprio. smoke: saídas de fumaça.
 // phases: at = fração de vida em que a fase começa; core = ataques do núcleo;
 // rate = multiplicador de cadência das peças. Padrões: aim, fan, ring, spiral,
 // burst, missiles, spawn, wall.
@@ -318,6 +323,39 @@ const BOSSES = {
       { at: 0.66, rate: 1.15, core: [{ p: 'spiral', cd: 5, dur: 3, step: 0.09, arms: 3, spin: 0.3, spd: 120, oy: 30 }, { p: 'burst', cd: 3.4, n: 6, step: 0.09, spd: 200, oy: 30 }] },
       { at: 0.33, rate: 1.3, core: [{ p: 'spiral', cd: 4.6, dur: 3.4, step: 0.1, arms: 6, spin: 0.22, spd: 110, oy: 30 }, { p: 'missiles', cd: 6, n: 4, oy: 30 }, { p: 'wall', cd: 7, spd: 100 }] },
     ] },
+  walker: { name: 'MAMUTE DE AÇO', style: 'walker', ground: true, hp: 2300, y: 240, sway: 70, swaySpd: 0.4, score: 100000, coins: 220,
+    smoke: [[-28, -166], [28, -166]],
+    hit: [[0, -80, 62], [0, 10, 72], [0, 112, 48]],
+    parts: [
+      { id: 'main', kind: 'cannon', x: 0, y: -10, r: 28, hp: 200, atk: { p: 'burst', cd: 3.0, n: 5, step: 0.1, spd: 195 } },
+      { id: 'hL', kind: 'cannon', x: -50, y: 122, r: 18, hp: 140, atk: { p: 'fan', cd: 2.6, n: 3, spread: 0.45, spd: 165, aim: true } },
+      { id: 'hR', kind: 'cannon', x: 50, y: 122, r: 18, hp: 140, atk: { p: 'fan', cd: 2.6, n: 3, spread: 0.45, spd: 165, aim: true } },
+      { id: 'sL', kind: 'cannon', x: -66, y: -40, r: 16, hp: 110, atk: { p: 'aim', cd: 2.1, spd: 170 } },
+      { id: 'sR', kind: 'cannon', x: 66, y: -40, r: 16, hp: 110, atk: { p: 'aim', cd: 2.1, spd: 170 } },
+      { id: 'pod', kind: 'pod', x: 0, y: -112, r: 22, hp: 160, atk: { p: 'missiles', cd: 6, n: 3 } },
+    ],
+    phases: [
+      { at: 1, core: [{ p: 'fan', cd: 3.2, n: 7, spread: 1.2, spd: 135, oy: 150 }] },
+      { at: 0.66, rate: 1.15, core: [{ p: 'ring', cd: 3.2, n: 16, spd: 115, oy: 10 }, { p: 'wall', cd: 7, spd: 100 }] },
+      { at: 0.33, rate: 1.3, core: [{ p: 'spiral', cd: 4.8, dur: 3, step: 0.1, arms: 4, spin: 0.27, spd: 120, oy: 10 }, { p: 'fan', cd: 3.4, n: 5, spread: 0.7, spd: 150, aim: true, oy: 150 }] },
+    ] },
+  titan: { name: 'TITÃ DE MAGMA', style: 'titan', hp: 3600, y: 240, sway: 70, swaySpd: 0.34, score: 200000, coins: 360,
+    smoke: [[-50, -186], [0, -190], [50, -186]],
+    hit: [[0, -120, 52], [0, -15, 76], [0, 95, 56]],
+    parts: [
+      { id: 'wingL', kind: 'wing', x: -160, y: -36, r: 52, hp: 420, atk: { p: 'fan', cd: 3.1, n: 5, spread: 0.9, spd: 140, aim: true } },
+      { id: 'wingR', kind: 'wing', x: 160, y: -36, r: 52, hp: 420, atk: { p: 'fan', cd: 3.1, n: 5, spread: 0.9, spd: 140, aim: true } },
+      { id: 'cL', kind: 'cannon', x: -60, y: 108, r: 20, hp: 180, atk: { p: 'burst', cd: 3, n: 5, step: 0.1, spd: 195 } },
+      { id: 'cR', kind: 'cannon', x: 60, y: 108, r: 20, hp: 180, atk: { p: 'burst', cd: 3, n: 5, step: 0.1, spd: 195 } },
+      { id: 'mL', kind: 'pod', x: -66, y: -128, r: 20, hp: 150, atk: { p: 'missiles', cd: 6, n: 2 } },
+      { id: 'mR', kind: 'pod', x: 66, y: -128, r: 20, hp: 150, atk: { p: 'missiles', cd: 6, n: 2 } },
+    ],
+    phases: [
+      { at: 1, core: [{ p: 'fan', cd: 3.3, n: 9, spread: 1.4, spd: 130, oy: 40 }, { p: 'ring', cd: 4.6, n: 14, spd: 110, oy: -15 }] },
+      { at: 0.75, rate: 1.15, core: [{ p: 'spiral', cd: 5, dur: 3, step: 0.09, arms: 3, spin: 0.3, spd: 120, oy: -15 }, { p: 'burst', cd: 3.4, n: 6, step: 0.09, spd: 200, oy: 40 }] },
+      { at: 0.5, rate: 1.25, core: [{ p: 'spiral', cd: 4.6, dur: 3.2, step: 0.1, arms: 5, spin: -0.24, spd: 115, oy: -15 }, { p: 'missiles', cd: 6, n: 4, oy: 40 }, { p: 'spawn', cd: 8, n: 3, type: 'kamikaze', oy: 60 }] },
+      { at: 0.25, rate: 1.4, core: [{ p: 'spiral', cd: 4.4, dur: 3.4, step: 0.1, arms: 6, spin: 0.22, spd: 110, oy: -15 }, { p: 'wall', cd: 6.5, spd: 100 }, { p: 'fan', cd: 3.2, n: 7, spread: 0.9, spd: 150, aim: true, oy: 40 }] },
+    ] },
   // ---------------- mini-chefes (vida multiplicada pela dificuldade da fase) ----------------
   gunship: { name: 'HELICÓPTERO BLINDADO', style: 'heli', mini: true, hp: 180, y: 175, sway: 120, swaySpd: 0.6, score: 8000, coins: 40,
     hit: [[0, 0, 36], [0, -62, 16]],
@@ -400,11 +438,21 @@ const STAGES = [
     waveGap: [2.6, 3.7], ground: ['flak', 'turret'], groundGap: [4.5, 7],
     targets: [['reactor', 5]], hostages: 7, goal: { t: 4, r: 5 }, mini: { boss: 'warden', at: 0.5 }, boss: 'station',
     hpMul: 2.0, fireMul: 0.95, bulletMul: 1.0, coinMul: 2.0 },
-  { name: 'Núcleo Imperial', sub: 'A batalha final', theme: 'core', dur: 150, scroll: 62,
+  { name: 'Núcleo Imperial', sub: 'O trono do Imperador', theme: 'core', dur: 150, scroll: 62,
     air: { drone: 3, saucer: 3, gunner: 2, jet: 2, kamikaze: 2 }, late: { bomber: 1, saucer: 1 }, forms: ['v', 'sine', 'swoop', 'column', 'pincer'],
     waveGap: [2.5, 3.6], ground: ['flak', 'turret', 'sam'], groundGap: [4.5, 6.5],
     targets: [['reactor', 4], ['hangar', 3]], hostages: 8, goal: { t: 6, r: 6 }, mini: { boss: 'skyfort', at: 0.45 }, boss: 'emperor',
     hpMul: 2.3, fireMul: 1.0, bulletMul: 1.02, coinMul: 2.2 },
+  { name: 'Geleira Polar', sub: 'A rota de fuga do Império', theme: 'ice', dur: 150, scroll: 62,
+    air: { jet: 4, fighter: 2, heli: 2, gunner: 2, kamikaze: 2 }, late: { bomber: 2, gunner: 1, drone: 1 }, forms: ['v', 'sine', 'swoop', 'column', 'pincer'],
+    waveGap: [2.45, 3.55], ground: ['tank', 'turret', 'sam', 'flak'], groundGap: [4.4, 6.6],
+    targets: [['radar', 3], ['depot', 2], ['base', 2]], hostages: 8, goal: { t: 5, r: 6 }, mini: { boss: 'gunship', at: 0.5 }, boss: 'walker',
+    hpMul: 2.5, fireMul: 1.03, bulletMul: 1.04, coinMul: 2.4 },
+  { name: 'Forja Vulcânica', sub: 'O último reduto do Império', theme: 'volcano', dur: 155, scroll: 64,
+    air: { jet: 3, gunner: 3, saucer: 2, drone: 2, kamikaze: 2 }, late: { bomber: 2, saucer: 1, gunner: 1 }, forms: ['v', 'sine', 'swoop', 'column', 'pincer'],
+    waveGap: [2.4, 3.5], ground: ['flak', 'turret', 'sam', 'tank'], groundGap: [4.2, 6.2],
+    targets: [['reactor', 3], ['hangar', 2], ['depot', 3]], hostages: 8, goal: { t: 6, r: 6 }, mini: { boss: 'blimp', at: 0.45 }, boss: 'titan',
+    hpMul: 2.7, fireMul: 1.06, bulletMul: 1.06, coinMul: 2.6 },
 ];
 
 /* =====================================================================
@@ -802,6 +850,7 @@ const GTINT = {
   ocean: ['#8a96a3', '#2e3740', '#b5c0cb'], jungle: ['#5f7a3a', '#27331a', '#86a35a'], desert: ['#b9965a', '#5a4524', '#dcbf86'],
   city: ['#6b7684', '#2a3038', '#95a1af'], navy: ['#5d6875', '#20262d', '#8794a2'], base: ['#5a6470', '#22282f', '#86919e'],
   space: ['#6f6a9a', '#2a2645', '#9c97c9'], core: ['#7a5aa0', '#2c1d40', '#a585cc'],
+  ice: ['#8b98a5', '#2f3a45', '#c3cfd9'], volcano: ['#6b5040', '#2a1b14', '#9c7660'],
 };
 const isSea = th => th === 'ocean' || th === 'navy';
 const isSpace = th => th === 'space' || th === 'core';
@@ -832,6 +881,13 @@ function drawPad(g, th, R, r = Math.random) {
     for (let x = -R * 2; x < R * 2; x += 16) { L(g, x, -R, x + 10, -R + 10, '#f1c40f', 5); L(g, x, R, x + 10, R - 10, '#f1c40f', 5); }
     g.restore();
     RR(g, -R + 8, -R + 8, R * 2 - 16, R * 2 - 16, 4, '#7b8592', '#4a525c', 1.5);
+  } else if (th === 'ice') {
+    RR(g, -R, -R, R * 2, R * 2, 8, '#a9b4bd', '#5f6a73', 2); RR(g, -R + 6, -R + 6, R * 2 - 12, R * 2 - 12, 5, '#bcc6ce');
+    for (let i = 0; i < 7; i++) { const a = r() * TAU; E(g, Math.cos(a) * R * 0.95, Math.sin(a) * R * 0.95, 9 + r() * 9, 5, 'rgba(250,252,255,0.95)', null, 2, a); }
+  } else if (th === 'volcano') {
+    const o = []; for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + Math.PI / 8; o.push(Math.cos(a) * R * 1.08, Math.sin(a) * R * 1.08); }
+    P(g, o, '#4a3b35', '#1d1411', 3); P(g, o.map(v => v * 0.86), '#5a4840');
+    for (let i = 0; i < 8; i++) C(g, o[i * 2] * 0.94, o[i * 2 + 1] * 0.94, 2.5, '#ff7a2a');
   } else { // espaço: plataforma hexagonal
     const pts = []; for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + Math.PI / 6; pts.push(Math.cos(a) * R * 1.1, Math.sin(a) * R * 1.1); }
     P(g, pts, '#474b63', '#1c1f2e', 3);
@@ -1224,6 +1280,58 @@ const BOSS_DRAW = {
     C(g, Math.cos(ea) * 12 - 4, -14 + Math.sin(ea) * 12, 3, '#fff');
     if (b.phase >= 2) C(g, 0, -10, 46 + Math.sin(t * 10) * 3, null, 'rgba(255,60,60,0.6)', 3);
   },
+  walker(g, b) { // andador de quatro patas, visto de cima
+    const t = G.time, hull = '#8d9aa6', dark = '#2c353e', lite = '#c9d4dd', snow = '#f4f8fb';
+    for (const [sx, hy, ph] of [[-1, -84, 0], [1, -84, Math.PI], [-1, 64, Math.PI], [1, 64, 0]]) {
+      const st = Math.sin(t * 2.4 + ph), fx = sx * 132, fy = hy + st * 22, kx = sx * 112, ky = hy - 12 + st * 8;
+      g.beginPath(); g.moveTo(sx * 60, hy); g.lineTo(kx, ky); g.lineTo(fx, fy);
+      g.strokeStyle = dark; g.lineWidth = 24; g.stroke(); g.strokeStyle = hull; g.lineWidth = 16; g.stroke();
+      C(g, kx, ky, 11, lite, dark, 3);
+      E(g, fx, fy, 20, 24, '#5d6a76', dark, 3); E(g, fx, fy - 4, 12, 14, '#77848f');
+    }
+    for (const sx of [-1, 1]) { RR(g, sx * 28 - 9, -170, 18, 36, 5, '#4a5560', dark, 3); C(g, sx * 28, -166, 6, '#1a1f24'); }
+    E(g, 0, -12, 94, 140, hull, dark, 5);
+    E(g, 0, -12, 78, 122, '#a3afba');
+    for (let y = -112; y <= 92; y += 28) L(g, -66 + Math.abs(y) * 0.12, y, 66 - Math.abs(y) * 0.12, y, 'rgba(44,53,62,0.3)', 2);
+    E(g, -34, -78, 28, 14, snow); E(g, 38, 34, 22, 11, snow); E(g, -26, 66, 16, 8, snow);
+    for (const sx of [-1, 1]) { // presas
+      g.beginPath(); g.moveTo(sx * 26, 138); g.quadraticCurveTo(sx * 72, 172, sx * 38, 210);
+      g.strokeStyle = '#5a4a32'; g.lineWidth = 15; g.stroke(); g.strokeStyle = '#efe6cf'; g.lineWidth = 10; g.stroke();
+    }
+    E(g, 0, 120, 60, 44, hull, dark, 5); E(g, 0, 114, 46, 30, lite);
+    const eye = ['#4ff3ff', '#ffb63d', '#ff3d3d'][b.phase] || '#4ff3ff';
+    for (const sx of [-1, 1]) { C(g, sx * 18, 140, 7, '#111', dark, 2); C(g, sx * 18, 140, 4, eye); }
+  },
+  titan(g, b) { // fortaleza voadora de rocha e magma
+    const t = G.time, wl = bp(b, 'wingL'), wr = bp(b, 'wingR');
+    const rock = '#2e2522', dark = '#120c0a', lite = '#4a3c36', lava = '#ff6a1a', hot = '#ffd36b', pul = 0.6 + 0.4 * Math.sin(t * 4);
+    for (const ex of [-50, 0, 50]) { const f = 0.7 + Math.random() * 0.3; C(g, ex, -196, 20 * f, 'rgba(255,120,30,0.4)'); C(g, ex, -190, 10 * f, '#ffe08a'); }
+    for (const [sx, w] of [[-1, wl], [1, wr]]) {
+      if (w && !w.dead) {
+        P(g, [sx * 62, 50, sx * 150, 18, sx * 240, -44, sx * 212, -72, sx * 236, -106, sx * 150, -94, sx * 62, -122], rock, dark, 4);
+        P(g, [sx * 72, 30, sx * 150, 2, sx * 212, -48, sx * 150, -80, sx * 72, -102], lite);
+        g.globalAlpha = pul;
+        L(g, sx * 72, -34, sx * 150, -40, lava, 3.5); L(g, sx * 150, -40, sx * 222, -64, lava, 3.5); L(g, sx * 150, -40, sx * 150, -4, lava, 3);
+        L(g, sx * 72, -34, sx * 150, -40, hot, 1.2); L(g, sx * 150, -40, sx * 222, -64, hot, 1.2);
+        g.globalAlpha = 1;
+      } else {
+        P(g, [sx * 62, 50, sx * 112, 24, sx * 98, -20, sx * 128, -54, sx * 104, -92, sx * 62, -122], '#1e1714', dark, 4);
+        C(g, sx * 108, -36, 8 + Math.random() * 5, 'rgba(255,110,30,0.75)');
+      }
+    }
+    const body = [0, 196, 70, 122, 100, 20, 96, -110, 50, -186, -50, -186, -96, -110, -100, 20, -70, 122];
+    P(g, body, rock, dark, 5);
+    P(g, body.map(v => v * 0.8), lite);
+    g.globalAlpha = 0.55 + 0.45 * pul;
+    for (const [x1, y1, x2, y2] of [[0, 40, 0, 170], [-34, 30, -72, 108], [34, 30, 72, 108], [-40, -70, -78, -132], [40, -70, 78, -132], [0, -76, 0, -172]]) {
+      L(g, x1, y1, x2, y2, lava, 4.5); L(g, x1, y1, x2, y2, hot, 1.6);
+    }
+    g.globalAlpha = 1;
+    const core = ['#ffb43a', '#ff8a1a', '#ff4a1a', '#ff1a4a'][b.phase] || '#ffb43a';
+    C(g, 0, -15, 52, '#1a100c', dark, 4);
+    C(g, 0, -15, 40 + pul * 4, core); C(g, 0, -15, 24 + pul * 3, hot); C(g, 0, -15, 10, '#fff8e0');
+    if (b.phase >= 3) C(g, 0, -15, 60 + Math.sin(t * 10) * 3, null, 'rgba(255,60,30,0.7)', 3);
+  },
 };
 // camada desenhada acima das peças (rotor do helicóptero)
 const BOSS_TOP = {
@@ -1328,9 +1436,12 @@ const THEMES = {
   base:   { shadow: true, strips: 'base', clouds: { gap: [600, 1000], alpha: 0.45 } },
   space:  { shadow: false, tileSpd: 0.25, tile2Spd: 0.6, decor: { planet: 1, nebula: 2, asteroid: 7 }, gap: [110, 230] },
   core:   { shadow: false, tileSpd: 0.25, tile2Spd: 0.6, decor: { hull: 5, asteroid: 2, nebula: 1 }, gap: [110, 210] },
+  // snow: flocos caindo; embers: brasas subindo; heat: brilho alaranjado vindo de baixo
+  ice:    { shadow: true, snow: true, clouds: { gap: [320, 620], alpha: 0.75 }, decor: { pines: 7, lake: 2, crevasse: 2, rocks: 3 }, gap: [60, 140] },
+  volcano: { shadow: true, embers: true, heat: true, clouds: { gap: [380, 700], alpha: 0.5, dark: true }, decor: { lava: 3, cone: 2, rocks: 5, river: 1 }, gap: [80, 170] },
 };
-const THEME_NAME = { ocean: 'Oceano', jungle: 'Selva', desert: 'Deserto', city: 'Cidade', navy: 'Mar noturno', base: 'Base inimiga', space: 'Espaço', core: 'Espaço profundo' };
-const THEME_COLOR = { ocean: '#1d8fd4', jungle: '#3e8c36', desert: '#e1b46a', city: '#7d8794', navy: '#14365e', base: '#5b6573', space: '#1a1840', core: '#2a1240' };
+const THEME_NAME = { ocean: 'Oceano', jungle: 'Selva', desert: 'Deserto', city: 'Cidade', navy: 'Mar noturno', base: 'Base inimiga', space: 'Espaço', core: 'Espaço profundo', ice: 'Geleira', volcano: 'Vulcão' };
+const THEME_COLOR = { ocean: '#1d8fd4', jungle: '#3e8c36', desert: '#e1b46a', city: '#7d8794', navy: '#14365e', base: '#5b6573', space: '#1a1840', core: '#2a1240', ice: '#dce9f2', volcano: '#3a2420' };
 const DECOR_SPEED = { planet: 0.3, nebula: 0.45 };
 
 // repete um desenho nas bordas para o ladrilho emendar sem costura
@@ -1380,6 +1491,26 @@ const TILE = {
     starField(g, S, r, 150, ['#ffffff', '#ffd0f4', '#d0c4ff']);
   },
 };
+TILE.ice = (g, S, r) => {
+  g.fillStyle = '#e6eff6'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 12; i++) { const x = r() * S, y = r() * S, rad = 30 + r() * 45; wrapDo(S, x, y, rad, (X, Y) => C(g, X, Y, rad, 'rgba(165,195,220,0.22)')); }
+  for (let i = 0; i < 36; i++) { const x = r() * S, y = r() * S, w = 10 + r() * 16; wrapDo(S, x, y, 30, (X, Y) => waveMark(g, X, Y, w, 'rgba(140,175,205,0.35)')); }
+  for (let i = 0; i < 70; i++) { g.fillStyle = 'rgba(255,255,255,0.95)'; g.fillRect(r() * S, r() * S, 1.6, 1.6); }
+};
+TILE.volcano = (g, S, r) => {
+  g.fillStyle = '#2b2320'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 14; i++) { const x = r() * S, y = r() * S, rad = 22 + r() * 40, c = r() < 0.5 ? 'rgba(12,8,6,0.35)' : 'rgba(75,55,45,0.28)'; wrapDo(S, x, y, rad, (X, Y) => C(g, X, Y, rad, c)); }
+  for (let i = 0; i < 5; i++) { // rachaduras com magma (discretas, para não confundir com os tiros)
+    const x = r() * S, y = r() * S, seg = []; let a = r() * TAU, px = 0, py = 0;
+    for (let k = 0; k < 5; k++) { a += (r() - 0.5) * 1.4; px += Math.cos(a) * 12; py += Math.sin(a) * 12; seg.push(px, py); }
+    wrapDo(S, x, y, 70, (X, Y) => {
+      for (const [col, lw] of [['rgba(170,50,15,0.4)', 3.5], ['rgba(230,120,50,0.35)', 1.2]]) {
+        g.beginPath(); g.moveTo(X, Y); for (let k = 0; k < seg.length; k += 2) g.lineTo(X + seg[k], Y + seg[k + 1]); g.strokeStyle = col; g.lineWidth = lw; g.stroke();
+      }
+    });
+  }
+  for (let i = 0; i < 60; i++) { g.fillStyle = 'rgba(120,95,80,0.4)'; g.fillRect(r() * S, r() * S, 1.5, 1.5); }
+};
 const TILE2 = {
   ocean(g, S, r) { for (let i = 0; i < 26; i++) { const x = r() * S, y = r() * S; wrapDo(S, x, y, 10, (X, Y) => L(g, X - 4, Y, X + 4, Y, 'rgba(255,255,255,0.35)', 1.5)); } },
   navy(g, S, r) { for (let i = 0; i < 22; i++) { const x = r() * S, y = r() * S; wrapDo(S, x, y, 14, (X, Y) => L(g, X - 7, Y, X + 7, Y, 'rgba(200,230,255,0.16)', 2)); } },
@@ -1393,6 +1524,17 @@ const TILE2 = {
   },
 };
 
+// pinheiro com neve visto de cima
+function pine(g, x, y, rad, r) {
+  E(g, x + rad * 0.45, y + rad * 0.55, rad, rad * 0.8, 'rgba(60,85,115,0.25)');
+  for (const [k, col] of [[1, '#1f4d3a'], [0.68, '#2d6a4f'], [0.38, '#3f8a63']]) {
+    const pts = [], n = 9, a0 = r() * TAU;
+    for (let i = 0; i < n * 2; i++) { const a = a0 + i / (n * 2) * TAU, d = (i % 2 ? 0.55 : 1) * rad * k; pts.push(x + Math.cos(a) * d, y + Math.sin(a) * d); }
+    P(g, pts, col, k === 1 ? '#143326' : null, 1.2);
+  }
+  for (let i = 0; i < 5; i++) { const a = r() * TAU, d = rad * (0.3 + r() * 0.5); C(g, x + Math.cos(a) * d, y + Math.sin(a) * d, rad * 0.16, 'rgba(255,255,255,0.88)'); }
+  C(g, x, y, rad * 0.13, '#f4f8fb');
+}
 // ---- decorações (pré-desenhadas em canvases, várias variações por tema) ----
 function palm(g, x, y, s, r) {
   E(g, x + 5 * s, y + 7 * s, 12 * s, 8 * s, 'rgba(0,0,0,0.25)');
@@ -1476,14 +1618,15 @@ const DECOR = {
     }, 1.5);
   },
   river(th, r) {
-    const w = 480, h = 140, ph = r() * TAU;
+    const w = 480, h = 140, ph = r() * TAU, lava = th === 'volcano';
     return makeCanvas(w, h, g => {
       const edge = (y0, k) => { for (let x = 0; x <= w; x += 10) { const y = y0 + Math.sin(x * 0.025 + ph + k) * 7 + Math.sin(x * 0.07 + k) * 3; if (x === 0) g.moveTo(x, y); else g.lineTo(x, y); } };
       g.beginPath(); edge(16, 0); for (let x = w; x >= 0; x -= 10) { const y = 124 + Math.sin(x * 0.025 + ph + 2) * 7; g.lineTo(x, y); } g.closePath();
-      g.fillStyle = '#c9b27a'; g.fill();
+      g.fillStyle = lava ? '#1e1512' : '#c9b27a'; g.fill();
       g.beginPath(); edge(26, 0); for (let x = w; x >= 0; x -= 10) { const y = 114 + Math.sin(x * 0.025 + ph + 2) * 7; g.lineTo(x, y); } g.closePath();
-      g.fillStyle = '#3a8fc4'; g.fill();
-      for (let i = 0; i < 26; i++) waveMark(g, r() * w, 40 + r() * 60, 6 + r() * 8, 'rgba(255,255,255,0.25)');
+      g.fillStyle = lava ? '#b8380e' : '#3a8fc4'; g.fill();
+      for (let i = 0; i < 26; i++) waveMark(g, r() * w, 40 + r() * 60, 6 + r() * 8, lava ? 'rgba(240,140,70,0.45)' : 'rgba(255,255,255,0.25)');
+      if (lava) for (let i = 0; i < 10; i++) E(g, r() * w, 45 + r() * 50, 8 + r() * 12, 4 + r() * 4, '#3a2420', null, 2, r());
     }, 1.25);
   },
   dune(th, r) {
@@ -1497,14 +1640,15 @@ const DECOR = {
   },
   rocks(th, r) {
     const R = 22 + r() * 30, S = R * 3, navy = th === 'navy', pts = blobPts(R, R * 0.8, 9, 0.45, r);
-    const base = navy ? '#4c5157' : '#a0643a', top = navy ? '#666c74' : '#c78a55', out = navy ? '#25282c' : '#5e3a20';
+    const [base, top, out] = navy ? ['#4c5157', '#666c74', '#25282c'] : th === 'ice' ? ['#7d8a96', '#eef4f8', '#3c4650']
+      : th === 'volcano' ? ['#3a2e2a', '#4e3f39', '#140e0c'] : ['#a0643a', '#c78a55', '#5e3a20'];
     return makeCanvas(S, S, g => {
       g.translate(S / 2, S / 2);
       if (navy) { smoothPath(g, pts, 0, 0, 1.3); g.fillStyle = 'rgba(255,255,255,0.15)'; g.fill(); }
       else { smoothPath(g, pts, R * 0.3, R * 0.4); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fill(); }
       smoothPath(g, pts); g.fillStyle = base; g.fill(); g.strokeStyle = out; g.lineWidth = 2.5; g.stroke();
       smoothPath(g, pts, -R * 0.12, -R * 0.12, 0.7); g.fillStyle = top; g.fill();
-      for (let i = 0; i < 3; i++) L(g, (r() - 0.5) * R, (r() - 0.5) * R, (r() - 0.5) * R, (r() - 0.5) * R, out, 1.5);
+      for (let i = 0; i < 3; i++) L(g, (r() - 0.5) * R, (r() - 0.5) * R, (r() - 0.5) * R, (r() - 0.5) * R, th === 'volcano' ? 'rgba(255,110,30,0.7)' : out, 1.5);
     }, 1.5);
   },
   cactus(th, r) {
@@ -1572,6 +1716,63 @@ const DECOR = {
       smoothPath(g, pts, -R * 0.12, -R * 0.15, 0.7); g.fillStyle = '#8a7d72'; g.fill();
       for (let i = 0; i < 4; i++) { const x = (r() - 0.5) * R, y = (r() - 0.5) * R, cr = 2 + r() * R * 0.18; C(g, x, y, cr, '#564b44'); C(g, x - cr * 0.3, y - cr * 0.3, cr * 0.5, '#9a8d82'); }
     }, 1.5);
+  },
+  pines(th, r) {
+    const Rc = 26 + r() * 46, S = (Rc + 30) * 2, n = 4 + Math.floor(Rc / 8), list = [];
+    for (let i = 0; i < n; i++) { const a = r() * TAU, d = Rc * Math.sqrt(r()); list.push([Math.cos(a) * d, Math.sin(a) * d, 11 + r() * 9]); }
+    list.sort((a, b) => a[1] - b[1]);
+    return makeCanvas(S, S, g => { g.translate(S / 2, S / 2); for (const [x, y, rad] of list) pine(g, x, y, rad, r); }, 1.5);
+  },
+  lake(th, r) { // lago congelado
+    const R = 45 + r() * 45, S = R * 2.8, pts = blobPts(R, R * 0.7, 12, 0.3, r);
+    return makeCanvas(S, S, g => {
+      g.translate(S / 2, S / 2);
+      smoothPath(g, pts, 0, 0, 1.12); g.fillStyle = '#ffffff'; g.fill();
+      smoothPath(g, pts); g.fillStyle = '#bfe0ef'; g.fill(); g.strokeStyle = '#8fb9cc'; g.lineWidth = 2.5; g.stroke();
+      smoothPath(g, pts, -R * 0.12, -R * 0.1, 0.6); g.fillStyle = 'rgba(225,244,252,0.8)'; g.fill();
+      for (let i = 0; i < 6; i++) { // rachaduras no gelo
+        let x = (r() - 0.5) * R, y = (r() - 0.5) * R * 0.6; g.beginPath(); g.moveTo(x, y);
+        for (let k = 0; k < 3; k++) { x += (r() - 0.5) * 30; y += (r() - 0.5) * 22; g.lineTo(x, y); }
+        g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 1.5; g.stroke();
+      }
+    }, 1.25);
+  },
+  crevasse(th, r) { // fenda azul no gelo
+    const len = 110 + r() * 110, w = 10 + r() * 8, ang = (r() - 0.5) * 1.2, S = len + 40;
+    return makeCanvas(S, S, g => {
+      g.translate(S / 2, S / 2); g.rotate(ang);
+      const top = [], bot = [];
+      for (let i = 0; i <= 10; i++) { const x = -len / 2 + len * i / 10, k = Math.sin(i / 10 * Math.PI); top.push(x, -w * k * (0.6 + r() * 0.6)); bot.push(x, w * k * (0.6 + r() * 0.6)); }
+      const outline = top.concat(bot.reduceRight((a, v, i) => (i % 2 ? a.push(bot[i - 1], v) : 0, a), []));
+      P(g, outline, '#9fd0ea', null); P(g, outline.map(v => v * 0.82), '#2b5b7a'); P(g, outline.map(v => v * 0.5), '#173a52');
+    }, 1.5);
+  },
+  lava(th, r) { // lago de lava
+    const R = 30 + r() * 40, S = R * 3, pts = blobPts(R, R * 0.75, 12, 0.35, r);
+    return makeCanvas(S, S, g => {
+      g.translate(S / 2, S / 2);
+      smoothPath(g, pts, 0, 0, 1.35); g.fillStyle = 'rgba(255,110,30,0.22)'; g.fill();
+      smoothPath(g, pts, 0, 0, 1.12); g.fillStyle = '#1e1512'; g.fill();
+      smoothPath(g, pts); g.fillStyle = '#b8380e'; g.fill();
+      smoothPath(g, pts, -R * 0.1, -R * 0.08, 0.62); g.fillStyle = '#d9561a'; g.fill();
+      smoothPath(g, pts, -R * 0.15, -R * 0.12, 0.28); g.fillStyle = '#ee8a3a'; g.fill();
+      for (let i = 0; i < 4; i++) { const a = r() * TAU, d = R * (0.4 + r() * 0.4); E(g, Math.cos(a) * d, Math.sin(a) * d * 0.75, 6 + r() * 8, 4 + r() * 4, '#3a2420', null, 2, r() * TAU); }
+    }, 1.25);
+  },
+  cone(th, r) { // cratera de vulcão
+    const R = 55 + r() * 40, S = R * 2.8, pts = blobPts(R, R * 0.9, 12, 0.25, r);
+    return makeCanvas(S, S, g => {
+      g.translate(S / 2, S / 2);
+      smoothPath(g, pts, R * 0.2, R * 0.25); g.fillStyle = 'rgba(0,0,0,0.3)'; g.fill();
+      smoothPath(g, pts); g.fillStyle = '#4a3a33'; g.fill(); g.strokeStyle = '#1e1512'; g.lineWidth = 2.5; g.stroke();
+      smoothPath(g, pts, -R * 0.08, -R * 0.1, 0.72); g.fillStyle = '#5e4a40'; g.fill();
+      for (let i = 0; i < 4; i++) { // escorridos de lava
+        const a = r() * TAU; g.beginPath(); g.moveTo(Math.cos(a) * R * 0.3, Math.sin(a) * R * 0.3);
+        g.quadraticCurveTo(Math.cos(a + 0.3) * R * 0.6, Math.sin(a + 0.3) * R * 0.6, Math.cos(a + 0.15) * R * 0.92, Math.sin(a + 0.15) * R * 0.92);
+        g.strokeStyle = 'rgba(190,65,20,0.75)'; g.lineWidth = 4; g.stroke(); g.strokeStyle = 'rgba(235,150,80,0.7)'; g.lineWidth = 1.2; g.stroke();
+      }
+      C(g, 0, 0, R * 0.36, '#2a1c17', '#1a100c', 3); C(g, 0, 0, R * 0.26, '#c2410f'); C(g, -R * 0.04, -R * 0.04, R * 0.14, '#e0782a');
+    }, 1.25);
   },
   hull(th, r) {
     const w = 160 + r() * 140, h = 120 + r() * 140;
@@ -1719,6 +1920,9 @@ function initBackground() {
   if (T.decor) { let y = H + 80; while (y > -100) { const d = spawnDecor(y); if (d && d.k === 'river') G.decor.splice(G.decor.indexOf(d), 1); y -= rand(T.gap[0], T.gap[1]); } G.decorDist = rand(T.gap[0], T.gap[1]); }
   if (T.clouds) { spawnCloud(rand(100, H)); spawnCloud(rand(100, H)); G.cloudDist = rand(T.clouds.gap[0], T.clouds.gap[1]); }
   if (T.rain) for (let i = 0; i < 70; i++) G.rain.push({ x: rand(0, W), y: rand(0, H), s: rand(500, 800) });
+  G.flakes = [];
+  if (T.snow || T.embers) for (let i = 0; i < (T.snow ? 70 : 45); i++)
+    G.flakes.push({ x: rand(0, W), y: rand(0, H), s: T.snow ? rand(25, 70) : rand(30, 90), r: T.snow ? rand(1, 2.6) : rand(1, 2.2), ph: rand(0, TAU) });
 }
 function updateBackground(dt) {
   const T = G.theme, sc = G.scroll * dt;
@@ -1740,6 +1944,11 @@ function updateBackground(dt) {
     G.clouds = G.clouds.filter(c => c.y - c.h / 2 < H + 120);
   }
   if (T.rain) for (const d of G.rain) { d.y += d.s * dt; d.x -= d.s * 0.25 * dt; if (d.y > H) { d.y = -20; d.x = rand(0, W + 100); } }
+  for (const f of G.flakes) {
+    f.x += Math.sin(G.time * 1.6 + f.ph) * 18 * dt;
+    if (T.snow) { f.y += f.s * dt + sc * 1.2; if (f.y > H + 5) { f.y = -5; f.x = rand(0, W); } }
+    else { f.y -= f.s * dt; if (f.y < -5) { f.y = H + 5; f.x = rand(0, W); } }
+  }
 }
 function tileDraw(img, off) {
   const S = img.lh; let y0 = off % S; if (y0 < 0) y0 += S; y0 -= S;
@@ -1767,7 +1976,7 @@ function drawClouds() {
 let state = 'menu';
 let G = null;          // estado da fase em andamento
 let RESULT = null;     // resumo da última fase vencida
-const TRANS = [0, 2, -3, 4, -1, 1, -2, 3]; // transposição da trilha por fase
+const TRANS = [0, 2, -3, 4, -1, 1, -2, 3, -4, 5]; // transposição da trilha por fase
 
 function hostageKinds(th) { return isSea(th) ? ['raft', 'para'] : isSpace(th) ? ['astro'] : ['ground', 'para']; }
 
@@ -2275,6 +2484,10 @@ function updateBoss(dt) {
       b.smokeT -= dt;
       if (b.smokeT <= 0) { b.smokeT = 0.12; const fx = d.style === 'ship' ? 0 : 59, fy = d.style === 'ship' ? -62 : -40;
         part(1, b.x + fx * b.s, b.y + fy * b.s, rand(-6, 6), rand(-50, -30), 1.2, 8, '#3a3a3a', 18); }
+    } else if (d.smoke) {
+      b.smokeT -= dt;
+      if (b.smokeT <= 0) { b.smokeT = 0.1; const [fx, fy] = pick(d.smoke);
+        part(1, b.x + fx * b.s, b.y + fy * b.s, rand(-6, 6), rand(-60, -35), 1.2, 8, d.style === 'titan' ? '#2a2020' : '#4a4f55', 18); }
     }
   } else if (b.state === 'leave') {
     b.y -= 140 * dt;
@@ -2653,8 +2866,8 @@ function finishStage() {
   save.medal[i] = Math.max(save.medal[i], DIFF_KEYS.indexOf(G.diffKey) + 1);
   const rec = total > save.best[i];
   save.best[i] = Math.max(save.best[i], total);
-  save.unlocked = Math.max(save.unlocked, Math.min(8, i + 2));
-  if (i === 7) save.done = true;
+  save.unlocked = Math.max(save.unlocked, Math.min(N_STAGES, i + 2));
+  if (i === N_STAGES - 1) save.done = true;
   writeSave();
   RESULT = { idx: i, total, stars, rec, t: 0, shown: 0, lines: [
     ['Pontos da fase', fmt(G.score), null],
@@ -2893,12 +3106,26 @@ function drawWorld() {
     for (const d of G.rain) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + 5, d.y - 20); }
     ctx.stroke();
   }
+  if (G.theme.snow) {
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath();
+    for (const f of G.flakes) { ctx.moveTo(f.x + f.r, f.y); ctx.arc(f.x, f.y, f.r, 0, TAU); }
+    ctx.fill();
+  } else if (G.theme.embers) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const f of G.flakes) { ctx.globalAlpha = 0.45 + 0.4 * Math.sin(G.time * 7 + f.ph); C(ctx, f.x, f.y, f.r, '#ff9a3a'); }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
   ctx.restore();
   if (G.theme.night) {
     const gr = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.2, W / 2, H * 0.55, H * 0.8);
     gr.addColorStop(0, 'rgba(0,0,30,0)'); gr.addColorStop(1, 'rgba(0,0,30,0.5)');
     ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
     if (G.lightning > 0) { ctx.fillStyle = `rgba(220,230,255,${G.lightning})`; ctx.fillRect(0, 0, W, H); }
+  }
+  if (G.theme.heat) {
+    const gr = ctx.createLinearGradient(0, H, 0, H * 0.4);
+    gr.addColorStop(0, `rgba(255,80,20,${0.13 + 0.03 * Math.sin(G.time * 2)})`); gr.addColorStop(1, 'rgba(255,80,20,0)');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
   }
   if (G.bombFlash > 0) { ctx.fillStyle = `rgba(255,250,230,${Math.min(0.8, G.bombFlash)})`; ctx.fillRect(0, 0, W, H); }
   const p = G.player;
@@ -3102,9 +3329,9 @@ function shopBack() {
   setState(f === 'victory' ? 'victory' : f === 'gameover' ? 'gameover' : f === 'select' ? 'select' : 'menu');
 }
 function shopNextStage() {
-  if (ui.shopFrom === 'victory' && RESULT) return Math.min(7, RESULT.idx + 1);
+  if (ui.shopFrom === 'victory' && RESULT) return Math.min(N_STAGES - 1, RESULT.idx + 1);
   if (ui.shopFrom === 'gameover' && G) return G.idx;
-  return Math.min(save.unlocked - 1, 7);
+  return Math.min(save.unlocked - 1, N_STAGES - 1);
 }
 function buy(u) {
   const lvl = upOwned(u.id);
@@ -3158,7 +3385,7 @@ function drawMenu() {
     button('VOLTAR AOS JOGOS', x, y, bw, bh, voltarAosJogos, { color: '#5a6478' });
   }
   ICON.coin(W / 2 - 70, H - 36, 9); txt(fmt(save.coins), W / 2 - 56, H - 36, 18, '#ffe066', 'left');
-  ICON.star(W / 2 + 34, H - 36, 10, '#ffd34d'); txt(save.stars.reduce((a, b) => a + b, 0) + '/24', W / 2 + 48, H - 36, 18, '#fff', 'left');
+  ICON.star(W / 2 + 34, H - 36, 10, '#ffd34d'); txt(save.stars.reduce((a, b) => a + b, 0) + '/' + N_STAGES * 3, W / 2 + 48, H - 36, 18, '#fff', 'left');
   if (ui.help) drawHelp();
 }
 function drawHelp() {
@@ -3192,8 +3419,8 @@ function drawSelect() {
   drawMenuBg();
   txt('SELECIONE A FASE', W / 2, 34, 26, '#ffd34d');
   ICON.coin(W - 74, 34, 7.5); txt(fmt(save.coins), W - 62, 34, 15, '#ffe066', 'left');
-  const cw = 212, gap = 12, gx = (W - cw * 2) / 3, top = 146, ch = Math.min(132, (H - top - 90) / 4 - gap);
-  for (let i = 0; i < 8; i++) {
+  const rows = Math.ceil(N_STAGES / 2), cw = 212, gap = 10, gx = (W - cw * 2) / 3, top = 146, ch = Math.min(132, (H - top - 84) / rows - gap);
+  for (let i = 0; i < N_STAGES; i++) {
     const st = STAGES[i], locked = i >= save.unlocked, x = gx + (i % 2) * (cw + gx), y = top + (i >> 1) * (ch + gap);
     const hov = area(x, y, cw, ch, () => startStage(i), locked) && !locked;
     ctx.save();
@@ -3207,19 +3434,21 @@ function drawSelect() {
     ctx.fillStyle = gr; ctx.fillRect(x, y, cw, ch);
     ctx.restore();
     RR(ctx, x, y, cw, ch, 14, null, hov ? '#fff' : locked ? 'rgba(255,255,255,0.25)' : '#4fc3ff', hov ? 3 : 2);
-    txt('' + (i + 1), x + 24, y + 26, 30, locked ? '#888' : '#ffd34d');
-    fitTxt(st.name, x + 46, y + 22, cw - 54, 16, locked ? '#999' : '#fff', 'left', 'bold');
-    fitTxt(THEME_NAME[st.theme] + (st.mini ? ' • mini-chefe' : ''), x + 46, y + 42, cw - 54, 12, '#bcd3f0');
-    if (locked) { ICON.lock(x + cw / 2, y + ch / 2 + 6); txt('Conclua a fase ' + i, x + cw / 2, y + ch - 16, 12, '#ccc'); }
+    const tx = x + (i >= 9 ? 56 : 46); // número de dois dígitos empurra o nome
+    txt('' + (i + 1), x + (i >= 9 ? 29 : 24), y + 26, i >= 9 ? 27 : 30, locked ? '#888' : '#ffd34d');
+    fitTxt(st.name, tx, y + 22, x + cw - 8 - tx, 16, locked ? '#999' : '#fff', 'left', 'bold');
+    const m = !locked && save.medal[i] && DIFFS[DIFF_KEYS[save.medal[i] - 1]];
+    let mw = 0;
+    if (m) { // maior dificuldade em que a fase foi concluída, à direita do tema
+      const ml = (m.short || m.label).toUpperCase();
+      ctx.font = `bold 10px ${FONT}`; mw = ctx.measureText(ml).width + 12;
+      RR(ctx, x + cw - 10 - mw, y + 34, mw, 16, 8, m.color, 'rgba(0,0,0,0.5)', 1.5); txt(ml, x + cw - 10 - mw / 2, y + 42.5, 10, '#fff');
+    }
+    fitTxt(THEME_NAME[st.theme] + (st.mini ? ' • mini-chefe' : ''), tx, y + 42, x + cw - 8 - tx - (mw ? mw + 6 : 0), 12, '#bcd3f0');
+    if (locked) { ICON.lock(x + 26, y + ch - 20); txt('Conclua a fase ' + i, x + 44, y + ch - 20, 12, '#ccc', 'left'); }
     else {
-      for (let k = 0; k < 3; k++) ICON.star(x + 22 + k * 24, y + ch - 22, 9, k < save.stars[i] ? '#ffd34d' : 'rgba(255,255,255,0.18)', k < save.stars[i] ? '#5a3d00' : 'rgba(0,0,0,0.4)');
-      if (save.best[i]) txt(fmt(save.best[i]), x + cw - 12, y + ch - 22, 13, '#fff', 'right');
-      const m = save.medal[i] && DIFFS[DIFF_KEYS[save.medal[i] - 1]];
-      if (m) { // maior dificuldade em que a fase foi concluída
-        const ml = (m.short || m.label).toUpperCase();
-        ctx.font = `bold 10px ${FONT}`; const mw = ctx.measureText(ml).width + 12;
-        RR(ctx, x + cw - 10 - mw, y + 52, mw, 16, 8, m.color, 'rgba(0,0,0,0.5)', 1.5); txt(ml, x + cw - 10 - mw / 2, y + 60.5, 10, '#fff');
-      }
+      for (let k = 0; k < 3; k++) ICON.star(x + 22 + k * 24, y + ch - 20, 9, k < save.stars[i] ? '#ffd34d' : 'rgba(255,255,255,0.18)', k < save.stars[i] ? '#5a3d00' : 'rgba(0,0,0,0.4)');
+      if (save.best[i]) txt(fmt(save.best[i]), x + cw - 12, y + ch - 20, 13, '#fff', 'right');
     }
     ctx.restore();
   }
@@ -3331,7 +3560,7 @@ function drawVictory() {
     const k = clamp((R.t - R.lines.length * 0.35) / 1, 0, 1);
     txt('TOTAL ' + fmt(R.total * k), W / 2, y + h - 40, 26, '#ffd34d');
     if (R.rec && k >= 1) txt('NOVO RECORDE!', W / 2, y + h - 14, 13, '#7dffb0');
-    const by = y + h + 18, last = R.idx === 7;
+    const by = y + h + 18, last = R.idx === N_STAGES - 1;
     button(last ? 'VER O FINAL' : 'PRÓXIMA FASE', 20, by, W - 40, 54, () => last ? setState('ending') : startStage(R.idx + 1), { color: '#2bb24c', size: 22 });
     button('LOJA', 20, by + 66, (W - 52) / 2, 50, () => openShop('victory'), { color: '#e08a1e' });
     button('MENU', 32 + (W - 52) / 2, by + 66, (W - 52) / 2, 50, () => { G = null; setState('menu'); }, { color: '#5a6478' });
@@ -3357,7 +3586,7 @@ function drawEnding() {
   txt('O Império dos Céus caiu.', W / 2, H * 0.3 + 40, 18, '#ffffff');
   txt('Seu esquadrão libertou o mundo!', W / 2, H * 0.3 + 66, 16, '#cfe8ff');
   const stars = save.stars.reduce((a, b) => a + b, 0), best = save.best.reduce((a, b) => a + b, 0);
-  ICON.star(W / 2 - 70, H * 0.3 + 104, 11, '#ffd34d'); txt(stars + '/24 estrelas', W / 2 - 54, H * 0.3 + 104, 16, '#fff', 'left');
+  ICON.star(W / 2 - 70, H * 0.3 + 104, 11, '#ffd34d'); txt(stars + '/' + N_STAGES * 3 + ' estrelas', W / 2 - 54, H * 0.3 + 104, 16, '#fff', 'left');
   txt('Recorde somado: ' + fmt(best), W / 2, H * 0.3 + 132, 15, '#ffe066');
   txt('Obrigado por jogar!', W / 2, H * 0.8, 18, '#ffd34d');
   button('MENU', W / 2 - 100, H - 80, 200, 54, () => { G = null; setState('menu'); }, { color: '#2bb24c' });
