@@ -137,19 +137,26 @@ const upDesc = (u, lvl) => Array.isArray(u.desc) ? u.desc[Math.min(lvl, u.desc.l
 // lives: vidas por partida; cont: continues por fase; req: o que a fase exige além do chefe
 // ('' nada, 'meta' as metas, 'reféns' todos os reféns e a meta de alvos, 'tudo' todos os alvos e reféns);
 // lifeRescue: refém pode dar vida extra; evo: fração da evolução que vale na fase (upgrades da loja e nível
-// máximo da arma; 0,5 corta tudo pela metade); reward: moedas e pontos
+// máximo da arma; 0,5 corta tudo pela metade); reward: moedas e pontos;
+// hb: área do avião que leva tiro, [meia-largura e meia-altura da fuselagem, meia-largura e meia-altura das asas]
+// (null: só o ponto vermelho do centro); hpBase: vida inicial, antes da loja; shReg: quanto o escudo da loja
+// demora a regenerar (×); shPick: cargas de escudo do power-up e do refém; heal: fração da vida que o power-up cura
 const DIFFS = {
   easy:   { label: 'Fácil',   color: '#2bb24c', hp: 1,   fire: 1,   bullet: 1,    gap: 1,    tgt: 1,    bossHp: 1,   bossRate: 1,   drop: 1,    inv: 1,
             hit: 1, lead: 0,    lives: 3, cont: Infinity, req: '',      lifeRescue: true,  evo: 1, reward: 1,
+            hb: null,           hpBase: 5, shReg: 1,   shPick: 2, heal: 0.5,
             rule: 'Basta vencer o chefe: metas valem estrelas', desc: 'Para aprender • continues à vontade' },
   normal: { label: 'Normal',  color: '#e08a1e', hp: 1.5, fire: 1.8, bullet: 1.15, gap: 0.8,  tgt: 1.1,  bossHp: 1.4, bossRate: 1.4, drop: 0.7,  inv: 0.7,
             hit: 1, lead: 0.3,  lives: 3, cont: 2,        req: 'meta',  lifeRescue: true,  evo: 1, reward: 1.3,
+            hb: [4, 16, 17, 4],  hpBase: 4, shReg: 1.4, shPick: 1, heal: 0.4,
             rule: 'Metas de alvos e resgates obrigatórias', desc: '2 continues por fase • moedas e pontos ×1,3' },
   hard:   { label: 'Difícil', color: '#c0392b', hp: 2,   fire: 2.5, bullet: 1.3,  gap: 0.66, tgt: 1.2,  bossHp: 1.8, bossRate: 1.8, drop: 0.5,  inv: 0.55,
             hit: 1, lead: 0.6,  lives: 2, cont: 1,        req: 'reféns', lifeRescue: false, evo: 1, reward: 1.7,
+            hb: [5.5, 22, 25, 6], hpBase: 3, shReg: 1.8, shPick: 1, heal: 0.34,
             rule: 'Resgate TODOS os reféns e cumpra a meta de alvos', desc: '2 vidas • 1 continue • reféns não dão vida • ×1,7' },
   pro:    { label: 'Profissional', short: 'PRO', color: '#8e44ad', hp: 2.4, fire: 2.8, bullet: 1.42, gap: 0.56, tgt: 1.25, bossHp: 2, bossRate: 2.3, drop: 0.35, inv: 0.45,
             hit: 2, lead: 0.9,  lives: 2, cont: 0,        req: 'tudo',  lifeRescue: false, evo: 0.5, reward: 2.5,
+            hb: [6.5, 27, 31, 7], hpBase: 4, shReg: 2.2, shPick: 1, heal: 0.25,
             rule: 'TODOS os alvos e TODOS os reféns, sem continue', desc: 'Dano dobrado • tiros miram à frente • upgrades e arma pela metade • ×2,5' },
 };
 const DIFF_KEYS = Object.keys(DIFFS);
@@ -1860,7 +1867,7 @@ function updateFlow(dt) {
    11. JOGADOR E ARMAS
    ===================================================================== */
 function applyUpgrades(p) {
-  p.maxHp = 5 + upLvl('hp');
+  p.maxHp = G.diff.hpBase + upLvl('hp');
   p.maxShield = 1 + upLvl('shield');
   p.speed = 250 + 35 * upLvl('speed');
   G.dmgMul = 1 + 0.2 * upLvl('damage');
@@ -1900,7 +1907,7 @@ function updatePlayer(dt) {
   const kv = Math.min(1, dt * 8); p.vx = lerp(p.vx, vx, kv); p.vy = lerp(p.vy, p.entering > 0 ? 0 : vy, kv);
   p.tilt = lerp(p.tilt, clamp(vx / 280, -1, 1), Math.min(1, dt * 10));
   const shl = upLvl('shield');
-  if (shl > 0 && p.shield < p.maxShield) { p.shRegen += dt; if (p.shRegen >= 18 - 3 * shl) { p.shRegen = 0; p.shield++; SFX.shield(); } }
+  if (shl > 0 && p.shield < p.maxShield) { p.shRegen += dt; if (p.shRegen >= (18 - 3 * shl) * G.diff.shReg) { p.shRegen = 0; p.shield++; SFX.shield(); } }
   else p.shRegen = 0;
   p.drones.forEach((d, i) => { d.x = lerp(d.x, p.x + (i ? 40 : -40), Math.min(1, dt * 9)); d.y = lerp(d.y, p.y + 16, Math.min(1, dt * 9)); });
   if (p.y < H - 10 && !G.cleared) playerWeapons(dt);
@@ -2201,7 +2208,7 @@ function rescue(h) {
   let k = pickW(RESCUE_REWARDS); if (k === 'life' && (p.lives >= 6 || !G.diff.lifeRescue)) k = 'shield';
   let msg;
   if (k === 'life') { p.lives++; msg = '+1 VIDA!'; SFX.oneup(); }
-  else if (k === 'shield') { p.shield = Math.min(p.maxShield + 1, p.shield + 2); msg = 'ESCUDO!'; SFX.shield(); }
+  else if (k === 'shield') { p.shield = Math.min(p.maxShield + 1, p.shield + G.diff.shPick); msg = 'ESCUDO!'; SFX.shield(); }
   else { for (let i = 0; i < 15; i++) spawnPickup('coin', h.x, h.y); msg = '+15 MOEDAS'; }
   SFX.rescue();
   floater(h.x, h.y - 24, 'RESGATADO! ' + msg, '#7dffb0', 16);
@@ -2427,9 +2434,9 @@ function collect(k) {
       if (p.weapon < wpnMax()) { p.weapon++; floater(p.x, p.y - 44, 'ARMA NV ' + p.weapon + (p.weapon === wpnMax() ? ' MÁX!' : '!'), '#ff8a8a', 18); }
       else { G.score += 1000; save.coins += 5; G.stats.coins += 5; floater(p.x, p.y - 44, 'ARMA MÁX! +1000', '#ff8a8a', 16); }
       break;
-    case 'S': p.shield = Math.min(p.maxShield + 1, p.shield + 2); floater(p.x, p.y - 44, 'ESCUDO!', '#7fd4ff', 18); break;
+    case 'S': p.shield = Math.min(p.maxShield + 1, p.shield + G.diff.shPick); floater(p.x, p.y - 44, 'ESCUDO!', '#7fd4ff', 18); break;
     case 'H':
-      if (p.hp < p.maxHp) { p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp / 2)); floater(p.x, p.y - 44, 'VIDA +', '#7dffb0', 18); }
+      if (p.hp < p.maxHp) { p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * G.diff.heal)); floater(p.x, p.y - 44, 'VIDA +', '#7dffb0', 18); }
       else { G.score += 500; floater(p.x, p.y - 44, '+500', '#7dffb0', 16); }
       break;
     case 'B': p.bombs = Math.min(9, p.bombs + 1); floater(p.x, p.y - 44, 'BOMBA +1', '#ffc46b', 18); break;
@@ -2460,21 +2467,28 @@ function collisions() {
   if (p.alive && p.entering <= 0 && p.inv <= 0 && !G.cleared) {
     for (const e of EB.items) {
       if (!e.on) continue;
-      const rr = e.r + p.r;
-      if (d2(e.x, e.y, p.x, p.y) < rr * rr) { e.on = false; hurtPlayer(1); break; }
+      if (hitsPlayer(e.x, e.y, e.r)) { e.on = false; hurtPlayer(1); break; }
     }
     for (const e of G.enemies) {
       if (e.dead || p.inv > 0) continue;
-      const rr = e.r * 0.7 + 8;
-      if (d2(e.x, e.y, p.x, p.y) < rr * rr) {
+      if (hitsPlayer(e.x, e.y, e.r * 0.7 + 4)) {
         if (e.r < 20) killEnemy(e); else damageEnemy(e, 10);
         hurtPlayer(e.type === 'missile' ? 1 : 2);
       }
     }
     if (b && b.state === 'fight' && !b.d.ground && p.inv <= 0) {
-      for (const h of b.d.hit) { const rr = h[2] * b.s * 0.8 + 6; if (d2(b.x + h[0] * b.s, b.y + h[1] * b.s, p.x, p.y) < rr * rr) { hurtPlayer(1); break; } }
+      for (const h of b.d.hit) if (hitsPlayer(b.x + h[0] * b.s, b.y + h[1] * b.s, h[2] * b.s * 0.8 + 2)) { hurtPlayer(1); break; }
     }
   }
+}
+// um círculo (x, y, r) encosta no avião? No Fácil só o ponto do centro conta; nos outros níveis,
+// a fuselagem e as asas (G.diff.hb), como elipses
+function hitsPlayer(x, y, r) {
+  const p = G.player, dx = x - p.x, dy = y - p.y, h = G.diff.hb;
+  if (dx * dx + dy * dy < (r + p.r) * (r + p.r)) return true;
+  if (!h) return false;
+  const inE = (ax, ay, cy) => { const u = dx / (ax + r), v = (dy - cy) / (ay + r); return u * u + v * v < 1; };
+  return inE(h[0], h[1], 0) || inE(h[2] * (1 - Math.abs(p.tilt) * 0.2), h[3], 1);
 }
 function hitFx(s) {
   for (let i = 0; i < 2; i++) part(2, s.x, s.y, rand(-120, 120), rand(40, 200), 0.18, 2, '#fff6a0');
@@ -2516,9 +2530,12 @@ function hurtPlayer(dmg) {
   if (p.shield > 0) {
     p.shield--; p.inv = 0.9 * G.diff.inv; SFX.shield();
     part(4, p.x, p.y, 0, 0, 0.4, 20, '#7fd4ff', 140); G.shake = Math.max(G.shake, 4);
+    floater(p.x, p.y - 40, 'ESCUDO -1', '#7fd4ff', 15);
     return;
   }
-  p.hp -= dmg * G.diff.hit; p.inv = 1.5 * G.diff.inv; SFX.hurt(); G.shake = Math.max(G.shake, 7); G.hurtT = 0.35;
+  const lost = dmg * G.diff.hit;
+  p.hp -= lost; p.inv = 1.5 * G.diff.inv; SFX.hurt(); G.shake = Math.max(G.shake, 7); G.hurtT = 0.35;
+  floater(p.x, p.y - 40, 'VIDA -' + lost, '#ff6b6b', 17);
   for (let i = 0; i < 10; i++) part(2, p.x, p.y, rand(-200, 200), rand(-200, 200), 0.3, 2, '#ffb0a0');
   if (p.hp <= 0) killPlayer();
 }
@@ -2848,7 +2865,7 @@ function drawPlayerAll() {
     C(ctx, p.x, p.y, 34, `rgba(80,180,255,${0.12 * k})`); C(ctx, p.x, p.y, 34, null, `rgba(130,210,255,${0.5 * k + 0.2})`, 2);
     ctx.restore();
   }
-  C(ctx, p.x, p.y, 3, 'rgba(255,255,255,0.95)', 'rgba(255,60,60,0.9)', 1.5); // ponto de colisão
+  if (!G.diff.hb) C(ctx, p.x, p.y, 3, 'rgba(255,255,255,0.95)', 'rgba(255,60,60,0.9)', 1.5); // ponto de colisão (só no Fácil)
 }
 function drawWorld() {
   ctx.save();
@@ -3157,7 +3174,7 @@ function drawHelp() {
     ['S  H  B  M', 'Escudo, vida, bomba e ímã de moedas'],
     ['Reféns', 'Voe por cima: vida extra, escudo ou moedas'],
     ['Alvos', 'Colchetes vermelhos: contam para a meta'],
-    ['Dificuldade', 'Do Normal em diante as metas são obrigatórias'],
+    ['Dificuldade', 'Do Normal em diante: metas obrigatórias e o avião todo leva tiro'],
     ['Chefes', 'Destrua canhões e asas para enfraquecê-los'],
     ['Loja', 'Upgrades permanentes salvos no navegador'],
   ];
