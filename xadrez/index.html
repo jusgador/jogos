@@ -85,7 +85,7 @@
   #telaJogo { padding-top: calc(4px + var(--seguro-topo)); }
   #areaJogo { flex: 1; display: flex; gap: 14px; min-height: 0; justify-content: center; align-items: flex-start; }
   #colTab { display: flex; flex-direction: column; gap: 6px; flex: none; }
-  .jogador { display: flex; align-items: center; gap: 8px; height: 34px; padding-left: 18px; }
+  .jogador { display: flex; align-items: center; gap: 8px; height: 34px; padding-left: 24px; }
   .jogador .nome { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .jogador .cap { flex: 1; min-width: 0; display: flex; align-items: center; height: 20px; overflow: hidden; color: var(--fraco); font-size: 12px; }
   .jogador .cap svg { width: 18px; height: 18px; margin-right: -6px; }
@@ -95,9 +95,11 @@
   .relogio.pouco { background: var(--vermelho); color: #fff; }
   .pensando { font-size: 12px; color: var(--fraco); }
   #moldura { position: relative; display: flex; gap: 6px; }
-  #barraAval { width: 12px; border-radius: 4px; overflow: hidden; background: #3a3a3a; position: relative; flex: none; }
-  #barraAval .br { position: absolute; left: 0; right: 0; bottom: 0; background: #f2efe8; transition: height .4s; height: 50%; }
-  #barraAval .num { position: absolute; left: 0; right: 0; font-size: 8px; text-align: center; font-weight: 700; }
+  #barraAval { width: 18px; border-radius: 4px; overflow: hidden; background: #403b35; position: relative; flex: none; box-shadow: 0 0 0 1px #6b5f4e; }
+  #barraAval .br { position: absolute; left: 0; right: 0; bottom: 0; background: #f4f1ea; transition: height .4s; height: 50%; }
+  #barraAval::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--ouro); opacity: .8; }
+  #barraAval .num { position: absolute; left: 0; right: 0; font-size: 9px; letter-spacing: -.03em; text-align: center; font-weight: 800; z-index: 1; }
+  #btBarra.ligado { border-color: var(--ouro); color: var(--ouro); }
   #barraAval.oculta { visibility: hidden; }
   #tabuleiro { position: relative; width: var(--tam); height: var(--tam); border-radius: 4px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
     box-shadow: 0 6px 24px rgba(0,0,0,.45); }
@@ -2126,7 +2128,7 @@ function posicionar() {
   const segT = parseFloat(cs.getPropertyValue('--seguro-topo')) || 0, segB = parseFloat(cs.getPropertyValue('--seguro-baixo')) || 0;
   const segE = parseFloat(cs.getPropertyValue('--seguro-esq')) || 0, segD = parseFloat(cs.getPropertyValue('--seguro-dir')) || 0;
   const W = window.innerWidth - 16 - segE - segD, H = window.innerHeight - 12 - segT - segB - 48;
-  const barra = $('#barraAval').classList.contains('oculta') ? 0 : 18;
+  const barra = 24; // a barra de avaliação ocupa sempre o mesmo espaço, visível ou não
   const retrato = window.innerWidth <= 760 || window.innerWidth / window.innerHeight <= 1;
   const jog = retrato ? 30 : 34;
   let tam;
@@ -2238,7 +2240,11 @@ function atualizarBarra(nBranca) {
   num.style.top = nBranca >= 0 ? '' : '2px'; num.style.bottom = nBranca >= 0 ? '2px' : '';
   num.style.color = nBranca >= 0 ? '#222' : '#eee';
 }
-function mostrarBarra(v) { $('#barraAval').classList.toggle('oculta', !v); posicionar(); }
+function mostrarBarra(v) {
+  $('#barraAval').classList.toggle('oculta', !v);
+  const b = $('#btBarra');
+  if (b) { b.classList.toggle('ligado', !!v); b.textContent = v ? '📊 Esconder avaliação' : '📊 Mostrar avaliação'; b.title = v ? 'Esconde a barra à esquerda do tabuleiro' : 'Mostra quem está melhor numa barra à esquerda do tabuleiro'; }
+}
 
 // ================================================================ MODO: PARTIDA
 function modoPartida(conf, salvo) {
@@ -2303,7 +2309,7 @@ function modoPartida(conf, salvo) {
     p.innerHTML = `
       <div class="caixa"><div class="abertura" id="pAbert"></div><div id="pStatus" class="fraco"></div></div>
       ${treino ? `<div class="caixa treinador"><div class="tit">🎓 Treinador</div><div id="pTreino" class="comentario">Jogue. Depois de cada lance seu eu digo o que achei.</div>
-        <div class="linha-bts" style="margin-top:8px"><button class="bt pequeno" id="btDica" title="Dica (H)">💡 Dica</button><button class="bt pequeno" id="btDesf" title="Desfazer (Backspace)">↶ Desfazer</button><button class="bt pequeno" id="btBarra">📊 Avaliação</button></div></div>` : ''}
+        <div class="linha-bts" style="margin-top:8px"><button class="bt pequeno" id="btDica" title="Dica (H)">💡 Dica</button><button class="bt pequeno" id="btDesf" title="Desfazer (Backspace)">↶ Desfazer</button><button class="bt pequeno" id="btBarra">📊 Mostrar avaliação</button></div></div>` : ''}
       <div id="lances"></div>
       <div class="nav" id="pNav"></div>
       <div class="linha-bts" id="pAcoes"></div>`;
@@ -2311,7 +2317,12 @@ function modoPartida(conf, salvo) {
     if (treino) {
       $('#btDica').onclick = dar_dica;
       $('#btDesf').onclick = desfazer;
-      $('#btBarra').onclick = () => { conf.barra = $('#barraAval').classList.contains('oculta'); mostrarBarra(conf.barra); if (st.ultNota != null) atualizarBarra(st.ultNota); };
+      $('#btBarra').onclick = () => {
+        conf.barra = $('#barraAval').classList.contains('oculta');
+        mostrarBarra(conf.barra);
+        if (st.ultNota != null) atualizarBarra(st.ultNota);
+        avisar(conf.barra ? 'Barra de avaliação: a parte branca é a chance das brancas.' : 'Barra de avaliação escondida.');
+      };
     }
     acoes();
   }
