@@ -12,6 +12,7 @@ Página inicial e jogos, publicados no GitHub Pages: https://jusgador.github.io/
 | Sinuca de Bico | `sinuca/` |
 | Bocha do Clube | `bocha/` |
 | Truco do Clube | `truco/` |
+| Xadrez do Clube | `xadrez/` |
 
 Cada jogo é desenvolvido direto na sua pasta, num único `index.html`. Os jogos começaram em repositórios próprios, e o histórico de cada um veio junto (`git log --follow asas/index.html`).
 
@@ -63,6 +64,7 @@ Roteiro para uma sessão aberta em `D:\dev\jogos` para criar um jogo novo, do co
   | `sinuca-` | Sinuca de Bico |
   | `bocha-` | Bocha do Clube |
   | `truco-` | Truco do Clube |
+  | `xadrez-` | Xadrez do Clube |
 
 ### 2. O arquivo do jogo
 
