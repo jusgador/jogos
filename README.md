@@ -10,6 +10,7 @@ Página inicial e jogos, publicados no GitHub Pages: https://jusgador.github.io/
 | Bruce Lee 64 - A Fortaleza | `fortaleza/` |
 | Poker Texas Hold'em | `poker/` |
 | Sinuca de Bico | `sinuca/` |
+| Sinuca3D | `sinuca3d/` |
 | Bocha do Clube | `bocha/` |
 | Truco do Clube | `truco/` |
 | Xadrez do Clube | `xadrez/` |
@@ -62,6 +63,7 @@ Roteiro para uma sessão aberta em `D:\dev\jogos` para criar um jogo novo, do co
   | `bl64_` | Bruce Lee 64 - A Fortaleza |
   | `poker-` | Poker Texas Hold'em |
   | `sinuca-` | Sinuca de Bico |
+  | `sinuca3d-` | Sinuca3D |
   | `bocha-` | Bocha do Clube |
   | `truco-` | Truco do Clube |
   | `xadrez-` | Xadrez do Clube |
