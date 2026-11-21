@@ -21,9 +21,9 @@ No-Limit Hold'em contra 1 a 8 bots, num único `index.html`, sem dependências. 
 | L | Histórico da mão |
 | M | Som |
 | Esc | Menu / fechar janela |
-| Enter | Próxima mão |
+| Enter / Espaço | Próxima mão (no showdown) ou acelerar/pular após desistir |
 
-Os atalhos ½ pote, ⅔ pote e Pote ajustam o valor do raise; no celular, tudo funciona por toque.
+Os atalhos ½ pote, ⅔ pote e Pote ajustam o valor do raise; no celular, tudo funciona por toque. Ao desistir de uma mão, é possível acelerar a rodada ou pular direto para o resultado pelos botões no rodapé, tocando na mesa ou apertando Espaço (também configurável no menu). No showdown, cada assento exibe a mão formada, o rodapé traz o comparativo ordenado e tocar/passar o mouse sobre um jogador destaca as 5 cartas da melhor mão dele; o jogo aguarda um toque/clique para seguir à próxima mão.
 
 ## IA
 

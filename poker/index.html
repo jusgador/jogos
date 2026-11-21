@@ -111,6 +111,7 @@
   .carta.mesa { --c: var(--cwm); }
   .carta.grande { --c: var(--cwh); }
   .carta.vence { box-shadow: 0 0 0 2px var(--ouro), 0 0 14px 3px rgba(242,193,78,.85); transform: translateY(-6px); }
+  .carta.insp { box-shadow: 0 0 0 2px var(--azul), 0 0 14px 3px rgba(78,161,255,.85); transform: translateY(-6px); }
   .carta.apaga { filter: brightness(.55) saturate(.6); }
   .carta.vira { animation: vira .35s ease-out; }
   @keyframes vira { 0% { transform: rotateY(90deg) scale(.95); } 100% { transform: rotateY(0) scale(1); } }
@@ -141,6 +142,13 @@
   .assento.desistiu .caixa { opacity: .55; }
   .assento.desistiu .cartas { opacity: .35; }
   .assento.ganhou .caixa { border-color: var(--verde); box-shadow: 0 0 0 2px rgba(47,191,113,.6), 0 0 22px rgba(47,191,113,.55); }
+  .assento.sd-ativo { cursor: pointer; }
+  .assento.sd-ativo:hover .caixa { border-color: var(--azul); }
+  .assento.inspecionando .caixa { border-color: var(--azul); box-shadow: 0 0 0 2px rgba(78,161,255,.65), 0 0 20px rgba(78,161,255,.5); }
+  .assento.ganhou.inspecionando .caixa { border-color: var(--ouro); box-shadow: 0 0 0 2px rgba(242,193,78,.7), 0 0 22px rgba(242,193,78,.55); }
+  .sd-ganho { display: inline-block; background: rgba(47,191,113,.22); color: #7ef0ad; border: 1px solid rgba(47,191,113,.5); border-radius: 6px; padding: 0 5px; font-weight: 700; font-size: 10.5px; margin-bottom: 1px; }
+  .sd-mao { color: #e8f5ec; font-weight: 600; font-size: 10.5px; line-height: 1.2; }
+  .sd-mao.perdeu { color: #b7c8be; font-weight: 500; }
   .marca {
     position: absolute; top: -8px; font: 700 10px/1 system-ui, sans-serif; border-radius: 50%; width: 20px; height: 20px;
     display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.6);
@@ -192,6 +200,10 @@
   #btCall { background: #1f5a8a; }
   #btRaise { background: #a5781b; }
   #btDica { flex: 0 0 auto; background: #24402f; padding: 10px 12px; }
+  #linhaFora { display: flex; gap: 6px; align-items: stretch; }
+  #btAcelerar { background: #1e4b3a; }
+  #btAcelerar.ativo { background: #2b6e52; box-shadow: inset 0 0 0 1px var(--verde); }
+  #btPular { background: #2a4566; }
   #avaliacoes { position: absolute; left: 8px; bottom: 6px; z-index: 14; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; max-width: 40%; }
   #avaliacoes:empty { display: none; }
   .aval {
@@ -251,14 +263,33 @@
   #balao .bts { display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; }
   #balao button { background: #2a3f66; border: 1px solid #3c5a8c; border-radius: 6px; padding: 3px 8px; font-size: 12px; }
 
-  /* ---------- Faixa de resultado ---------- */
+  /* ---------- Faixa de resultado (acoplada ao rodapé para não cobrir as cartas) ---------- */
   #resultado {
-    position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 18;
-    background: rgba(10,18,14,.95); border: 1px solid var(--ouro); border-radius: 12px; padding: 8px 12px;
-    display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 16px);
-    box-shadow: 0 6px 24px rgba(0,0,0,.6); animation: surge .3s ease-out;
+    display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 820px; margin: 0 auto;
+    animation: surgeRes .2s ease-out;
   }
-  #resultado .txt { font-weight: 600; text-align: center; }
+  @keyframes surgeRes { from { opacity: 0; transform: translateY(4px); } }
+  #resultado .res-topo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+  #resultado .txt { font-weight: 700; color: var(--ouro); font-size: clamp(12.5px, 2vmin, 15px); flex: 1; min-width: 180px; }
+  #resultado .res-bts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #resultado .sd-comp {
+    display: flex; flex-direction: column; gap: 3px; max-height: min(132px, 24vh); overflow-y: auto;
+    background: #0a120e; border: 1px solid var(--borda); border-radius: 8px; padding: 4px 6px;
+  }
+  .sd-row {
+    display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 6px; font-size: 12.5px;
+    cursor: pointer; border: 1px solid transparent; transition: background .15s, border-color .15s;
+  }
+  .sd-row:hover { background: rgba(78,161,255,.12); border-color: rgba(78,161,255,.35); }
+  .sd-row.vence { background: rgba(47,191,113,.12); }
+  .sd-row.inspecionando { background: rgba(78,161,255,.18); border-color: var(--azul); }
+  .sd-row.vence.inspecionando { background: rgba(242,193,78,.16); border-color: var(--ouro); }
+  .sd-row .sd-pos { width: 22px; text-align: center; font-weight: 700; color: var(--fraco); flex: none; }
+  .sd-row .sd-nome { font-weight: 600; min-width: 56px; white-space: nowrap; }
+  .sd-row .sd-nome.eu { color: #9fd3ff; }
+  .sd-row .sd-mao-txt { flex: 1; min-width: 0; color: #dbe8e0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sd-row .sd-premio { font-weight: 700; color: var(--verde); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .sd-dica { font-size: 11px; color: var(--fraco); }
   .bt { background: var(--painel2); border: 1px solid var(--borda); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
   .bt:hover:not(:disabled) { border-color: var(--verde); }
   .bt.prim { background: var(--verde); color: #04170c; border-color: var(--verde); }
@@ -365,11 +396,14 @@
     #linhaValor { flex: 1 1 280px; flex-wrap: nowrap; }
     #slider { min-width: 40px; }
     #valor { width: 64px; }
-    #linhaAcoes, #esperando { flex: 1 1 340px; }
+    #linhaAcoes, #linhaFora, #esperando { flex: 1 1 340px; }
     #linhaValor .pre { padding: 3px 6px; }
     .acao { padding: 7px 4px; }
     #hud { max-height: calc(100% - 12px); }
-    #resultado { bottom: 4px; padding: 5px 8px; }
+    #resultado { gap: 4px; }
+    #resultado .sd-comp { max-height: 58px; padding: 2px 4px; }
+    .sd-row { padding: 2px 4px; font-size: 11.5px; }
+    .sd-dica { display: none; }
   }
 </style>
 </head>
@@ -397,7 +431,6 @@
       <div id="hudCorpo"></div>
     </div>
     <div id="balao" class="oculto"></div>
-    <div id="resultado" class="oculto"></div>
     <div id="avaliacoes"></div>
     <div id="camada"></div>
   </main>
@@ -421,6 +454,11 @@
       <button class="acao" id="btRaise">Raise<kbd>R</kbd></button>
       <button class="acao oculto" id="btDica" title="Pedir dica (D)">💡<span class="rotulo"> Dica</span></button>
     </div>
+    <div id="linhaFora" class="oculto">
+      <button class="acao" id="btAcelerar">⏩ Acelerar<kbd>Espaço</kbd></button>
+      <button class="acao" id="btPular">⏭ Pular p/ resultado</button>
+    </div>
+    <div id="resultado" class="oculto"></div>
   </footer>
 </div>
 
@@ -461,6 +499,12 @@
         <label class="chk"><input type="checkbox" id="cfgRapido"> Velocidade rápida</label>
         <label class="chk"><input type="checkbox" id="cfgForca" checked> Mostrar força da mão e equidade</label>
         <label class="chk"><input type="checkbox" id="cfgSom" checked> Som</label>
+        <label for="cfgDesistir" style="margin-top:4px;font-weight:500">Ao desistir da mão</label>
+        <select id="cfgDesistir">
+          <option value="normal">Normal</option>
+          <option value="acelerar">Acelerar automaticamente</option>
+          <option value="pular">Pular para o resultado</option>
+        </select>
       </div>
       <div class="cfg">
         <label>Modo Aprendizado</label>
@@ -469,7 +513,7 @@
         <p class="nota">Probabilidades, outs, dicas do treinador, avaliação das jogadas e revisão das mãos.</p>
       </div>
     </div>
-    <p class="nota" style="margin-top:16px">Atalhos: <b>F</b> fold · <b>C</b> check/call · <b>R</b> raise · <b>A</b> all-in · <b>D</b> dica · <b>L</b> histórico · <b>M</b> som. As estatísticas ficam salvas neste navegador. No console, <code>runTests()</code> roda os autotestes.</p>
+    <p class="nota" style="margin-top:16px">Atalhos: <b>F</b> fold · <b>C</b> check/call · <b>R</b> raise · <b>A</b> all-in · <b>D</b> dica · <b>L</b> histórico · <b>M</b> som · <b>Espaço</b> acelerar/pular ou próxima mão. As estatísticas ficam salvas neste navegador. No console, <code>runTests()</code> roda os autotestes.</p>
   </div>
 </section>
 
@@ -625,6 +669,19 @@ function nomeMao(p, comChute = false) {
     case 7: return `Quadra de ${NOME_PL[k(0)]}` + (comChute ? `, kicker ${NOME_UM[k(1)]}` : '');
     default: return k(0) === 12 ? 'Royal Flush' : `Straight Flush até ${art(k(0))} ${NOME_UM[k(0)]}`;
   }
+}
+// Nome da mão para comparação no showdown: mostra kickers quando outro participante empata na mão principal
+function nomeMaoComp(p, todosPontos) {
+  const cat = p >> 20, k = i => (p >> (16 - 4 * i)) & 15;
+  const chave = x => (catDe(x) === 2 || catDe(x) === 6 ? x >> 12 : x >> 16);
+  const mesmoGrupo = todosPontos.filter(x => chave(x) === chave(p));
+  const desempateKicker = mesmoGrupo.some(x => x !== p);
+  if (!desempateKicker) return nomeMao(p, false);
+  // Para par, se o 1º kicker também empata com outro jogador, lista os 3 kickers
+  if (cat === 1 && mesmoGrupo.some(x => x !== p && ((x >> 12) & 15) === k(1))) {
+    return `Par de ${NOME_PL[k(0)]}, kickers ${RANK_TXT[k(1)]}-${RANK_TXT[k(2)]}-${RANK_TXT[k(3)]}`;
+  }
+  return nomeMao(p, true);
 }
 
 // ---------- Mãos iniciais: 169 classes, fórmula de Chen e percentis ----------
@@ -1562,7 +1619,7 @@ function ler(k, padrao) { try { const s = localStorage.getItem(k); return s ? JS
 function gravar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* cheio ou bloqueado */ } }
 function apagar(k) { try { localStorage.removeItem(k); } catch (e) { /* ignora */ } }
 
-const CFG_PADRAO = { bots: 5, fichas: 1000, aumento: 10, dif: 1, rapido: false, forca: true, som: true, aprender: false, nivel: 1 };
+const CFG_PADRAO = { bots: 5, fichas: 1000, aumento: 10, dif: 1, rapido: false, forca: true, som: true, aprender: false, nivel: 1, aoDesistir: 'normal' };
 let cfg = { ...CFG_PADRAO, ...ler(CH.cfg, {}) };
 const ESTAT_PADRAO = { maos: 0, ganhas: 0, maiorPote: 0, vpip: 0, sd: 0, sdGanhos: 0, partidas: 0, vitorias: 0, melhorColocacao: 0 };
 let estat = { ...ESTAT_PADRAO, ...ler(CH.estat, {}) };
@@ -1582,38 +1639,126 @@ const salvarIface = () => gravar(CH.iface, iface);
 function salvar() { if (G && G.fase !== 'acabou') gravar(CH.partida, G); }
 
 // =====================================================================
-//  8. SONS (Web Audio API, gerados na hora)
+//  8. SONS (Web Audio API, síntese orgânica sem arquivos externos)
 // =====================================================================
 const Som = {
   ctx: null,
+  _saida: null,
+  _bufRuido: null,
   iniciar() {
-    if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
+    if (!this.ctx) {
+      try {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const comp = this.ctx.createDynamicsCompressor();
+        comp.threshold.value = -14; comp.knee.value = 18; comp.ratio.value = 4;
+        comp.attack.value = 0.004; comp.release.value = 0.12;
+        const master = this.ctx.createGain();
+        master.gain.value = 0.9;
+        comp.connect(master).connect(this.ctx.destination);
+        this._saida = comp;
+        const n = this.ctx.sampleRate;
+        const b = this.ctx.createBuffer(1, n, this.ctx.sampleRate), d = b.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+        this._bufRuido = b;
+      } catch (e) { return; }
+    }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   },
-  tom(freq, dur, tipo = 'sine', vol = 0.12, quando = 0) {
-    if (!cfg.som || !this.ctx) return;
+  tom(freq, dur, tipo = 'sine', vol = 0.12, quando = 0, freqFim = null) {
+    if (!cfg.som || !this.ctx || !this._saida) return;
     const t = this.ctx.currentTime + quando, o = this.ctx.createOscillator(), g = this.ctx.createGain();
     o.type = tipo; o.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    if (freqFim != null) o.frequency.exponentialRampToValueAtTime(Math.max(20, freqFim), t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.008, dur * 0.25));
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(this.ctx.destination); o.start(t); o.stop(t + dur + 0.02);
+    o.connect(g).connect(this._saida); o.start(t); o.stop(t + dur + 0.02);
   },
-  ruido(dur, vol, freq) {
-    if (!cfg.som || !this.ctx) return;
-    const n = Math.floor(this.ctx.sampleRate * dur), b = this.ctx.createBuffer(1, n, this.ctx.sampleRate), d = b.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  _ruido(dur, vol, freqIni, freqFim = null, tipo = 'bandpass', q = 1.1, quando = 0, ataque = 0.005) {
+    if (!cfg.som || !this.ctx || !this._saida || !this._bufRuido) return;
+    const t = this.ctx.currentTime + quando;
     const s = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
-    s.buffer = b; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.8; g.gain.value = vol;
-    s.connect(f).connect(g).connect(this.ctx.destination); s.start();
+    s.buffer = this._bufRuido;
+    const maxOff = Math.max(0, this._bufRuido.duration - dur - 0.03);
+    const off = Math.random() * maxOff;
+    f.type = tipo; f.Q.value = q;
+    f.frequency.setValueAtTime(freqIni, t);
+    if (freqFim != null) f.frequency.exponentialRampToValueAtTime(Math.max(40, freqFim), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + Math.min(ataque, dur * 0.4));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f).connect(g).connect(this._saida);
+    s.start(t, off, dur + 0.015);
   },
-  carta() { this.ruido(0.07, 0.35, 2600); },
-  ficha() { this.tom(2300, 0.05, 'triangle', 0.09); this.tom(3100, 0.06, 'triangle', 0.06, 0.035); },
-  fichas() { for (let k = 0; k < 4; k++) this.tom(2000 + rnd() * 1400, 0.05, 'triangle', 0.07, k * 0.045); },
-  vitoria() { [523, 659, 784, 1047].forEach((f, k) => this.tom(f, 0.22, 'triangle', 0.12, k * 0.09)); },
-  derrota() { [392, 330, 262].forEach((f, k) => this.tom(f, 0.25, 'sine', 0.1, k * 0.12)); },
-  vez() { this.tom(880, 0.12, 'sine', 0.1); this.tom(1320, 0.14, 'sine', 0.07, 0.09); },
-  fold() { this.tom(180, 0.12, 'sine', 0.07); },
-  check() { this.tom(320, 0.05, 'square', 0.04); this.tom(320, 0.05, 'square', 0.04, 0.07); },
+  embaralhar() {
+    if (!cfg.som || !this.ctx) return;
+    // Riffle suave (flutters curtos de papel + batida leve no final)
+    let t = 0;
+    for (let k = 0; k < 9; k++) {
+      const f = 2200 + Math.random() * 1100;
+      this._ruido(0.022, 0.075 + Math.random() * 0.03, f, f * 0.72, 'bandpass', 1.6, t, 0.002);
+      t += 0.02 + Math.random() * 0.012;
+    }
+    this._ruido(0.045, 0.1, 1400, 700, 'lowpass', 0.8, t + 0.015, 0.004);
+  },
+  carta(tipo = 'dar', passo = 0) {
+    const j = 0.88 + Math.random() * 0.24;
+    if (tipo === 'mesa') {
+      // Virar carta comunitária: deslize + snap mais nítido + leve toque no feltro
+      const tom = 1 + passo * 0.045;
+      this._ruido(0.072, 0.2, 2500 * j * tom, 1450 * j, 'bandpass', 1.2, 0, 0.005);
+      this._ruido(0.02, 0.1, 4100 * j * tom, 2900 * j, 'highpass', 0.9, 0.026, 0.002);
+      this.tom(165 * j, 0.035, 'sine', 0.055, 0.03, 72);
+    } else if (tipo === 'virar') {
+      // Revelar cartas no showdown / all-in
+      this._ruido(0.065, 0.18, 3000 * j, 1750 * j, 'bandpass', 1.3, 0, 0.004);
+      this._ruido(0.018, 0.08, 4300 * j, 3000 * j, 'highpass', 0.9, 0.022, 0.002);
+    } else {
+      // Distribuir carta fechada: deslize leve no feltro com micro-estalo orgânico
+      const vol = 0.13 + Math.random() * 0.035;
+      this._ruido(0.058, vol, 1950 * j, 1050 * j, 'bandpass', 1.1, 0, 0.006);
+      this._ruido(0.016, vol * 0.45, 3400 * j, 2200 * j, 'bandpass', 1.8, 0.028, 0.002);
+    }
+  },
+  _estaloFicha(quando = 0, vol = 0.08, brilho = 1) {
+    const j = (0.9 + Math.random() * 0.22) * brilho;
+    // Harmônicos curtos inarmônicos simulando choque de fichas de cerâmica/argila
+    this.tom(2450 * j, 0.032, 'sine', vol * 0.72, quando);
+    this.tom(3920 * j, 0.026, 'triangle', vol * 0.48, quando);
+    this.tom(5550 * j, 0.018, 'sine', vol * 0.28, quando);
+    this._ruido(0.01, vol * 0.65, 4800 * j, 3200 * j, 'highpass', 0.8, quando, 0.001);
+  },
+  ficha(tipo = 'call') {
+    if (tipo === 'allin') {
+      this._ruido(0.15, 0.14, 1500, 680, 'bandpass', 0.9, 0, 0.012);
+      this.tom(130, 0.11, 'sine', 0.12, 0.04, 54);
+      for (let k = 0; k < 6; k++) this._estaloFicha(0.02 + k * 0.032 + Math.random() * 0.01, 0.085, 0.92 + k * 0.04);
+    } else if (tipo === 'raise') {
+      for (let k = 0; k < 3; k++) this._estaloFicha(k * 0.036 + Math.random() * 0.008, 0.085, 0.95 + k * 0.05);
+    } else {
+      this._estaloFicha(0, 0.08, 1);
+      this._estaloFicha(0.038, 0.055, 1.08);
+    }
+  },
+  fichas() {
+    this._ruido(0.14, 0.1, 1350, 820, 'bandpass', 0.9, 0, 0.012);
+    for (let k = 0; k < 5; k++) this._estaloFicha(k * 0.038 + Math.random() * 0.012, 0.075, 0.92 + k * 0.045);
+  },
+  vitoria() { [523, 659, 784, 1047].forEach((f, k) => this.tom(f, 0.22, 'triangle', 0.11, k * 0.085)); },
+  derrota() { [392, 330, 262].forEach((f, k) => this.tom(f, 0.24, 'sine', 0.09, k * 0.11)); },
+  vez() { this.tom(880, 0.11, 'sine', 0.085); this.tom(1320, 0.13, 'sine', 0.06, 0.085); },
+  fold() {
+    // Cartas deslizando de volta ao centro (muck)
+    const j = 0.92 + Math.random() * 0.16;
+    this._ruido(0.11, 0.15, 1550 * j, 620 * j, 'bandpass', 0.95, 0, 0.01);
+  },
+  check() {
+    // Duas batidinhas secas na mesa ("toc-toc")
+    [0, 0.105].forEach((q, k) => {
+      const f = (k === 0 ? 152 : 144) * (0.96 + Math.random() * 0.08);
+      this.tom(f, 0.048, 'sine', 0.14, q, 68);
+      this._ruido(0.024, 0.085, 480, 220, 'lowpass', 0.7, q, 0.002);
+    });
+  },
 };
 
 // =====================================================================
@@ -1625,11 +1770,22 @@ const ui = {
   laco: 0, pausado: false, visiveis: [], mesaVis: 0, revelar: new Set(), destaque: new Set(), vencedores: new Set(),
   potesFixos: null, fichasExib: null, geom: [], analise: null, dica: false, esperaHumano: null, proxima: null,
   conceitosSessao: new Set(), filaConceitos: [], ultimaDecisao: null,
+  showdown: null, modoFora: 'normal', proximaLiberadaEm: 0,
 };
-const vel = () => (cfg.rapido ? 0.45 : 1);
+const vel = () => (ui.modoFora === 'pular' ? 0 : ui.modoFora === 'acelerar' ? 0.18 : cfg.rapido ? 0.45 : 1);
 const emAposta = () => G && ['preflop', 'flop', 'turn', 'river'].includes(G.fase);
+const humanoForaDaMao = () => !!(G && emAposta() && G.jog[0].desistiu && !G.jog[0].fora && vivos(G).length > 1);
 const assentoEl = i => assentosEl.querySelector(`.assento[data-i="${i}"]`);
 const apostaEl = i => assentosEl.querySelector(`.aposta[data-i="${i}"]`);
+
+function destaqueAtual() {
+  if (ui.showdown && ui.showdown.inspecionando != null) {
+    const i = ui.showdown.inspecionando;
+    const m = ui.showdown.melhor[i];
+    if (m) return { set: new Set(m.cartas), cls: ui.vencedores.has(i) ? ' vence' : ' insp' };
+  }
+  return { set: ui.destaque, cls: ' vence' };
+}
 
 function htmlCarta(c, cls = '') {
   if (c == null || c < 0) return `<div class="carta verso ${cls}"></div>`;
@@ -1764,15 +1920,24 @@ function renderInfo() {
 function renderAssento(p) {
   const s = assentoEl(p.i);
   if (!s) return;
+  const noSd = !!(ui.showdown && ui.showdown.melhor[p.i]);
   s.classList.toggle('vez', emAposta() && G.vez === p.i);
-  s.classList.toggle('fora', p.fora);
-  s.classList.toggle('desistiu', p.desistiu && !p.fora);
+  s.classList.toggle('fora', p.fora && !noSd);
+  s.classList.toggle('desistiu', p.desistiu && !p.fora && !noSd);
   s.classList.toggle('ganhou', ui.vencedores.has(p.i));
+  s.classList.toggle('sd-ativo', noSd);
+  s.classList.toggle('inspecionando', noSd && ui.showdown.inspecionando === p.i);
   s.querySelector('.nome').textContent = p.nome;
   const fichas = ui.fichasExib ? ui.fichasExib[p.i] : p.fichas;
-  s.querySelector('.fichas').textContent = p.fora ? '—' : fmt(fichas);
+  s.querySelector('.fichas').textContent = p.fora && !noSd ? '—' : fmt(fichas);
   const est = s.querySelector('.estado');
-  if (p.fora) est.textContent = `Eliminado · ${p.colocacao}º`;
+  if (noSd) {
+    const g = ui.showdown.ganhos[p.i] || 0;
+    const nome = ui.showdown.nomes[p.i] || '';
+    const elim = p.fora ? `<div class="nota" style="font-size:10px">Eliminado · ${p.colocacao}º</div>` : '';
+    est.innerHTML = (g > 0 ? `<span class="sd-ganho">🏆 +${fmt(g)}</span>` : '') +
+      `<div class="sd-mao${g > 0 ? '' : ' perdeu'}">${esc(nome)}</div>` + elim;
+  } else if (p.fora) est.textContent = `Eliminado · ${p.colocacao}º`;
   else if (p.allin && G.fase !== 'fim') est.innerHTML = '<span class="marca allin">ALL-IN</span>';
   else est.textContent = p.acao || '';
   // marcas de blind
@@ -1785,12 +1950,13 @@ function renderAssento(p) {
   // cartas
   const nVis = Math.min(ui.visiveis[p.i] ?? p.cartas.length, p.cartas.length);
   const aberta = p.humano || ui.revelar.has(p.i);
+  const dest = destaqueAtual();
   let html = '', chave = '';
-  if (!p.fora && !(p.desistiu && !p.humano)) {
+  if (noSd || (!p.fora && !(p.desistiu && !p.humano))) {
     for (let k = 0; k < nVis; k++) {
       const c = p.cartas[k];
       let cls = p.humano ? 'grande' : '';
-      if (aberta && ui.destaque.size) cls += ui.destaque.has(c) ? ' vence' : ' apaga';
+      if (aberta && dest.set.size) cls += dest.set.has(c) ? dest.cls : ' apaga';
       html += aberta ? htmlCarta(c, cls) : htmlCarta(-1, cls);
       chave += (aberta ? c : 'x') + cls + '|';
     }
@@ -1802,12 +1968,12 @@ function renderAssento(p) {
     cEl.classList.toggle('aberta', aberta && !p.humano && nVis > 0);
     if (viraram) cEl.querySelectorAll('.carta').forEach(c => c.classList.add('vira'));
   }
-  // força da mão (opcional)
+  // força da mão (opcional; no showdown já aparece em .estado para não duplicar)
   const f = s.querySelector('.forca');
   if (f) {
     // cada parte fica inteira numa linha; a quebra só acontece entre elas
     const t = [];
-    if (cfg.forca && p.cartas.length && nVis >= 2 && !p.fora) {
+    if (!noSd && cfg.forca && p.cartas.length && nVis >= 2 && !p.fora) {
       const visMesa = G.mesa.slice(0, ui.mesaVis);
       if (visMesa.length >= 3) t.push(nomeMao(avaliar(p.cartas.concat(visMesa))));
       else { const k = classeIdx(p.cartas[0], p.cartas[1]); t.push(classeInfo(k).nome, `top ${pct(PCT[k])}`); }
@@ -1834,10 +2000,11 @@ function renderPotes() {
 }
 function renderMesa(vira = false) {
   const b = $('#board');
+  const dest = destaqueAtual();
   [...b.children].forEach((vaga, k) => {
     const c = k < ui.mesaVis ? G.mesa[k] : null;
     let cls = 'mesa';
-    if (c != null && ui.destaque.size) cls += ui.destaque.has(c) ? ' vence' : ' apaga';
+    if (c != null && dest.set.size) cls += dest.set.has(c) ? dest.cls : ' apaga';
     const chave = c == null ? '' : c + cls;
     if (vaga.dataset.k === chave) return;
     const nova = vaga.dataset.k === '' || vaga.dataset.k === undefined;
@@ -1847,16 +2014,58 @@ function renderMesa(vira = false) {
   });
 }
 function msgMesa(t) { $('#msgMesa').innerHTML = t || ''; }
+function atualizarInspecaoShowdown() {
+  if (!ui.showdown || !G) return;
+  const idx = ui.showdown.inspecionando;
+  for (const p of G.jog) renderAssento(p);
+  renderMesa();
+  document.querySelectorAll('#resultado .sd-row').forEach(row => {
+    row.classList.toggle('inspecionando', Number(row.dataset.i) === idx);
+  });
+  if (idx != null && G.jog[idx]) {
+    msgMesa(`Vendo ${esc(G.jog[idx].nome)}: ${esc(ui.showdown.nomes[idx] || '')}`);
+  } else {
+    msgMesa(ui.showdown.msgPadrao || '');
+  }
+}
 
 // ---------- Controles do jogador ----------
 const btFold = $('#btFold'), btCall = $('#btCall'), btRaise = $('#btRaise'), btDica = $('#btDica');
+const btAcelerar = $('#btAcelerar'), btPular = $('#btPular');
 const slider = $('#slider'), valorIn = $('#valor');
 function vezHumano() { return G && emAposta() && G.vez === 0 && ui.esperaHumano; }
 function atualizarControles() {
+  const resVis = !$('#resultado').classList.contains('oculto');
+  if (resVis) {
+    document.body.classList.remove('vez-humano');
+    $('#esperando').classList.add('oculto');
+    $('#linhaValor').classList.add('oculto');
+    $('#linhaAcoes').classList.add('oculto');
+    $('#linhaFora').classList.add('oculto');
+    return;
+  }
   const meu = vezHumano();
+  const fora = humanoForaDaMao();
   document.body.classList.toggle('vez-humano', !!meu);
   btDica.classList.toggle('oculto', !cfg.aprender);
   const botoes = [btFold, btCall, btRaise, ...document.querySelectorAll('#linhaValor .pre')];
+  if (fora) {
+    $('#linhaValor').classList.add('oculto');
+    $('#linhaAcoes').classList.add('oculto');
+    $('#linhaFora').classList.remove('oculto');
+    const vezNome = G.vez >= 0 ? ` · vez de ${G.jog[G.vez].nome}` : '';
+    $('#esperando').textContent = ui.modoFora === 'acelerar'
+      ? `⏩ Acelerando rodada${vezNome}… (toque na mesa ou Espaço para pular)`
+      : `Você desistiu${vezNome} · toque na mesa ou Espaço para acelerar`;
+    $('#esperando').classList.remove('oculto');
+    btAcelerar.classList.toggle('ativo', ui.modoFora === 'acelerar');
+    btAcelerar.disabled = ui.modoFora !== 'normal';
+    btAcelerar.innerHTML = ui.modoFora === 'acelerar' ? '⏩ Acelerando…' : '⏩ Acelerar<kbd>Espaço</kbd>';
+    btPular.disabled = ui.modoFora === 'pular';
+    return;
+  }
+  $('#linhaFora').classList.add('oculto');
+  $('#linhaAcoes').classList.remove('oculto');
   if (!meu) {
     botoes.forEach(b => (b.disabled = true));
     slider.disabled = valorIn.disabled = btDica.disabled = true;
@@ -1890,6 +2099,27 @@ function atualizarControles() {
     definirValor(v);
   } else valorIn.value = '';
 }
+function ativarAcelerar() {
+  if (!humanoForaDaMao() || ui.modoFora !== 'normal') return;
+  ui.modoFora = 'acelerar';
+  acordarEspera();
+  atualizarControles();
+}
+function ativarPular() {
+  if (!humanoForaDaMao() || ui.modoFora === 'pular') return;
+  ui.modoFora = 'pular';
+  ui.proximaLiberadaEm = performance.now() + 300;
+  acordarEspera();
+  atualizarControles();
+}
+function avancarAceleracao() {
+  if (!humanoForaDaMao()) return false;
+  if (ui.modoFora === 'normal') { ativarAcelerar(); return true; }
+  if (ui.modoFora === 'acelerar') { ativarPular(); return true; }
+  return false;
+}
+btAcelerar.onclick = ativarAcelerar;
+btPular.onclick = ativarPular;
 function definirValor(v) {
   const L = legais(G);
   v = clamp(Math.round(v), L.minPara, L.maxPara);
@@ -1954,11 +2184,47 @@ $('#btLogFechar').onclick = () => alternarLog(false);
 // =====================================================================
 //  10. LAÇO DO JOGO (controla a máquina de estados com pausas e animações)
 // =====================================================================
+let _esperaResolve = null;
+function acordarEspera() {
+  if (_esperaResolve) { const r = _esperaResolve; _esperaResolve = null; r(); }
+}
 async function esperar(ms, id) {
-  if (ms > 0) await sleep(ms);
+  if (ms > 0) {
+    await new Promise(res => {
+      const done = () => { clearTimeout(t); if (_esperaResolve === done) _esperaResolve = null; res(); };
+      const t = setTimeout(done, ms);
+      _esperaResolve = done;
+    });
+  }
   while (ui.pausado && id === ui.laco) await sleep(120);
 }
-function botAtraso() { return cfg.rapido ? 150 + rnd() * 250 : 600 + rnd() * 900; }
+function botAtraso() {
+  if (ui.modoFora === 'pular') return 0;
+  if (ui.modoFora === 'acelerar') return 55 + rnd() * 65;
+  return cfg.rapido ? 150 + rnd() * 250 : 600 + rnd() * 900;
+}
+
+// Resolve instantaneamente o resto da mão quando o jogador desistiu e pediu para pular
+function resolverRestoBots(G) {
+  let guard = 0;
+  while (emAposta() && guard++ < 400) {
+    if (vivos(G).length <= 1) { fecharRua(G); return 'fold'; }
+    if (G.vez >= 0) {
+      const i = G.vez, p = G.jog[i];
+      if (p.humano) break;
+      const acao = decidirBot(visaoDe(G, i), p.perfil, G.cfg.dif);
+      agir(G, acao);
+      const k = G.mh.eventos.length - 1;
+      if (acao.pensou) G.mh.pensamentos[k] = acao.pensou;
+      continue;
+    }
+    fecharRua(G);
+    if (vivos(G).length <= 1) return 'fold';
+    if (G.fase === 'river') { G.fase = 'showdown'; return 'showdown'; }
+    abrirRua(G);
+  }
+  return vivos(G).length <= 1 ? 'fold' : (G.fase === 'showdown' ? 'showdown' : null);
+}
 
 async function jogar() {
   const id = ++ui.laco;
@@ -1976,6 +2242,16 @@ async function jogar() {
     }
     if (G.fase === 'showdown') { await fazerShowdown(id); continue; }
     if (vivos(G).length === 1) { await vitoriaSemShowdown(id); continue; }
+    if (ui.modoFora === 'pular' && G.jog[0].desistiu && emAposta()) {
+      const destino = resolverRestoBots(G);
+      ui.mesaVis = G.mesa.length;
+      ui.visiveis = G.jog.map(p => p.cartas.length);
+      salvar();
+      renderLog();
+      render();
+      if (destino === 'showdown') { await fazerShowdown(id); continue; }
+      if (destino === 'fold') { await vitoriaSemShowdown(id); continue; }
+    }
     if (G.vez >= 0) {
       const i = G.vez, p = G.jog[i];
       render();
@@ -1991,6 +2267,12 @@ async function jogar() {
         await esperar(Math.max(0, botAtraso() - (performance.now() - t0)), id);
       }
       if (!vivo()) return;
+      if (!p.humano && ui.modoFora === 'pular' && G.jog[0].desistiu) {
+        agir(G, acao);
+        const k = G.mh.eventos.length - 1;
+        if (acao.pensou) G.mh.pensamentos[k] = acao.pensou;
+        continue;
+      }
       executar(i, acao);
       salvar();
       continue;
@@ -2005,8 +2287,9 @@ async function jogar() {
     if (corrida) {
       const antes = ui.revelar.size;
       vivos(G).forEach(q => ui.revelar.add(q.i));
-      if (ui.revelar.size !== antes) { render(); msgMesa('All-in! As cartas são reveladas.'); await esperar(1000 * vel(), id); }
+      if (ui.revelar.size !== antes) { Som.carta('virar'); render(); msgMesa('All-in! As cartas são reveladas.'); await esperar(1000 * vel(), id); }
     }
+    if (ui.modoFora === 'pular' && G.jog[0].desistiu) continue;
     abrirRua(G);
     salvar();
     renderLog();
@@ -2020,6 +2303,7 @@ function comecarMao() {
   iniciarMao(G);
   ui.visiveis = G.jog.map(() => 0); ui.mesaVis = 0; ui.revelar = new Set(); ui.destaque = new Set();
   ui.vencedores = new Set(); ui.potesFixos = null; ui.fichasExib = null; ui.analise = null; ui.dica = false;
+  ui.showdown = null; ui.modoFora = 'normal';
   $('#resultado').classList.add('oculto');
   msgMesa(G.subiuBlind ? `Blinds sobem para ${fmt(G.sb)}/${fmt(G.bb)}` : '');
   if (G.subiuBlind) toast(`Os blinds subiram para ${fmt(G.sb)}/${fmt(G.bb)}.`);
@@ -2034,6 +2318,11 @@ async function animarDistribuicao(id) {
   ui.visiveis = G.jog.map(() => 0);
   render();
   posicionar();
+  if (vel() > 0) {
+    Som.embaralhar();
+    await esperar(180 * vel(), id);
+    if (id !== ui.laco) return;
+  }
   const origem = ui.geom[G.dealer] ? { x: ui.geom[G.dealer].dx, y: ui.geom[G.dealer].dy } : pontoDe(centroEl);
   const promessas = [];
   let k = 0;
@@ -2041,7 +2330,7 @@ async function animarDistribuicao(id) {
     const atraso = k++ * 85 * vel();
     promessas.push(sleep(atraso).then(() => {
       if (id !== ui.laco) return;
-      Som.carta();
+      Som.carta('dar');
       const alvo = pontoDe(assentoEl(j).querySelector('.cartas'));
       return voar(htmlCarta(-1, j === 0 ? 'grande' : ''), origem, alvo, 260 * vel());
     }).then(() => { if (id !== ui.laco) return; ui.visiveis[j]++; renderAssento(G.jog[j]); }));
@@ -2053,22 +2342,24 @@ async function animarDistribuicao(id) {
 async function animarMesa(id) {
   for (let k = ui.mesaVis; k < G.mesa.length; k++) {
     if (id !== ui.laco) return;
+    if (ui.modoFora === 'pular' && G.jog[0].desistiu) break;
     const vaga = $('#board').children[k];
     const de = ui.geom[G.dealer] ? { x: ui.geom[G.dealer].dx, y: ui.geom[G.dealer].dy } : { x: area.clientWidth / 2, y: 0 };
-    Som.carta();
+    Som.carta('mesa', k);
     await voar(htmlCarta(-1, 'mesa'), de, pontoDe(vaga), 260 * vel());
     ui.mesaVis = k + 1;
     renderMesa(true);
     renderAssento(G.jog[0]);
-    await sleep(90 * vel());
+    await esperar(90 * vel(), id);
   }
+  ui.mesaVis = G.mesa.length;
   render();
 }
 async function recolherApostas(id) {
   const comAposta = G.jog.filter(p => p.aposta > 0).map(p => ({ i: p.i, v: p.aposta }));
   const dev = fecharRua(G);
-  if (dev && dev.v > 0) toastCurto(`${G.jog[dev.i].nome} recebe de volta ${fmt(dev.v)} (aposta não paga)`);
-  if (comAposta.length) {
+  if (dev && dev.v > 0 && ui.modoFora !== 'pular') toastCurto(`${G.jog[dev.i].nome} recebe de volta ${fmt(dev.v)} (aposta não paga)`);
+  if (comAposta.length && ui.modoFora !== 'pular') {
     Som.fichas();
     const alvo = pontoDe($('#potes'));
     const voos = comAposta.map(({ i, v }) => voar(htmlFicha(v), { x: ui.geom[i].bx, y: ui.geom[i].by }, alvo, 320 * vel()));
@@ -2100,14 +2391,20 @@ function executar(i, acao) {
   if (r.tipo === 'fold') Som.fold();
   else if (r.tipo === 'check') Som.check();
   else {
-    Som.ficha();
+    Som.ficha(p.allin || r.tipo === 'allin' ? 'allin' : r.tipo === 'raise' ? 'raise' : 'call');
     if (ui.geom[i] && p.aposta > antes) {
       const s = assentoEl(i);
       voar(htmlFicha(p.aposta), pontoDe(s.querySelector('.caixa')), { x: ui.geom[i].bx, y: ui.geom[i].by }, 260 * vel());
     }
   }
   balaoAcao(i, r.texto);
-  if (p.humano) { ui.dica = false; document.body.classList.remove('vez-humano'); fecharBalao(); }
+  if (p.humano) {
+    ui.dica = false; document.body.classList.remove('vez-humano'); fecharBalao();
+    if (r.tipo === 'fold' && vivos(G).length > 1) {
+      if (cfg.aoDesistir === 'acelerar') ui.modoFora = 'acelerar';
+      else if (cfg.aoDesistir === 'pular') { ui.modoFora = 'pular'; ui.proximaLiberadaEm = performance.now() + 300; }
+    }
+  }
   render();
   renderLog();
 }
@@ -2118,9 +2415,10 @@ function balaoAcao(i, texto) {
   const b = document.createElement('div');
   b.className = 'balao-acao'; b.textContent = texto;
   s.querySelector('.caixa').appendChild(b);
-  setTimeout(() => b.remove(), cfg.rapido ? 900 : 1600);
+  setTimeout(() => b.remove(), ui.modoFora === 'acelerar' ? 420 : cfg.rapido ? 900 : 1600);
 }
 async function vitoriaSemShowdown(id) {
+  const pulado = ui.modoFora === 'pular';
   await recolherApostas(id);
   const ant = G.jog.map(p => p.fichas);
   const valor = potTotal(G);
@@ -2131,7 +2429,8 @@ async function vitoriaSemShowdown(id) {
   ui.vencedores = new Set([r.i]);
   msgMesa(`${esc(w.nome)} leva ${fmt(r.valor)} — todos desistiram`);
   render();
-  await animarPremio([r.i], r.valor, id);
+  if (!pulado) await animarPremio([r.i], r.valor, id);
+  else Som.fichas();
   ui.potesFixos = [];
   ui.fichasExib = null;
   if (r.i === 0) Som.vitoria();
@@ -2143,52 +2442,75 @@ async function animarPremio(venc, valor, id) {
   const de = pontoDe($('#potes'));
   Som.fichas();
   await Promise.all(venc.map(i => voar(htmlFicha(valor), de, pontoDe(assentoEl(i).querySelector('.caixa')), 480 * vel())));
-  await esperar(100, id);
+  await esperar(100 * vel(), id);
 }
 async function fazerShowdown(id) {
   G.fase = 'showdown';
+  const pulado = ui.modoFora === 'pular';
   document.querySelectorAll('.balao-acao').forEach(b => b.remove());
   const naMao = vivos(G);
+  const antesRev = ui.revelar.size;
   naMao.forEach(p => ui.revelar.add(p.i));
+  if (ui.revelar.size > antesRev) Som.carta('virar');
   ui.mesaVis = G.mesa.length;
   ui.visiveis = G.jog.map(p => p.cartas.length);
   const ant = G.jog.map(p => p.fichas);
   const r = resolverShowdown(G);
+  const todosPontos = naMao.map(p => r.melhor[p.i].pont);
+  const nomesMao = Object.fromEntries(naMao.map(p => [p.i, nomeMaoComp(r.melhor[p.i].pont, todosPontos)]));
+  // Ranking ordenado do melhor para o pior (com empates de posição)
+  const ordenados = naMao.slice().sort((a, b) => {
+    const dp = r.melhor[b.i].pont - r.melhor[a.i].pont;
+    if (dp !== 0) return dp;
+    return (r.ganhos[b.i] || 0) - (r.ganhos[a.i] || 0);
+  });
+  const ranking = [];
+  let pos = 1;
+  ordenados.forEach((p, idx) => {
+    if (idx > 0 && r.melhor[p.i].pont < r.melhor[ordenados[idx - 1].i].pont) pos = idx + 1;
+    ranking.push({ i: p.i, pos, pont: r.melhor[p.i].pont, cartas: p.cartas.slice(), nome: nomesMao[p.i], ganho: r.ganhos[p.i] || 0 });
+  });
+  ui.showdown = { melhor: r.melhor, nomes: nomesMao, ganhos: {}, ranking, msgPadrao: '', inspecionando: null, fixado: null };
   ui.fichasExib = ant.slice();
   ui.potesFixos = r.potes.map(pt => ({ valor: pt.valor, eleg: pt.eleg }));
   render();
   renderLog();
   msgMesa('Showdown');
-  await esperar(900 * vel(), id);
+  if (!pulado) await esperar(750 * vel(), id);
   const linhas = [];
+  const todosVenc = new Set();
   // Os potes laterais são resolvidos primeiro, o principal por último
   for (let k = r.potes.length - 1; k >= 0; k--) {
     if (id !== ui.laco) return;
     const pt = r.potes[k];
     ui.destaque = new Set();
-    pt.venc.forEach(i => r.melhor[i].cartas.forEach(c => ui.destaque.add(c)));
-    ui.vencedores = new Set(pt.venc);
+    pt.venc.forEach(i => { r.melhor[i].cartas.forEach(c => ui.destaque.add(c)); todosVenc.add(i); });
+    ui.vencedores = new Set(todosVenc);
+    for (const i in pt.div) ui.showdown.ganhos[i] = (ui.showdown.ganhos[i] || 0) + pt.div[i];
     const nomes = pt.venc.map(i => G.jog[i].nome).join(' e ');
     const rot = r.potes.length > 1 ? (k === 0 ? 'o pote principal' : `o pote lateral ${k}`) : 'o pote';
     const txt = pt.venc.length > 1
       ? `${nomes} dividem ${rot} (${fmt(pt.valor)}) com ${pt.nome}`
-      : `${nomes} ${pt.venc[0] === 0 ? 'vence' : 'vence'} ${rot} (${fmt(pt.valor)}) com ${pt.nome}`;
+      : `${nomes} vence ${rot} (${fmt(pt.valor)}) com ${pt.nome}`;
     linhas.unshift(txt);
-    msgMesa(esc(txt));
+    ui.showdown.msgPadrao = esc(txt);
+    msgMesa(ui.showdown.msgPadrao);
     render();
     if (pt.venc.includes(0)) Som.vitoria(); else if (pt.eleg.includes(0)) Som.derrota();
-    await animarPremio(pt.venc, pt.valor, id);
+    if (!pulado) await animarPremio(pt.venc, pt.valor, id);
+    else if (k === 0) Som.fichas();
     for (const i in pt.div) ui.fichasExib[i] += pt.div[i];
     ui.potesFixos.splice(k, 1);
     render();
-    await esperar((r.potes.length > 1 ? 1500 : 1900) * vel(), id);
+    if (!pulado && r.potes.length > 1 && k > 0) await esperar(1100 * vel(), id);
   }
+  ui.showdown.ganhos = { ...r.ganhos };
   // Mão de cada um que foi ao showdown, para o histórico
-  for (const p of naMao) linhas.push(`${p.nome} mostra ${p.cartas.map(cartaTxt).join(' ')}: ${nomeMao(r.melhor[p.i].pont)}`);
+  for (const p of naMao) linhas.push(`${p.nome} mostra ${p.cartas.map(cartaTxt).join(' ')}: ${nomesMao[p.i]}`);
   ui.fichasExib = null;
   await terminarMao(id, { tipo: 'showdown', ganhos: r.ganhos,
     potes: r.potes.map(pt => ({ valor: pt.valor, venc: pt.venc, nome: pt.nome, eleg: pt.eleg })),
-    maos: Object.fromEntries(naMao.map(p => [p.i, nomeMao(r.melhor[p.i].pont)])), linhas });
+    maos: nomesMao, ranking, linhas });
 }
 async function terminarMao(id, info) {
   G.fase = 'fim';
@@ -2230,27 +2552,74 @@ function mostrarResultado(id, info, quebrados) {
     if (info.tipo === 'showdown' && info.potes.length > 1) txt = info.linhas.slice(0, info.potes.length).join(' · ');
     if (quebrados.length) txt += ' · ' + quebrados.map(q => `${q.nome} eliminado`).join(', ');
     const fim = fimDeJogo();
-    el.innerHTML = `<span class="txt">${ganho > 0 ? '🏆 ' : ''}${esc(txt)}</span>` +
+    const ehSd = info.tipo === 'showdown' && ui.showdown && ui.showdown.ranking.length > 0;
+    let compHtml = '';
+    if (ehSd) {
+      const linhasComp = ui.showdown.ranking.map(r => {
+        const p = G.jog[r.i];
+        const venceu = r.ganho > 0;
+        return `<div class="sd-row${venceu ? ' vence' : ''}" data-i="${r.i}" title="Clique ou passe o mouse para destacar as 5 cartas">` +
+          `<span class="sd-pos">${venceu ? '🏆' : r.pos + 'º'}</span>` +
+          `<span class="sd-nome${p.humano ? ' eu' : ''}">${esc(p.nome)}</span>` +
+          `${cartinhas(r.cartas)}` +
+          `<span class="sd-mao-txt">${esc(r.nome)}</span>` +
+          `${venceu ? `<span class="sd-premio">+${fmt(r.ganho)}</span>` : ''}</div>`;
+      }).join('');
+      compHtml = `<div class="sd-comp">${linhasComp}</div>`;
+    }
+    el.innerHTML = `${compHtml}<div class="res-topo">` +
+      `<span class="txt">${ganho > 0 ? '🏆 ' : ''}${esc(txt)}` +
+      `${ehSd ? ' <span class="sd-dica">· toque em um jogador para ver as 5 cartas</span>' : ''}</span>` +
+      `<div class="res-bts">` +
       (cfg.aprender || G.mh.decisoes.length ? '<button class="bt" id="btRevisar">🔍 Revisar mão</button>' : '<button class="bt" id="btRevisar">🔍 Revisar</button>') +
-      `<button class="bt prim" id="btProxima">${fim ? 'Ver resultado ▶' : 'Próxima mão ▶'}</button>`;
+      `<button class="bt prim" id="btProxima">${fim ? 'Ver resultado ▶' : 'Próxima mão ▶'}</button></div></div>`;
     el.classList.remove('oculto');
-    let feito = false;
+    atualizarControles();
+    requestAnimationFrame(posicionar);
+    // Inspeção interativa pelas linhas do quadro comparativo
+    if (ehSd) {
+      el.querySelectorAll('.sd-row').forEach(row => {
+        const idx = Number(row.dataset.i);
+        row.addEventListener('pointerenter', e => {
+          if (e.pointerType !== 'mouse' || !ui.showdown || ui.showdown.fixado != null) return;
+          ui.showdown.inspecionando = idx;
+          atualizarInspecaoShowdown();
+        });
+        row.addEventListener('pointerleave', e => {
+          if (e.pointerType !== 'mouse' || !ui.showdown || ui.showdown.fixado != null) return;
+          if (ui.showdown.inspecionando === idx) { ui.showdown.inspecionando = null; atualizarInspecaoShowdown(); }
+        });
+        row.addEventListener('click', e => {
+          e.stopPropagation();
+          if (!ui.showdown) return;
+          ui.showdown.fixado = ui.showdown.fixado === idx ? null : idx;
+          ui.showdown.inspecionando = ui.showdown.fixado;
+          atualizarInspecaoShowdown();
+        });
+      });
+    }
+    let feito = false, timer = null, congelado = false;
     const seguir = () => {
       if (feito) return;
-      feito = true; clearInterval(timer); el.classList.add('oculto');
-      ui.proxima = null; res();
+      feito = true; if (timer) clearInterval(timer);
+      el.classList.add('oculto');
+      ui.proxima = null;
+      atualizarControles();
+      res();
     };
     ui.proxima = seguir;
     $('#btProxima').onclick = seguir;
     $('#btRevisar').onclick = () => { congelado = true; abrirRevisao(G.ultimaMao); };
-    // Avança sozinho depois de alguns segundos (a contagem para enquanto há janela aberta ou revisão)
-    let congelado = false, resta = (fim ? 2.5 : cfg.aprender ? 7 : cfg.rapido ? 2.2 : 4) * 1000;
-    const timer = setInterval(() => {
-      if (id !== ui.laco) { clearInterval(timer); return; }
-      if (ui.pausado || congelado) return;
-      resta -= 200;
-      if (resta <= 0) seguir();
-    }, 200);
+    // No showdown aguarda clique/toque para que o jogador compare com calma; sem showdown avança sozinho rápido (~2s)
+    if (!ehSd) {
+      let resta = (fim ? 2 : cfg.rapido || ui.modoFora === 'pular' ? 1.4 : 2) * 1000;
+      timer = setInterval(() => {
+        if (id !== ui.laco) { clearInterval(timer); return; }
+        if (ui.pausado || congelado) return;
+        resta -= 200;
+        if (resta <= 0) seguir();
+      }, 200);
+    }
   });
 }
 function verificarFim() {
@@ -2924,7 +3293,9 @@ function abrirMenu() {
     `<div class="grade-cfg">` +
     `<div class="cfg"><label>Partida</label><label class="chk"><input type="checkbox" data-c="rapido" ${cfg.rapido ? 'checked' : ''}> Velocidade rápida</label>` +
     `<label class="chk"><input type="checkbox" data-c="forca" ${cfg.forca ? 'checked' : ''}> Mostrar força da mão e equidade</label>` +
-    `<label class="chk"><input type="checkbox" data-c="som" ${cfg.som ? 'checked' : ''}> Som</label></div>` +
+    `<label class="chk"><input type="checkbox" data-c="som" ${cfg.som ? 'checked' : ''}> Som</label>` +
+    `<label style="margin-top:4px;font-weight:500">Ao desistir da mão</label>` +
+    `<select data-c="aoDesistir">${[['normal', 'Normal'], ['acelerar', 'Acelerar automaticamente'], ['pular', 'Pular para o resultado']].map(([v, t]) => `<option value="${v}" ${cfg.aoDesistir === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>` +
     `<div class="cfg"><label>Modo Aprendizado</label><label class="chk"><input type="checkbox" data-c="aprender" ${cfg.aprender ? 'checked' : ''}> Ativado</label>` +
     `<select data-c="nivel">${['Iniciante', 'Intermediário', 'Avançado'].map((n, k) => `<option value="${k}" ${cfg.nivel === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>` +
     `<div class="botoes-tela"><button class="bt" data-m="inicio">Tela inicial (a partida fica salva)</button><button class="bt" data-m="abandonar">Abandonar partida</button><button class="bt" data-m="jogos">◀ Jogos</button></div>`;
@@ -2932,8 +3303,12 @@ function abrirMenu() {
   const corpo = $('#janelaCorpo');
   corpo.querySelectorAll('[data-c]').forEach(el => el.onchange = () => {
     const k = el.dataset.c;
-    cfg[k] = el.type === 'checkbox' ? el.checked : Number(el.value);
+    cfg[k] = el.type === 'checkbox' ? el.checked : k === 'aoDesistir' ? el.value : Number(el.value);
     salvarCfg(); sincronizarCfgTela(); atualizarSom();
+    if (k === 'aoDesistir' && humanoForaDaMao()) {
+      if (cfg.aoDesistir === 'acelerar' && ui.modoFora === 'normal') ativarAcelerar();
+      else if (cfg.aoDesistir === 'pular') ativarPular();
+    }
     if ((k === 'aprender' || k === 'nivel' || k === 'forca') && G && emAposta()) {
       ui.analise = null;
       if (vezHumano()) prepararVezHumano(ui.laco); else analisarSeguindo(ui.laco);
@@ -2960,8 +3335,11 @@ let saindo = false;
 function voltarAosJogos() { saindo = true; salvar(); location.href = '../'; }
 function irInicio() {
   ui.laco++;
+  acordarEspera();
   ui.esperaHumano = null;
+  ui.showdown = null; ui.modoFora = 'normal';
   if (ui.proxima) ui.proxima = null;
+  $('#resultado').classList.add('oculto');
   if (G && G.fase !== 'acabou') salvar();
   $('#telaFim').classList.add('oculto');
   $('#telaInicio').classList.remove('oculto');
@@ -2972,6 +3350,7 @@ function sincronizarCfgTela() {
   $('#cfgBots').value = cfg.bots; $('#cfgBotsTxt').textContent = cfg.bots;
   $('#cfgFichas').value = String(cfg.fichas); $('#cfgAumento').value = String(cfg.aumento); $('#cfgDif').value = String(cfg.dif);
   $('#cfgRapido').checked = cfg.rapido; $('#cfgForca').checked = cfg.forca; $('#cfgSom').checked = cfg.som;
+  $('#cfgDesistir').value = cfg.aoDesistir || 'normal';
   $('#cfgAprender').checked = cfg.aprender; $('#cfgNivel').value = String(cfg.nivel);
   $('#cfgNivel').disabled = !cfg.aprender;
 }
@@ -2979,6 +3358,7 @@ function lerCfgTela() {
   cfg.bots = Number($('#cfgBots').value); cfg.fichas = Number($('#cfgFichas').value);
   cfg.aumento = Number($('#cfgAumento').value); cfg.dif = Number($('#cfgDif').value);
   cfg.rapido = $('#cfgRapido').checked; cfg.forca = $('#cfgForca').checked; cfg.som = $('#cfgSom').checked;
+  cfg.aoDesistir = $('#cfgDesistir').value;
   cfg.aprender = $('#cfgAprender').checked; cfg.nivel = Number($('#cfgNivel').value);
   salvarCfg(); sincronizarCfgTela(); atualizarSom();
 }
@@ -2991,7 +3371,7 @@ function entrarNaMesa() {
   $('#telaFim').classList.add('oculto');
   ui.visiveis = G.jog.map(p => p.cartas.length); ui.mesaVis = G.mesa.length; ui.revelar = new Set();
   ui.destaque = new Set(); ui.vencedores = new Set(); ui.potesFixos = null; ui.fichasExib = null; ui.analise = null;
-  ui.esperaHumano = null; ui.pausado = false;
+  ui.esperaHumano = null; ui.pausado = false; ui.showdown = null; ui.modoFora = 'normal';
   $('#resultado').classList.add('oculto');
   msgMesa('');
   // Retomando no meio de um all-in: as cartas de quem está na mão já estavam viradas
@@ -3039,7 +3419,16 @@ document.addEventListener('keydown', e => {
   if (!$('#janela').classList.contains('oculto') || !$('#telaInicio').classList.contains('oculto')) return;
   if (k === 'm') { $('#btSom').click(); return; }
   if (k === 'l') { alternarLog(); return; }
-  if ((k === 'enter' || k === ' ') && ui.proxima) { e.preventDefault(); ui.proxima(); return; }
+  if ((k === 'enter' || k === ' ') && ui.proxima) {
+    e.preventDefault();
+    if (!e.repeat && performance.now() >= ui.proximaLiberadaEm) ui.proxima();
+    return;
+  }
+  if (k === ' ' && humanoForaDaMao()) {
+    e.preventDefault();
+    if (!e.repeat) avancarAceleracao();
+    return;
+  }
   if (!vezHumano()) return;
   const L = legais(G);
   if (k === 'f') btFold.click();
@@ -3049,6 +3438,41 @@ document.addEventListener('keydown', e => {
   else if (k === 'd' && cfg.aprender) btDica.click();
   else return;
   e.preventDefault();
+});
+
+// Inspeção de mãos no showdown pelos assentos e toque na mesa para acelerar/pular após desistir
+assentosEl.addEventListener('pointerover', e => {
+  if (e.pointerType !== 'mouse' || !ui.showdown || ui.showdown.fixado != null) return;
+  const s = e.target.closest('.assento.sd-ativo');
+  if (!s) return;
+  const idx = Number(s.dataset.i);
+  if (ui.showdown.inspecionando !== idx) { ui.showdown.inspecionando = idx; atualizarInspecaoShowdown(); }
+});
+assentosEl.addEventListener('pointerout', e => {
+  if (e.pointerType !== 'mouse' || !ui.showdown || ui.showdown.fixado != null) return;
+  const s = e.target.closest('.assento.sd-ativo');
+  if (!s || (e.relatedTarget && s.contains(e.relatedTarget))) return;
+  const idx = Number(s.dataset.i);
+  if (ui.showdown.inspecionando === idx) { ui.showdown.inspecionando = null; atualizarInspecaoShowdown(); }
+});
+assentosEl.addEventListener('click', e => {
+  const s = e.target.closest('.assento.sd-ativo');
+  if (!s || !ui.showdown) return;
+  e.stopPropagation();
+  const idx = Number(s.dataset.i);
+  ui.showdown.fixado = ui.showdown.fixado === idx ? null : idx;
+  ui.showdown.inspecionando = ui.showdown.fixado;
+  atualizarInspecaoShowdown();
+});
+area.addEventListener('click', e => {
+  if (e.target.closest('#hud, #balao, #avaliacoes, button, a, .termo')) return;
+  if (ui.showdown && ui.showdown.fixado != null) {
+    ui.showdown.fixado = null;
+    ui.showdown.inspecionando = null;
+    atualizarInspecaoShowdown();
+    return;
+  }
+  if (humanoForaDaMao()) avancarAceleracao();
 });
 
 // Tela cheia no celular: pedida no toque (pointerup) dos botões das telas de menu
