@@ -387,6 +387,7 @@
     gap: 5px;
     touch-action: none;
     cursor: ns-resize;
+    transition: opacity .18s;
   }
   #vb-app #vb-power .vb-ptrack {
     position: relative;
@@ -400,8 +401,11 @@
   }
   #vb-app #vb-pfill { position: absolute; left: 0; right: 0; top: 0; height: 0; background: linear-gradient(180deg, #5ad17a, #f2c84b 55%, #ff4e4e); }
   #vb-app #vb-pcue { position: absolute; left: 50%; top: 0; width: 6px; height: 70%; margin-left: -3px; border-radius: 3px; background: linear-gradient(180deg, #5c87b5 0 3%, #f3efe4 3% 6%, #e3c793 6% 60%, #1a0f0a 60%); opacity: .85; }
-  #vb-app #vb-power span { font: 800 9px ui-monospace, monospace; letter-spacing: 1.5px; color: #d8ccbb; text-shadow: 0 1px 4px #000; }
+  #vb-app #vb-power span { font: 800 9px ui-monospace, monospace; letter-spacing: 1.5px; color: #d8ccbb; text-shadow: 0 1px 4px #000; white-space: nowrap; }
   #vb-app #vb-power.vb-on .vb-ptrack { border-color: #e8c27a; }
+  #vb-app #vb-power.vb-cancel .vb-ptrack { border-color: #ff6d6d; opacity: .55; }
+  #vb-app #vb-power.vb-cancel span { color: #ff8a8a; letter-spacing: .6px; }
+  #vb-app #vb-stage.vb-looking #vb-power { opacity: 0; pointer-events: none; }
   #vb-app #vb-fine {
     display: none;
     position: absolute;
@@ -719,7 +723,7 @@
     #vb-app #vb-center.vb-clock #vb-cmain { font-size: 26px; }
     #vb-app #vb-toolbar { flex-direction: column; top: 32%; right: auto; left: max(10px, var(--safe-left)); }
     #vb-app #vb-stage:has(#vb-ctrl:not([hidden])) #vb-full { left: max(10px, var(--safe-left)); bottom: auto; top: calc(32% + 136px); width: 34px; height: 34px; }
-    #vb-app #vb-power { height: 36%; bottom: max(70px, calc(var(--safe-bottom) + 60px)); }
+    #vb-app #vb-power { right: max(8px, var(--safe-right)); width: 42px; height: 36%; bottom: max(70px, calc(var(--safe-bottom) + 60px)); }
     #vb-app #vb-fine { width: 52%; bottom: max(14px, calc(var(--safe-bottom) + 8px)); }
     #vb-app #vb-toast { top: calc(122px + var(--safe-top)); }
     #vb-app #vb-banner b { font-size: 26px; }
@@ -824,7 +828,7 @@
 
     <div id="vb-ctrl" hidden>
       <button id="vb-spin" type="button" title="Efeito na branca (S)" aria-label="Definir efeito na bola branca"><i></i></button>
-      <div id="vb-power" aria-label="Força: puxe para baixo e solte para tacar">
+      <div id="vb-power" aria-label="Força: puxe para baixo e solte para tacar (arraste para o lado para cancelar)">
         <div class="vb-ptrack"><i id="vb-pfill"></i><b id="vb-pcue"></b></div>
         <span>PUXAR</span>
       </div>
@@ -2179,7 +2183,7 @@
     if(!G||CAM.mode==='top')on=!1;if(on&&(fresh||!CAM.look)){
       const L=CAM.lk,portrait=camera.aspect<.95,y=AIM.yaw;L.az=portrait?(Math.cos(y)>=0?0:Math.PI):y;L.el=portrait?1.0:.86;L.zoom=1;L.px=L.pz=0;L.key=''
     }
-    if(on!==CAM.look)CAM.glide=.75;CAM.look=on;syncLookUI()
+    if(on!==CAM.look)CAM.glide=.75;CAM.look=on;if(on){AIM.charging=!1;AIM.pull=0;updatePowerUI(0)}syncLookUI()
   }
   function camAt(c3,pos,tgt){
     _lc.fov=camera.fov;_lc.aspect=camera.aspect;_lc.updateProjectionMatrix();_lc.position.copy(pos);_lc.up.set(0,1,0);_lc.lookAt(tgt);_lc.updateMatrixWorld();return _lc
@@ -2439,24 +2443,54 @@
       AIM.a=AIM.h=0;updateSpinUI()
     })
   }
-  const pw=$('power');function updatePowerUI(p){
-    $('pfill').style.height=(p*100)+'%';$('pcue').style.top=(p*30)+'%';pw.classList.toggle('vb-on',p>0)
+  const pw=$('power'),pwLbl=pw.querySelector('span');function updatePowerUI(p,canceled){
+    $('pfill').style.height=(p*100)+'%';$('pcue').style.top=(p*30)+'%';pw.classList.toggle('vb-on',p>.03&&!canceled);pw.classList.toggle('vb-cancel',!!canceled);if(pwLbl)pwLbl.textContent=canceled?'CANCELA':(p>.03?Math.round(p*100)+'%':'PUXAR')
   }
   {
-    let y0=0,on=!1;pw.addEventListener('pointerdown',e=>{
-      if(STATE!=='aim')return;auResume();if(CAM.look)setLook(!1);on=!0;y0=e.clientY;pw.setPointerCapture(e.pointerId);AIM.pull=0;e.preventDefault()
-    });pw.addEventListener('pointermove',e=>{
-      if(!on)return;const h=pw.querySelector('.vb-ptrack').getBoundingClientRect().height;AIM.pull=clamp((e.clientY-y0)/(h*.9),0,1);updatePowerUI(AIM.pull)
-    });const up=()=>{
-      if(!on)return;on=!1;if(STATE==='aim'&&AIM.pull>.02){
-        AIM.pullBack=.03+AIM.pull*.22;shoot(dirOf(AIM.yaw),shotSpeed(AIM.pull),AIM.a,AIM.h)
-      } else{
-        AIM.pull=0;updatePowerUI(0)
+    const track=pw.querySelector('.vb-ptrack');
+    let pid=null,mode='',x0=0,y0=0,lx=0,ly=0,deadY=18,isTouch=!0,canceled=!1;
+    const reset=()=>{
+      pid=null;mode='';canceled=!1;AIM.pull=0;updatePowerUI(0,!1)
+    };
+    pw.addEventListener('pointerdown',e=>{
+      if(STATE!=='aim'||CAM.look||pid!==null)return;auResume();pid=e.pointerId;mode='pending';canceled=!1;isTouch=e.pointerType!=='mouse';deadY=isTouch?18:8;x0=lx=e.clientX;y0=ly=e.clientY;try{pw.setPointerCapture(e.pointerId)}catch(_){}AIM.pull=0;updatePowerUI(0,!1);e.preventDefault()
+    });
+    pw.addEventListener('pointermove',e=>{
+      if(e.pointerId!==pid)return;if(STATE!=='aim'||CAM.look){reset();return}
+      const dx0=e.clientX-x0,dy0=e.clientY-y0,adx=Math.abs(dx0);
+      if(mode==='pending'){
+        if(dy0>=deadY&&dy0>=adx*(isTouch?1.35:.9)){
+          mode='pull'
+        } else if(isTouch&&((adx>=10&&adx>=dy0*.8)||dy0<=-10)){
+          mode='aim'
+        } else return
       }
-      
-    };pw.addEventListener('pointerup',up);pw.addEventListener('pointercancel',()=>{
-      on=!1;AIM.pull=0;updatePowerUI(0)
-    })
+      if(mode==='aim'){
+        const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;
+        if(CAM.mode==='top'){
+          const p=tablePoint(e),c=cueBall();if(p&&c)AIM.yaw=Math.atan2(p.y-c.y,p.x-c.x)
+        } else{
+          AIM.yaw-=dx*(e.shiftKey?.0009:.0042);CAM.pitch=clamp(CAM.pitch+dy*.0025,.1,1.25)
+        }
+        return
+      }
+      const r=track.getBoundingClientRect(),cx=(r.left+r.right)/2,lat=Math.abs(e.clientX-cx);
+      if(!canceled&&lat>64)canceled=!0;else if(canceled&&lat<44)canceled=!1;
+      if(canceled){
+        AIM.pull=0;updatePowerUI(0,!0);return
+      }
+      const span=Math.max(70,r.height*.85-deadY);AIM.pull=clamp((e.clientY-y0-deadY)/span,0,1);updatePowerUI(AIM.pull,!1)
+    });
+    const up=e=>{
+      if(e.pointerId!==pid)return;const ok=mode==='pull'&&!canceled&&STATE==='aim'&&!CAM.look&&AIM.pull>.03,p=AIM.pull;pid=null;mode='';canceled=!1;
+      if(ok){
+        AIM.pullBack=.03+p*.22;shoot(dirOf(AIM.yaw),shotSpeed(p),AIM.a,AIM.h)
+      } else{
+        AIM.pull=0;updatePowerUI(0,!1)
+      }
+    };
+    pw.addEventListener('pointerup',up);
+    pw.addEventListener('pointercancel',e=>{if(e.pointerId===pid)reset()})
   }
   {
     const f=$('fine');let x0=0,on=!1,acc=0;f.addEventListener('pointerdown',e=>{
@@ -2596,7 +2630,7 @@
     
   },!0);document.addEventListener('keyup',e=>{
     if(e.code==='Space'&&AIM.charging){
-      e.preventDefault();AIM.charging=!1;if(STATE==='aim'&&AIM.pull>.02){
+      e.preventDefault();AIM.charging=!1;if(STATE==='aim'&&AIM.pull>.03){
         AIM.pullBack=.03+AIM.pull*.22;shoot(dirOf(AIM.yaw),shotSpeed(AIM.pull),AIM.a,AIM.h)
       } else{
         AIM.pull=0;updatePowerUI(0)

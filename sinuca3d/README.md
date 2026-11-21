@@ -14,7 +14,7 @@ Nos modos **Bola 8** e **Snooker**, é possível jogar contra a CPU em três ní
 
 - **Olhar ao redor da mesa:** cada turno pode começar com visão afastada (configurável em *Configurações*). Arraste para girar em torno da mesa, use pinça ou a roda do mouse para dar zoom e arraste com dois dedos (ou botão direito) para deslocar a câmera.
 - **Mirar:** clique ou toque na bola desejada para se posicionar atrás do taco. Arraste para ajustar a direção; para ajuste fino use a faixa **MIRA FINA** (no toque), as setas `←` `→` (com `Shift` para precisão extra) ou a roda do mouse.
-- **Tacar:** puxe a barra de força à direita para baixo e solte, ou segure `Espaço` e solte.
+- **Tacar:** puxe a barra de força à direita para baixo e solte (arraste para o lado para cancelar), ou segure `Espaço` e solte.
 - **Efeito na branca:** clique/toque na bola branca no canto inferior esquerdo (ou tecla `S`) e arraste o ponto vermelho — cima dá siga, baixo dá puxeta, lados dão efeito lateral nas tabelas (`X` centraliza).
 - **Bola na mão:** após faltas ou no início, arraste a bola branca até uma posição válida antes de tacar.
 - **Atalhos no teclado:** `L` alterna entre olhar a mesa e mirar, `V` alterna entre câmera 3D e vista de cima, `↑` `↓` aproximam/afastam a câmera, `S` abre o efeito, `X` zera o efeito, `M` liga/desliga o som e `Esc` abre a pausa.
