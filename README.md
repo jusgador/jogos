@@ -14,6 +14,7 @@ Página inicial e jogos, publicados no GitHub Pages: https://jusgador.github.io/
 | Bocha do Clube | `bocha/` |
 | Truco do Clube | `truco/` |
 | Xadrez do Clube | `xadrez/` |
+| Baduk (Go) | `go/` |
 
 Cada jogo é desenvolvido direto na sua pasta, num único `index.html`. Os jogos começaram em repositórios próprios, e o histórico de cada um veio junto (`git log --follow asas/index.html`).
 
@@ -67,6 +68,7 @@ Roteiro para uma sessão aberta em `D:\dev\jogos` para criar um jogo novo, do co
   | `bocha-` | Bocha do Clube |
   | `truco-` | Truco do Clube |
   | `xadrez-` | Xadrez do Clube |
+  | `go-` | Baduk (Go) |
 
 ### 2. O arquivo do jogo
 

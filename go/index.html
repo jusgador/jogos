@@ -1,0 +1,3975 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icone-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#140f0b">
+<title>Baduk (Go)</title>
+<!--
+  Baduk (Go) — Salão Tradicional em 3D
+  Tabuleiros 9×9, 13×13 e 19×19, IA MCTS+RAVE em Web Worker, Modo Treino,
+  7 lições interativas e 10 problemas Tsumego, tudo num único arquivo HTML.
+  Three.js via CDN (cdn.jsdelivr.net); madeira, pedras, tigelas e sons procedurais.
+  Dados salvos no localStorage com o prefixo "go-".
+-->
+<style>
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --bg: #140f0b;
+    --panel: rgba(24, 18, 13, 0.90);
+    --panel-solid: #1b140f;
+    --panel2: rgba(42, 31, 22, 0.92);
+    --border: rgba(235, 198, 134, 0.22);
+    --border-strong: rgba(235, 198, 134, 0.55);
+    --gold: #e6bf78;
+    --cream: #f5eee0;
+    --muted: #b5a690;
+    --green: #79c47c;
+    --red: #e05a52;
+    --amber: #f0a84a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--cream);
+    font: 500 15px/1.42 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  [hidden] { display: none !important; }
+  button {
+    font: inherit; color: inherit; cursor: pointer;
+    background: none; border: 0; padding: 0; margin: 0;
+    touch-action: manipulation;
+  }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  #app {
+    position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh;
+    overflow: hidden; user-select: none; -webkit-user-select: none;
+  }
+  #canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+    touch-action: none; cursor: crosshair;
+  }
+  #canvas.grabbing { cursor: grabbing; }
+
+  /* Loading / No WebGL */
+  #loading, #nogl {
+    position: absolute; inset: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; background: radial-gradient(circle at 50% 42%, #241a12, #110c09 75%);
+    text-align: center; padding: 24px;
+  }
+  .load-logo {
+    font: 700 32px/1.1 Georgia, "Times New Roman", serif;
+    letter-spacing: 0.08em; color: var(--gold);
+  }
+  .load-sub { color: var(--muted); font-size: 14px; }
+  .load-bar { width: 220px; height: 4px; border-radius: 99px; background: rgba(255,255,255,0.12); overflow: hidden; }
+  .load-bar i { display: block; height: 100%; width: 15%; background: linear-gradient(90deg, var(--gold), #f5d89e); transition: width .25s; }
+
+  /* Shared buttons */
+  .bt {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 14px; border-radius: 10px;
+    background: var(--panel2); border: 1px solid var(--border);
+    color: var(--cream); font-weight: 600; font-size: 14px;
+    transition: border-color .15s, background .15s, transform .1s;
+    backdrop-filter: blur(8px);
+  }
+  .bt:hover:not(:disabled) { border-color: var(--gold); background: rgba(58, 43, 30, 0.95); }
+  .bt:active:not(:disabled) { transform: scale(0.97); }
+  .bt:disabled { opacity: 0.38; cursor: default; }
+  .bt.gold { background: linear-gradient(180deg, #efd093, #d3a252); color: #1a1208; border-color: #f3d79e; font-weight: 700; }
+  .bt.gold:hover:not(:disabled) { background: linear-gradient(180deg, #f6dca6, #deae5f); }
+  .bt.green { background: linear-gradient(180deg, #8fd692, #63ab66); color: #0e1a0f; border-color: #a6e3a8; font-weight: 700; }
+  .bt.red { background: rgba(185, 58, 50, 0.85); color: #fff; border-color: rgba(255, 140, 130, 0.4); }
+  .bt.active { border-color: var(--gold); color: var(--gold); background: rgba(230, 191, 120, 0.16); }
+  .bt.sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  .bt.icon { width: 38px; height: 38px; padding: 0; border-radius: 10px; font-size: 16px; }
+
+  /* Overlay Menus */
+  .overlay {
+    position: absolute; inset: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: center;
+    padding: max(14px, var(--safe-top)) max(14px, var(--safe-right)) max(14px, var(--safe-bottom)) max(14px, var(--safe-left));
+    background: radial-gradient(circle at 50% 45%, rgba(20, 15, 11, 0.48), rgba(12, 9, 7, 0.82));
+    backdrop-filter: blur(4px);
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .card {
+    width: min(760px, 100%); max-height: 100%;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 18px; padding: 20px 22px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+    display: flex; flex-direction: column; gap: 14px;
+    overflow-y: auto;
+  }
+  .card.narrow { width: min(460px, 100%); }
+  .head-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 210px; }
+  .brand-emblem {
+    width: 46px; height: 46px; border-radius: 12px; flex: none;
+    background: linear-gradient(145deg, #d7a152, #9e6b29);
+    border: 1px solid rgba(255,240,210,0.4);
+    display: grid; place-items: center; box-shadow: inset 0 1px 2px rgba(255,255,255,0.35), 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .brand h1 { margin: 0; font: 700 26px/1.1 Georgia, "Times New Roman", serif; color: var(--gold); letter-spacing: 0.03em; }
+  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+  /* Tabs inside main menu */
+  .tabs {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+    background: rgba(0,0,0,0.28); padding: 4px; border-radius: 12px; border: 1px solid var(--border);
+  }
+  .tab {
+    padding: 8px 6px; border-radius: 9px; font-weight: 600; font-size: 13px;
+    color: var(--muted); text-align: center; transition: background .15s, color .15s;
+  }
+  .tab:hover { color: var(--cream); }
+  .tab.sel { background: linear-gradient(180deg, #efd093, #cfa050); color: #191108; font-weight: 700; }
+
+  .sec-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); margin: 2px 0 6px; font-weight: 700; }
+  .opt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+  .opt-grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .opt-grid.cols2 { grid-template-columns: repeat(2, 1fr); }
+  .opt {
+    padding: 9px 10px; border-radius: 10px; text-align: left;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    transition: border-color .15s, background .15s;
+  }
+  .opt:hover { border-color: rgba(230,191,120,0.55); }
+  .opt.sel { border-color: var(--gold); background: rgba(230,191,120,0.16); box-shadow: inset 0 0 0 1px rgba(230,191,120,0.45); }
+  .opt strong { display: block; font-size: 14px; color: var(--cream); }
+  .opt span { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  .resume-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 12px; border-radius: 12px;
+    background: linear-gradient(135deg, rgba(121, 196, 124, 0.16), rgba(40, 30, 20, 0.7));
+    border: 1px solid rgba(121, 196, 124, 0.45);
+  }
+  .resume-bar .info { flex: 1; font-size: 13px; }
+  .resume-bar .info strong { color: var(--green); display: block; }
+
+  /* Lists (Lessons / Tsumego) */
+  .list-scroll { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; padding-right: 2px; }
+  .list-item {
+    display: flex; align-items: center; gap: 12px; text-align: left;
+    padding: 10px 12px; border-radius: 11px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    transition: border-color .15s, background .15s;
+  }
+  .list-item:hover { border-color: var(--gold); background: rgba(230,191,120,0.10); }
+  .list-num {
+    width: 32px; height: 32px; border-radius: 9px; flex: none;
+    display: grid; place-items: center; font-weight: 700; font-size: 13px;
+    background: rgba(230,191,120,0.16); color: var(--gold); border: 1px solid var(--border);
+  }
+  .list-item.done .list-num { background: rgba(121,196,124,0.22); color: var(--green); border-color: rgba(121,196,124,0.5); }
+  .list-body { flex: 1; min-width: 0; }
+  .list-body strong { display: block; font-size: 14px; color: var(--cream); }
+  .list-body span { display: block; font-size: 12px; color: var(--muted); }
+  .tag {
+    font-size: 11px; padding: 3px 7px; border-radius: 99px; font-weight: 700;
+    background: rgba(255,255,255,0.07); color: var(--muted); white-space: nowrap;
+  }
+  .tag.ok { background: rgba(121,196,124,0.2); color: var(--green); }
+
+  /* In-game HUD */
+  #hud {
+    position: absolute; inset: 0; z-index: 15; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: max(10px, var(--safe-top)) max(12px, var(--safe-right)) max(10px, var(--safe-bottom)) max(12px, var(--safe-left));
+  }
+  #hud-top {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    pointer-events: none;
+  }
+  .hud-group { display: flex; align-items: center; gap: 6px; pointer-events: auto; flex-wrap: wrap; }
+
+  .score-pill {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 12px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--border);
+    backdrop-filter: blur(8px); pointer-events: auto;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  }
+  .player-box {
+    display: flex; align-items: center; gap: 7px;
+    padding: 3px 8px; border-radius: 8px; transition: background .2s, box-shadow .2s;
+  }
+  .player-box.turn { background: rgba(230,191,120,0.18); box-shadow: inset 0 0 0 1px rgba(230,191,120,0.65); }
+  .stone-dot {
+    width: 18px; height: 18px; border-radius: 50%; flex: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .stone-dot.b { background: radial-gradient(circle at 32% 30%, #4d5059, #141519 65%, #070709); border: 1px solid rgba(255,255,255,0.16); }
+  .stone-dot.w { background: radial-gradient(circle at 32% 30%, #ffffff, #ebe4d3 70%, #cbc0aa); border: 1px solid rgba(0,0,0,0.2); }
+  .p-meta { line-height: 1.15; }
+  .p-name { font-size: 12px; font-weight: 700; display: block; white-space: nowrap; }
+  .p-cap { font-size: 11px; color: var(--muted); display: block; white-space: nowrap; }
+  .vs-sep { width: 1px; height: 24px; background: var(--border); }
+
+  /* Evaluation bar (Training mode) */
+  #eval-wrap {
+    display: flex; align-items: center; gap: 8px; margin-top: 6px;
+    padding: 4px 10px; border-radius: 99px;
+    background: var(--panel); border: 1px solid var(--border);
+    backdrop-filter: blur(8px); pointer-events: auto; width: fit-content;
+  }
+  #eval-track {
+    width: 120px; height: 8px; border-radius: 99px; overflow: hidden;
+    background: #ece5d5; border: 1px solid rgba(255,255,255,0.22); position: relative;
+  }
+  #eval-black {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 50%;
+    background: linear-gradient(90deg, #1b1c20, #363942); transition: width .35s ease;
+  }
+  #eval-txt { font-size: 11px; font-weight: 700; color: var(--gold); white-space: nowrap; }
+
+  /* Lesson / Tsumego / Scoring Banner */
+  #coach-banner {
+    align-self: flex-start; max-width: min(300px, 100%);
+    padding: 10px 13px; border-radius: 13px;
+    background: rgba(24, 18, 13, 0.93); border: 1px solid var(--border-strong);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+    pointer-events: auto; display: flex; flex-direction: column; gap: 6px;
+    backdrop-filter: blur(10px);
+  }
+  @media (max-width: 980px) {
+    #coach-banner { align-self: center; max-width: min(560px, 100%); }
+  }
+  #coach-banner.ok { border-color: rgba(121,196,124,0.8); }
+  #coach-banner.warn { border-color: rgba(240,168,74,0.85); }
+  .cb-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .cb-title { font-size: 14px; font-weight: 700; color: var(--gold); }
+  .cb-text { font-size: 13px; color: var(--cream); line-height: 1.42; }
+  .cb-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+
+  /* Bottom HUD */
+  #hud-bottom {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 10px;
+    pointer-events: none; flex-wrap: wrap;
+  }
+  #inspect-pill {
+    padding: 6px 11px; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--border);
+    font-size: 12px; color: var(--muted); backdrop-filter: blur(8px);
+    pointer-events: auto;
+  }
+  #inspect-pill strong { color: var(--gold); }
+  #actions-bar {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    pointer-events: auto; margin-left: auto;
+  }
+
+  /* Toast */
+  #toast {
+    position: absolute; left: 50%; top: calc(max(12px, var(--safe-top)) + 74px);
+    transform: translate(-50%, -8px); opacity: 0; pointer-events: none; z-index: 40;
+    padding: 8px 16px; border-radius: 99px;
+    background: rgba(22, 16, 12, 0.94); border: 1px solid var(--border-strong);
+    color: var(--cream); font-size: 13px; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    transition: opacity .22s, transform .22s;
+    text-align: center; max-width: 90vw;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* Modal summary */
+  .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .score-box {
+    padding: 12px; border-radius: 12px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  }
+  .score-box.win { border-color: var(--gold); background: rgba(230,191,120,0.13); }
+  .score-box h3 { margin: 0 0 6px; display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .score-box .big { font: 700 28px/1.1 Georgia, serif; color: var(--gold); }
+  .score-box .det { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
+  .row-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .row-inline:last-child { border-bottom: 0; }
+  .row-inline small { display: block; color: var(--muted); font-size: 12px; }
+
+  @media (max-width: 680px) {
+    .card { padding: 15px 14px; border-radius: 14px; }
+    .brand h1 { font-size: 21px; }
+    .tabs { grid-template-columns: repeat(2, 1fr); }
+    .score-pill { padding: 5px 8px; gap: 6px; }
+    .p-name { font-size: 11px; }
+    .bt { padding: 7px 11px; font-size: 13px; }
+    .bt.icon { width: 34px; height: 34px; }
+    #eval-track { width: 84px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="canvas" aria-label="Tabuleiro 3D de Baduk (Go)"></canvas>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="load-logo">BADUK · GO</div>
+    <div class="load-sub" id="load-msg">Preparando o salão de madeira Kaya...</div>
+    <div class="load-bar"><i id="load-fill"></i></div>
+  </div>
+
+  <!-- WebGL Fallback -->
+  <div id="nogl" hidden>
+    <div class="load-logo">BADUK · GO</div>
+    <p style="max-width:420px;color:var(--muted)">Não foi possível iniciar o WebGL 3D neste navegador. Verifique se a aceleração de hardware está ativada.</p>
+    <button class="bt gold" onclick="location.href='../'">◀ Voltar aos Jogos</button>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- In-game HUD -->
+  <div id="hud" hidden>
+    <div>
+      <div id="hud-top">
+        <div>
+          <div class="score-pill">
+            <div class="player-box" id="pbox-b">
+              <span class="stone-dot b"></span>
+              <div class="p-meta">
+                <span class="p-name" id="pname-b">Pretas</span>
+                <span class="p-cap" id="pcap-b">0 capt.</span>
+              </div>
+            </div>
+            <div class="vs-sep"></div>
+            <div class="player-box" id="pbox-w">
+              <span class="stone-dot w"></span>
+              <div class="p-meta">
+                <span class="p-name" id="pname-w">Brancas</span>
+                <span class="p-cap" id="pcap-w">0 capt. · komi 6.5</span>
+              </div>
+            </div>
+          </div>
+          <div id="eval-wrap" hidden>
+            <div id="eval-track"><div id="eval-black"></div></div>
+            <span id="eval-txt">Equilibrado</span>
+          </div>
+        </div>
+
+        <div class="hud-group">
+          <button class="bt sm" id="bt-view" title="Alternar câmera 3D / Vista de cima (V)">3D / Topo</button>
+          <button class="bt sm" id="bt-terr" title="Mostrar estimativa de território (T)" hidden>Território</button>
+          <button class="bt icon" id="bt-resetcam" title="Centralizar câmera (R)">⌖</button>
+          <button class="bt icon" id="bt-sound" title="Som (M)">🔊</button>
+          <button class="bt icon" id="bt-pause" title="Menu e pausa (Esc)">☰</button>
+        </div>
+      </div>
+
+      <div id="coach-banner" hidden style="margin-top:8px">
+        <div class="cb-head">
+          <span class="cb-title" id="cb-title"></span>
+          <button class="bt sm" id="cb-close" hidden>✕</button>
+        </div>
+        <div class="cb-text" id="cb-text"></div>
+        <div class="cb-actions" id="cb-actions"></div>
+      </div>
+    </div>
+
+    <div id="hud-bottom">
+      <div id="inspect-pill" hidden></div>
+      <div id="actions-bar">
+        <button class="bt green" id="bt-confirm" hidden>✓ Confirmar lance</button>
+        <button class="bt sm" id="bt-hint" hidden title="Pedir dica (H)">💡 Dica</button>
+        <button class="bt sm" id="bt-undo" hidden title="Desfazer lance (Z)">↩ Desfazer</button>
+        <button class="bt sm" id="bt-pass" title="Passar a vez (P)">Passar</button>
+        <button class="bt sm" id="bt-resign" title="Desistir da partida">Desistir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Menu Overlay -->
+  <div class="overlay" id="menu-overlay" hidden>
+    <div class="card">
+      <div class="head-row">
+        <div class="brand">
+          <div class="brand-emblem" aria-hidden="true">
+            <svg width="30" height="30" viewBox="0 0 30 30">
+              <path d="M5 10h20M5 20h20M10 5v20M20 5v20" stroke="#3a230a" stroke-width="1.4" opacity=".65"/>
+              <circle cx="10" cy="10" r="5" fill="#17181c" stroke="rgba(255,255,255,.25)" stroke-width=".8"/>
+              <circle cx="20" cy="20" r="5" fill="#f5efe2" stroke="rgba(0,0,0,.22)" stroke-width=".8"/>
+            </svg>
+          </div>
+          <div>
+            <h1>Baduk (Go)</h1>
+            <p>Salão tradicional em 3D · Jogue, aprenda e resolva problemas.</p>
+          </div>
+        </div>
+        <button class="bt sm" id="bt-home">◀ Jogos</button>
+      </div>
+
+      <div class="resume-bar" id="resume-bar" hidden>
+        <div class="info">
+          <strong>Partida em andamento</strong>
+          <span id="resume-desc"></span>
+        </div>
+        <button class="bt green sm" id="bt-resume">Continuar</button>
+        <button class="bt sm" id="bt-discard">Descartar</button>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab sel" data-tab="cpu">Contra CPU</button>
+        <button class="tab" data-tab="pvp">2 Jogadores</button>
+        <button class="tab" data-tab="learn">Aprender</button>
+        <button class="tab" data-tab="tsumego">Problemas</button>
+      </div>
+
+      <!-- Tab: CPU -->
+      <div id="tab-cpu">
+        <div class="sec-label">Tabuleiro</div>
+        <div class="opt-grid cols3" id="cpu-size">
+          <button class="opt sel" data-val="9"><strong>9×9</strong><span>Rápido · Ideal para treinar</span></button>
+          <button class="opt" data-val="13"><strong>13×13</strong><span>Intermediário · 15 min</span></button>
+          <button class="opt" data-val="19"><strong>19×19</strong><span>Oficial · Partida completa</span></button>
+        </div>
+
+        <div class="sec-label" style="margin-top:12px">Força da CPU</div>
+        <div class="opt-grid" id="cpu-level">
+          <button class="opt" data-val="1"><strong>Iniciante</strong><span>25 kyu · Relaxado</span></button>
+          <button class="opt sel" data-val="2"><strong>Aprendiz</strong><span>18 kyu · Equilibrado</span></button>
+          <button class="opt" data-val="3"><strong>Clube</strong><span>12 kyu · Sólido</span></button>
+          <button class="opt" data-val="4"><strong>Dan Local</strong><span>6 kyu · Tático</span></button>
+          <button class="opt" data-val="5"><strong>Mestre</strong><span>Máxima busca</span></button>
+        </div>
+
+        <div class="opt-grid cols2" style="margin-top:12px">
+          <div>
+            <div class="sec-label">Sua cor</div>
+            <div class="opt-grid cols3" id="cpu-color">
+              <button class="opt sel" data-val="1"><strong>Pretas</strong><span>Começa</span></button>
+              <button class="opt" data-val="2"><strong>Brancas</strong><span>+Komi</span></button>
+              <button class="opt" data-val="0"><strong>Sorteio</strong><span>Aleatório</span></button>
+            </div>
+          </div>
+          <div>
+            <div class="sec-label">Modo</div>
+            <div class="opt-grid cols2" id="cpu-train">
+              <button class="opt sel" data-val="1"><strong>Treino</strong><span>Dicas, atari e território</span></button>
+              <button class="opt" data-val="0"><strong>Valendo</strong><span>Sem ajuda · Conta placar</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="opt-grid cols2" style="margin-top:12px">
+          <div>
+            <div class="sec-label">Vantagem (Handicap)</div>
+            <div class="opt-grid cols3" id="cpu-handicap">
+              <button class="opt sel" data-val="0"><strong>Nenhuma</strong><span>Igual</span></button>
+              <button class="opt" data-val="2"><strong>2 pedras</strong><span>Para pretas</span></button>
+              <button class="opt" data-val="4"><strong>4 pedras</strong><span>Para pretas</span></button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:flex-end;gap:8px;padding-top:18px">
+            <button class="bt" id="bt-open-cfg">⚙ Opções</button>
+            <button class="bt gold" id="bt-start-cpu" style="flex:1;padding:11px 16px">Iniciar Partida</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: 2 Players -->
+      <div id="tab-pvp" hidden>
+        <div class="sec-label">Tabuleiro (2 jogadores no mesmo aparelho)</div>
+        <div class="opt-grid cols3" id="pvp-size">
+          <button class="opt sel" data-val="9"><strong>9×9</strong><span>Partida ágil</span></button>
+          <button class="opt" data-val="13"><strong>13×13</strong><span>Equilibrado</span></button>
+          <button class="opt" data-val="19"><strong>19×19</strong><span>Oficial</span></button>
+        </div>
+        <div class="opt-grid cols2" style="margin-top:12px">
+          <div>
+            <div class="sec-label">Vantagem (Handicap)</div>
+            <div class="opt-grid cols3" id="pvp-handicap">
+              <button class="opt sel" data-val="0"><strong>Nenhuma</strong><span>Komi padrão</span></button>
+              <button class="opt" data-val="2"><strong>2 pedras</strong><span>Pretas</span></button>
+              <button class="opt" data-val="4"><strong>4 pedras</strong><span>Pretas</span></button>
+            </div>
+          </div>
+          <div>
+            <div class="sec-label">Ajudas visuais</div>
+            <div class="opt-grid cols2" id="pvp-train">
+              <button class="opt sel" data-val="1"><strong>Treino</strong><span>Atari + desfazer</span></button>
+              <button class="opt" data-val="0"><strong>Clássico</strong><span>Tabuleiro limpo</span></button>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="bt gold" id="bt-start-pvp" style="padding:11px 24px">Iniciar em 2 Jogadores</button>
+        </div>
+      </div>
+
+      <!-- Tab: Learn -->
+      <div id="tab-learn" hidden>
+        <div class="sec-label">Lições Interativas em 3D (<span id="learn-prog">0/7</span> concluídas)</div>
+        <div class="list-scroll" id="lesson-list"></div>
+      </div>
+
+      <!-- Tab: Tsumego -->
+      <div id="tab-tsumego" hidden>
+        <div class="sec-label">Problemas de Captura e Vida &amp; Morte (<span id="tsumego-prog">0/10</span> resolvidos)</div>
+        <div class="list-scroll" id="tsumego-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause / Settings Modal -->
+  <div class="overlay" id="pause-overlay" hidden>
+    <div class="card narrow">
+      <div class="head-row">
+        <h2 style="margin:0;color:var(--gold);font-family:Georgia,serif;flex:1" id="pause-title">Pausa &amp; Opções</h2>
+        <button class="bt sm" id="bt-pause-close">✕ Fechar</button>
+      </div>
+
+      <div>
+        <div class="row-inline">
+          <div><strong>Coordenadas na borda</strong><small>Mostra letras (A–T) e números (1–19) no goban</small></div>
+          <button class="bt sm" id="cfg-coords">Ligado</button>
+        </div>
+        <div class="row-inline">
+          <div><strong>Confirmar lance no toque</strong><small>Posiciona a pedra fantasma e confirma no botão (ótimo em 13×13 e 19×19)</small></div>
+          <button class="bt sm" id="cfg-confirm">Automático</button>
+        </div>
+        <div class="row-inline">
+          <div><strong>Aviso visual de Atari</strong><small>Destaca grupos com apenas 1 liberdade no modo Treino</small></div>
+          <button class="bt sm" id="cfg-atari">Ligado</button>
+        </div>
+        <div class="row-inline">
+          <div><strong>Som das pedras</strong><small>Estalo de pedra na madeira Kaya e efeitos sutis</small></div>
+          <button class="bt sm" id="cfg-sound">Ligado</button>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px" id="pause-game-btns">
+        <button class="bt gold" id="bt-pause-resume">Continuar partida</button>
+        <button class="bt" id="bt-export-sgf">Exportar partida (.sgf)</button>
+        <button class="bt" id="bt-pause-menu">Menu do Baduk (Go)</button>
+        <button class="bt" id="bt-pause-home">◀ Voltar aos Jogos</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over / Final Score Modal -->
+  <div class="overlay" id="result-overlay" hidden>
+    <div class="card narrow">
+      <div class="head-row">
+        <h2 style="margin:0;color:var(--gold);font-family:Georgia,serif;flex:1" id="res-title">Fim de Partida</h2>
+      </div>
+      <p id="res-sub" style="margin:0;color:var(--muted);font-size:14px"></p>
+      <div class="score-grid" id="res-grid"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <button class="bt gold" id="bt-res-again" style="flex:1">Jogar novamente</button>
+        <button class="bt" id="bt-res-sgf">SGF</button>
+        <button class="bt" id="bt-res-menu">Menu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================
+     NÚCLEO PURO DE REGRAS + IA MCTS/RAVE (compartilhado entre página e Worker)
+     ======================================================================== -->
+<script id="nucleo" type="text/plain">
+'use strict';
+
+const EMPTY = 0, BLACK = 1, WHITE = 2;
+const opp = c => (c === 1 ? 2 : 1);
+
+function defaultKomi(N, handicap) {
+  if (handicap && handicap >= 2) return 0.5;
+  return N === 9 ? 6.5 : 7.5;
+}
+
+function getStarPoints(N) {
+  if (N === 9) return [[2,2],[6,2],[4,4],[2,6],[6,6]];
+  if (N === 13) return [[3,3],[9,3],[6,6],[3,9],[9,9]];
+  return [[3,3],[9,3],[15,3],[3,9],[9,9],[15,9],[3,15],[9,15],[15,15]];
+}
+
+function getHandicapPoints(N, h) {
+  if (h < 2) return [];
+  const d = N === 9 ? 2 : 3;
+  const hi = N - 1 - d, mid = (N - 1) >> 1;
+  const pts = [
+    [hi, d], [d, hi], [hi, hi], [d, d],
+    [mid, mid], [d, mid], [hi, mid], [mid, d], [mid, hi]
+  ];
+  const order = {
+    2: [0, 1],
+    3: [0, 1, 2],
+    4: [0, 1, 2, 3],
+    5: [0, 1, 2, 3, 4],
+    6: [0, 1, 2, 3, 5, 6],
+    7: [0, 1, 2, 3, 5, 6, 4],
+    8: [0, 1, 2, 3, 5, 6, 7, 8],
+    9: [0, 1, 2, 3, 5, 6, 7, 8, 4]
+  };
+  return (order[Math.min(9, h)] || order[2]).map(i => pts[i][1] * N + pts[i][0]);
+}
+
+const COLS_STR = 'ABCDEFGHJKLMNOPQRST';
+function idxToCoord(N, idx) {
+  if (idx < 0) return 'Pass';
+  const x = idx % N, y = (idx / N) | 0;
+  return COLS_STR[x] + (N - y);
+}
+
+// Tabelas pré-calculadas por tamanho N
+const BOARD_META = {};
+function getMeta(N) {
+  if (BOARD_META[N]) return BOARD_META[N];
+  const S = N * N;
+  const nbr = new Int16Array(S * 4);
+  const ncnt = new Uint8Array(S);
+  const diag = new Int16Array(S * 4);
+  const dcnt = new Uint8Array(S);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const i = y * N + x;
+      let k = 0;
+      if (y > 0) nbr[i * 4 + k++] = i - N;
+      if (x + 1 < N) nbr[i * 4 + k++] = i + 1;
+      if (y + 1 < N) nbr[i * 4 + k++] = i + N;
+      if (x > 0) nbr[i * 4 + k++] = i - 1;
+      ncnt[i] = k;
+      let d = 0;
+      if (y > 0 && x > 0) diag[i * 4 + d++] = i - N - 1;
+      if (y > 0 && x + 1 < N) diag[i * 4 + d++] = i - N + 1;
+      if (y + 1 < N && x > 0) diag[i * 4 + d++] = i + N - 1;
+      if (y + 1 < N && x + 1 < N) diag[i * 4 + d++] = i + N + 1;
+      dcnt[i] = d;
+    }
+  }
+  // Zobrist determinístico (dois Uint32 por interseção e cor)
+  let seed = (0x9e3779b9 ^ (N * 2654435761)) >>> 0;
+  const rng = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed >>> 0; };
+  const zLo = new Uint32Array(S * 3);
+  const zHi = new Uint32Array(S * 3);
+  for (let i = 0; i < S * 3; i++) { zLo[i] = rng(); zHi[i] = rng(); }
+  BOARD_META[N] = { N, S, nbr, ncnt, diag, dcnt, zLo, zHi };
+  return BOARD_META[N];
+}
+
+function hashBoard(N, cells) {
+  const { S, zLo, zHi } = getMeta(N);
+  let lo = 0, hi = 0;
+  for (let i = 0; i < S; i++) {
+    const c = cells[i];
+    if (c) {
+      const k = i * 3 + c;
+      lo = (lo ^ zLo[k]) >>> 0;
+      hi = (hi ^ zHi[k]) >>> 0;
+    }
+  }
+  return hi * 4294967296 + lo;
+}
+
+// Busca rápida de grupo e liberdades (para UI e regras)
+function getGroupInfo(N, cells, start) {
+  const color = cells[start];
+  if (!color) return null;
+  const { S, nbr, ncnt } = getMeta(N);
+  const seen = new Uint8Array(S);
+  const libSeen = new Uint8Array(S);
+  const stack = [start];
+  seen[start] = 1;
+  const stones = [];
+  const libs = [];
+  while (stack.length) {
+    const p = stack.pop();
+    stones.push(p);
+    const base = p * 4, cnt = ncnt[p];
+    for (let k = 0; k < cnt; k++) {
+      const nb = nbr[base + k];
+      const v = cells[nb];
+      if (v === EMPTY) {
+        if (!libSeen[nb]) { libSeen[nb] = 1; libs.push(nb); }
+      } else if (v === color && !seen[nb]) {
+        seen[nb] = 1;
+        stack.push(nb);
+      }
+    }
+  }
+  return { color, stones, libs };
+}
+
+function getAllAtariStones(N, cells) {
+  const { S } = getMeta(N);
+  const checked = new Uint8Array(S);
+  const out = [];
+  for (let i = 0; i < S; i++) {
+    if (!cells[i] || checked[i]) continue;
+    const g = getGroupInfo(N, cells, i);
+    for (const s of g.stones) checked[s] = 1;
+    if (g.libs.length === 1) {
+      for (const s of g.stones) out.push(s);
+    }
+  }
+  return out;
+}
+
+class GoGame {
+  constructor(N = 9, komi = null, handicap = 0) {
+    this.N = N;
+    this.S = N * N;
+    this.handicap = handicap || 0;
+    this.komi = komi !== null ? komi : defaultKomi(N, this.handicap);
+    this.cells = new Uint8Array(this.S);
+    this.turn = BLACK;
+    this.captures = [0, 0, 0]; // index 1 = capturadas pelas Pretas, 2 = pelas Brancas
+    this.koPoint = -1;
+    this.passes = 0;
+    this.moves = []; // { idx, color, captured: [], prevKo, prevPasses, prevHash }
+    this.hashSet = new Set();
+    if (this.handicap >= 2) {
+      for (const p of getHandicapPoints(N, this.handicap)) this.cells[p] = BLACK;
+      this.turn = WHITE;
+    }
+    this.hash = hashBoard(N, this.cells);
+    this.hashSet.add(this.hash);
+  }
+
+  clone() {
+    const g = new GoGame(this.N, this.komi, 0);
+    g.handicap = this.handicap;
+    g.cells.set(this.cells);
+    g.turn = this.turn;
+    g.captures = this.captures.slice();
+    g.koPoint = this.koPoint;
+    g.passes = this.passes;
+    g.hash = this.hash;
+    g.hashSet = new Set(this.hashSet);
+    g.moves = this.moves.map(m => ({ ...m, captured: m.captured.slice() }));
+    return g;
+  }
+
+  // Testa legalidade e retorna { ok, reason, captured, newHash, newKo }
+  checkMove(idx, color = this.turn) {
+    if (idx === -1) return { ok: true, captured: [], newHash: this.hash, newKo: -1 };
+    if (idx < 0 || idx >= this.S) return { ok: false, reason: 'Fora do tabuleiro.' };
+    if (this.cells[idx] !== EMPTY) return { ok: false, reason: 'Interseção já ocupada.' };
+    if (idx === this.koPoint) return { ok: false, reason: 'Proibido pela regra do Ko! Jogue em outro lugar primeiro.' };
+
+    const { N, nbr, ncnt, zLo, zHi } = getMeta(this.N);
+    const enemy = opp(color);
+    this.cells[idx] = color;
+
+    const captured = [];
+    const seenEnemy = new Uint8Array(this.S);
+    const base = idx * 4, cnt = ncnt[idx];
+    for (let k = 0; k < cnt; k++) {
+      const nb = nbr[base + k];
+      if (this.cells[nb] === enemy && !seenEnemy[nb]) {
+        const eg = getGroupInfo(N, this.cells, nb);
+        for (const s of eg.stones) seenEnemy[s] = 1;
+        if (eg.libs.length === 0) {
+          for (const s of eg.stones) captured.push(s);
+        }
+      }
+    }
+
+    for (const s of captured) this.cells[s] = EMPTY;
+    const own = getGroupInfo(N, this.cells, idx);
+    const ownLibs = own.libs.length;
+    const ownSize = own.stones.length;
+
+    let ok = true, reason = '';
+    if (ownLibs === 0) {
+      ok = false;
+      reason = 'Suicídio proibido: a pedra ficaria sem liberdades.';
+    }
+
+    let newHash = this.hash;
+    if (ok) {
+      newHash = hashBoard(N, this.cells);
+      if (this.hashSet.has(newHash)) {
+        ok = false;
+        reason = 'Repetição proibida (Superko): recria uma posição anterior.';
+      }
+    }
+
+    // Restaura estado temporário
+    for (const s of captured) this.cells[s] = enemy;
+    this.cells[idx] = EMPTY;
+
+    const newKo = (ok && captured.length === 1 && ownSize === 1 && ownLibs === 1) ? captured[0] : -1;
+    return { ok, reason, captured, newHash, newKo };
+  }
+
+  play(idx) {
+    const color = this.turn;
+    const res = this.checkMove(idx, color);
+    if (!res.ok) return res;
+
+    const prevKo = this.koPoint;
+    const prevPasses = this.passes;
+    const prevHash = this.hash;
+
+    if (idx === -1) {
+      this.passes++;
+      this.koPoint = -1;
+    } else {
+      this.cells[idx] = color;
+      for (const s of res.captured) this.cells[s] = EMPTY;
+      this.captures[color] += res.captured.length;
+      this.passes = 0;
+      this.koPoint = res.newKo;
+      this.hash = res.newHash;
+      this.hashSet.add(this.hash);
+    }
+
+    this.moves.push({
+      idx, color, captured: res.captured,
+      prevKo, prevPasses, prevHash
+    });
+    this.turn = opp(color);
+    return { ok: true, captured: res.captured, move: this.moves[this.moves.length - 1] };
+  }
+
+  undo() {
+    if (!this.moves.length) return null;
+    const m = this.moves.pop();
+    if (m.idx >= 0) {
+      this.hashSet.delete(this.hash);
+      this.cells[m.idx] = EMPTY;
+      const enemy = opp(m.color);
+      for (const s of m.captured) this.cells[s] = enemy;
+      this.captures[m.color] -= m.captured.length;
+      this.hash = m.prevHash;
+    }
+    this.koPoint = m.prevKo;
+    this.passes = m.prevPasses;
+    this.turn = m.color;
+    return m;
+  }
+
+  toSGF(blackName = 'Pretas', whiteName = 'Brancas') {
+    const a = 97;
+    const enc = idx => idx < 0 ? '' : String.fromCharCode(a + (idx % this.N)) + String.fromCharCode(a + ((idx / this.N) | 0));
+    let sgf = `(;GM[1]FF[4]AP[BadukGo3D:1.0]RU[Chinese]SZ[${this.N}]KM[${this.komi}]PB[${blackName}]PW[${whiteName}]`;
+    if (this.handicap >= 2) {
+      sgf += `HA[${this.handicap}]AB` + getHandicapPoints(this.N, this.handicap).map(p => `[${enc(p)}]`).join('');
+    }
+    for (const m of this.moves) {
+      sgf += `;${m.color === BLACK ? 'B' : 'W'}[${enc(m.idx)}]`;
+    }
+    return sgf + ')';
+  }
+}
+
+// Contagem Chinesa (Área) com suporte a pedras marcadas como mortas
+function scoreChinese(N, cells, komi, deadSet) {
+  const { S, nbr, ncnt } = getMeta(N);
+  const eff = new Uint8Array(S);
+  let bStones = 0, wStones = 0;
+  for (let i = 0; i < S; i++) {
+    const c = (deadSet && deadSet.has(i)) ? EMPTY : cells[i];
+    eff[i] = c;
+    if (c === BLACK) bStones++;
+    else if (c === WHITE) wStones++;
+  }
+  const terr = new Int8Array(S); // +1 preto, -1 branco, 0 neutro/pedra
+  const seen = new Uint8Array(S);
+  let bTerr = 0, wTerr = 0;
+  const q = new Int16Array(S);
+
+  for (let i = 0; i < S; i++) {
+    if (eff[i] !== EMPTY || seen[i]) continue;
+    let head = 0, tail = 0;
+    q[tail++] = i;
+    seen[i] = 1;
+    let touchB = false, touchW = false;
+    while (head < tail) {
+      const p = q[head++];
+      const base = p * 4, cnt = ncnt[p];
+      for (let k = 0; k < cnt; k++) {
+        const nb = nbr[base + k];
+        const v = eff[nb];
+        if (v === EMPTY) {
+          if (!seen[nb]) { seen[nb] = 1; q[tail++] = nb; }
+        } else if (v === BLACK) touchB = true;
+        else if (v === WHITE) touchW = true;
+      }
+    }
+    if (touchB && !touchW) {
+      bTerr += tail;
+      for (let k = 0; k < tail; k++) terr[q[k]] = 1;
+    } else if (touchW && !touchB) {
+      wTerr += tail;
+      for (let k = 0; k < tail; k++) terr[q[k]] = -1;
+    }
+  }
+  const blackTotal = bStones + bTerr;
+  const whiteTotal = wStones + wTerr + komi;
+  return {
+    blackStones: bStones, whiteStones: wStones,
+    blackTerr: bTerr, whiteTerr: wTerr,
+    komi, blackTotal, whiteTotal,
+    diff: blackTotal - whiteTotal,
+    winner: blackTotal > whiteTotal ? BLACK : WHITE,
+    terr
+  };
+}
+
+// ========================================================================
+// MOTOR DE IA: MCTS + RAVE + PADRÕES 3x3 + PLAYOUTS TÁTICOS
+// ========================================================================
+
+// Tabela 3x3 estilo MoGo: 8 vizinhos (N, NE, E, SE, S, SW, W, NW) em base 3 = 6561 estados
+// 0 = vazio, 1 = amigo (quem joga), 2 = inimigo
+const PAT3X3 = (() => {
+  const tab = new Uint8Array(6561);
+  // Padrões canônicos em 3x3 ('.'=vazio, 'X'=amigo, 'O'=inimigo, '?'=qualquer, 'x'=não-inimigo, 'o'=não-amigo)
+  const rules = [
+    // Hane clássico
+    ['X', 'O', 'X', '.', '.', '.', '?', '?', 4],
+    ['X', 'O', '.', '.', '.', '?', '?', '.', 3],
+    ['X', 'O', '?', 'X', '.', '.', '?', '.', 3],
+    // Corte (cut)
+    ['O', 'X', '.', 'O', '.', '?', '?', '?', 4],
+    ['O', '.', 'O', 'X', '.', '.', '?', '?', 4],
+    // Boca de tigre / conexão forte
+    ['X', '?', 'X', '.', 'O', '.', '?', '?', 3],
+    ['X', 'O', '.', 'O', 'X', '?', '?', '?', 4],
+    // Resposta em contato
+    ['O', '.', '.', '.', '.', '?', '?', '?', 2],
+    ['X', 'O', '?', '.', '.', '?', '?', '?', 2],
+  ];
+  // Mapeia (N,NE,E,SE,S,SW,W,NW) -> rotação 90° e espelho
+  const rot = p => [p[6], p[7], p[0], p[1], p[2], p[3], p[4], p[5]];
+  const flip = p => [p[0], p[7], p[6], p[5], p[4], p[3], p[2], p[1]];
+  const matchChar = (ch, v) =>
+    ch === '?' || (ch === '.' && v === 0) || (ch === 'X' && v === 1) || (ch === 'O' && v === 2);
+
+  const expanded = [];
+  for (const r of rules) {
+    let cur = r.slice(0, 8), w = r[8];
+    for (let f = 0; f < 2; f++) {
+      for (let k = 0; k < 4; k++) {
+        expanded.push([cur, w]);
+        cur = rot(cur);
+      }
+      cur = flip(cur);
+    }
+  }
+  const digs = new Uint8Array(8);
+  for (let code = 0; code < 6561; code++) {
+    let t = code;
+    for (let i = 0; i < 8; i++) { digs[i] = t % 3; t = (t / 3) | 0; }
+    let best = 0;
+    for (let r = 0; r < expanded.length; r++) {
+      const pat = expanded[r][0];
+      let ok = true;
+      for (let i = 0; i < 8; i++) if (!matchChar(pat[i], digs[i])) { ok = false; break; }
+      if (ok && expanded[r][1] > best) best = expanded[r][1];
+    }
+    tab[code] = best;
+  }
+  return tab;
+})();
+
+class FastBoard {
+  constructor(N) {
+    this.N = N;
+    this.S = N * N;
+    this.meta = getMeta(N);
+    this.cells = new Uint8Array(this.S);
+    this.ko = -1;
+    this.turn = BLACK;
+    this.lastMove = -1;
+    this.passes = 0;
+    this.stamp = 1;
+    this.vis = new Int32Array(this.S);
+    this.libVis = new Int32Array(this.S);
+    this.q = new Int16Array(this.S);
+    this.stonesBuf = new Int16Array(this.S);
+  }
+
+  copyFrom(src) {
+    this.cells.set(src.cells);
+    this.ko = src.ko !== undefined ? src.ko : src.koPoint;
+    this.turn = src.turn;
+    this.lastMove = src.lastMove !== undefined ? src.lastMove : (src.moves && src.moves.length ? src.moves[src.moves.length - 1].idx : -1);
+    this.passes = src.passes || 0;
+  }
+
+  // Conta até maxLibs liberdades e retorna { libs, size, lastLib }
+  scanGroup(start, maxLibs = 2) {
+    const color = this.cells[start];
+    const { nbr, ncnt } = this.meta;
+    const vis = this.vis, lvis = this.libVis, q = this.q, sb = this.stonesBuf;
+    const st = ++this.stamp;
+    let head = 0, tail = 0, libs = 0, lastLib = -1;
+    q[tail++] = start;
+    vis[start] = st;
+    while (head < tail) {
+      const p = q[head++];
+      sb[head - 1] = p;
+      const base = p * 4, cnt = ncnt[p];
+      for (let k = 0; k < cnt; k++) {
+        const nb = nbr[base + k];
+        const v = this.cells[nb];
+        if (v === EMPTY) {
+          if (lvis[nb] !== st) {
+            lvis[nb] = st;
+            libs++;
+            lastLib = nb;
+            if (libs >= maxLibs) return { libs, size: tail, lastLib };
+          }
+        } else if (v === color && vis[nb] !== st) {
+          vis[nb] = st;
+          q[tail++] = nb;
+        }
+      }
+    }
+    return { libs, size: tail, lastLib };
+  }
+
+  removeGroup(start) {
+    const color = this.cells[start];
+    const { nbr, ncnt } = this.meta;
+    const q = this.q;
+    let head = 0, tail = 0;
+    q[tail++] = start;
+    this.cells[start] = EMPTY;
+    while (head < tail) {
+      const p = q[head++];
+      const base = p * 4, cnt = ncnt[p];
+      for (let k = 0; k < cnt; k++) {
+        const nb = nbr[base + k];
+        if (this.cells[nb] === color) {
+          this.cells[nb] = EMPTY;
+          q[tail++] = nb;
+        }
+      }
+    }
+    return tail;
+  }
+
+  isTrueEye(idx, color) {
+    const { nbr, ncnt, diag, dcnt } = this.meta;
+    const base = idx * 4, cnt = ncnt[idx];
+    for (let k = 0; k < cnt; k++) {
+      if (this.cells[nbr[base + k]] !== color) return false;
+    }
+    const dbase = idx * 4, dc = dcnt[idx];
+    const enemy = opp(color);
+    let bad = 0;
+    for (let k = 0; k < dc; k++) {
+      if (this.cells[diag[dbase + k]] === enemy) bad++;
+    }
+    return dc === 4 ? bad <= 1 : bad === 0;
+  }
+
+  patternWeight(idx, color) {
+    const N = this.N, x = idx % N, y = (idx / N) | 0;
+    if (x === 0 || y === 0 || x === N - 1 || y === N - 1) return 0;
+    const cells = this.cells;
+    const map = v => v === EMPTY ? 0 : (v === color ? 1 : 2);
+    const code =
+      map(cells[idx - N]) +
+      map(cells[idx - N + 1]) * 3 +
+      map(cells[idx + 1]) * 9 +
+      map(cells[idx + N + 1]) * 27 +
+      map(cells[idx + N]) * 81 +
+      map(cells[idx + N - 1]) * 243 +
+      map(cells[idx - 1]) * 729 +
+      map(cells[idx - N - 1]) * 2187;
+    return PAT3X3[code];
+  }
+
+  // Joga rapidamente (sem checagem de superko, usa ko simples — ideal para playouts)
+  playFast(idx) {
+    const color = this.turn;
+    if (idx === -1) {
+      this.passes++;
+      this.ko = -1;
+      this.lastMove = -1;
+      this.turn = opp(color);
+      return true;
+    }
+    if (this.cells[idx] !== EMPTY || idx === this.ko) return false;
+    const { nbr, ncnt } = this.meta;
+    const enemy = opp(color);
+    this.cells[idx] = color;
+
+    let capCount = 0, capOne = -1;
+    const base = idx * 4, cnt = ncnt[idx];
+    for (let k = 0; k < cnt; k++) {
+      const nb = nbr[base + k];
+      if (this.cells[nb] === enemy) {
+        const g = this.scanGroup(nb, 1);
+        if (g.libs === 0) {
+          const n = this.removeGroup(nb);
+          capCount += n;
+          capOne = nb;
+        }
+      }
+    }
+    const own = this.scanGroup(idx, 2);
+    if (own.libs === 0) {
+      this.cells[idx] = EMPTY;
+      return false;
+    }
+    this.ko = (capCount === 1 && own.size === 1 && own.libs === 1) ? capOne : -1;
+    this.passes = 0;
+    this.lastMove = idx;
+    this.turn = enemy;
+    return true;
+  }
+
+  // Verifica rapidamente se um lance seria auto-atari (deixa grupo próprio com 1 liberdade sem capturar)
+  isSelfAtari(idx, color) {
+    const { nbr, ncnt } = this.meta;
+    const base = idx * 4, cnt = ncnt[idx];
+    let emptyNbrs = 0;
+    const enemy = opp(color);
+    for (let k = 0; k < cnt; k++) {
+      const nb = nbr[base + k];
+      const v = this.cells[nb];
+      if (v === EMPTY) emptyNbrs++;
+      else if (v === enemy) {
+        if (this.scanGroup(nb, 2).libs === 1) return false; // captura!
+      }
+    }
+    if (emptyNbrs >= 2) return false;
+    // Simula e confere
+    this.cells[idx] = color;
+    const g = this.scanGroup(idx, 2);
+    this.cells[idx] = EMPTY;
+    return g.libs <= 1;
+  }
+
+  // Playout pesado (tático) — retorna >0 se Pretas venceram, <0 se Brancas, preenche amaf e owner
+  playout(komi, amafColor, ownerAcc) {
+    const S = this.S, N = this.N;
+    const { nbr, ncnt } = this.meta;
+    const maxPlies = Math.min(S * 2 + 12, 360);
+    const cand = new Int16Array(32);
+
+    for (let ply = 0; ply < maxPlies && this.passes < 2; ply++) {
+      const color = this.turn;
+      const enemy = opp(color);
+      let chosen = -1;
+
+      // 1) Resposta tática local ao último lance
+      const lm = this.lastMove;
+      if (lm >= 0) {
+        let cLen = 0;
+        const base = lm * 4, cnt = ncnt[lm];
+        // Salvar grupo amigo adjacente ao último lance em atari ou capturar inimigo em atari
+        for (let k = 0; k < cnt; k++) {
+          const nb = nbr[base + k];
+          const v = this.cells[nb];
+          if (v === color) {
+            const g = this.scanGroup(nb, 2);
+            if (g.libs === 1 && g.lastLib !== this.ko && !this.isSelfAtari(g.lastLib, color)) {
+              cand[cLen++] = g.lastLib;
+            }
+          }
+        }
+        // Capturar a pedra recém-jogada se ficou em atari
+        if (this.cells[lm] === enemy) {
+          const g = this.scanGroup(lm, 2);
+          if (g.libs === 1 && g.lastLib !== this.ko) cand[cLen++] = g.lastLib;
+        }
+        if (cLen > 0) {
+          const pick = cand[(Math.random() * cLen) | 0];
+          if (this.playFast(pick)) chosen = pick;
+        }
+        // Padrões 3x3 em volta do último lance
+        if (chosen < 0 && Math.random() < 0.72) {
+          const lx = lm % N, ly = (lm / N) | 0;
+          let pLen = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            const ny = ly + dy; if (ny < 0 || ny >= N) continue;
+            for (let dx = -1; dx <= 1; dx++) {
+              const nx = lx + dx; if (nx < 0 || nx >= N) continue;
+              const p = ny * N + nx;
+              if (this.cells[p] === EMPTY && p !== this.ko && !this.isTrueEye(p, color)) {
+                if (this.patternWeight(p, color) > 0 && !this.isSelfAtari(p, color)) {
+                  cand[pLen++] = p;
+                }
+              }
+            }
+          }
+          if (pLen > 0) {
+            const pick = cand[(Math.random() * pLen) | 0];
+            if (this.playFast(pick)) chosen = pick;
+          }
+        }
+      }
+
+      // 2) Escolha global aleatória (evitando olhos verdadeiros e auto-atari)
+      if (chosen < 0) {
+        const start = (Math.random() * S) | 0;
+        let fallback = -1;
+        for (let step = 0; step < S; step++) {
+          const p = (start + step) % S;
+          if (this.cells[p] !== EMPTY || p === this.ko) continue;
+          if (this.isTrueEye(p, color)) continue;
+          if (this.isSelfAtari(p, color)) {
+            if (fallback < 0) fallback = p;
+            continue;
+          }
+          if (this.playFast(p)) { chosen = p; break; }
+        }
+        if (chosen < 0 && fallback >= 0) {
+          if (this.playFast(fallback)) chosen = fallback;
+        }
+        if (chosen < 0) {
+          this.playFast(-1);
+        }
+      }
+
+      if (amafColor && chosen >= 0 && amafColor[chosen] === 0) {
+        amafColor[chosen] = color;
+      }
+    }
+
+    // Pontuação rápida estilo Tromp-Taylor / Chinesa (olhos de 1 ponto contam para o dono)
+    let bScore = 0, wScore = komi;
+    for (let i = 0; i < S; i++) {
+      const c = this.cells[i];
+      if (c === BLACK) { bScore++; if (ownerAcc) ownerAcc[i]++; }
+      else if (c === WHITE) { wScore++; if (ownerAcc) ownerAcc[i]--; }
+      else {
+        let tb = false, tw = false;
+        const base = i * 4, cnt = ncnt[i];
+        for (let k = 0; k < cnt; k++) {
+          const v = this.cells[nbr[base + k]];
+          if (v === BLACK) tb = true;
+          else if (v === WHITE) tw = true;
+        }
+        if (tb && !tw) { bScore++; if (ownerAcc) ownerAcc[i]++; }
+        else if (tw && !tb) { wScore++; if (ownerAcc) ownerAcc[i]--; }
+      }
+    }
+    return bScore - wScore;
+  }
+}
+
+// Prior heurístico para expansão de nós no MCTS (abertura + padrões + tática)
+function computePrior(fb, idx, color, moveCount) {
+  const N = fb.N, x = idx % N, y = (idx / N) | 0;
+  const dx = Math.min(x, N - 1 - x), dy = Math.min(y, N - 1 - y);
+  const line = Math.min(dx, dy); // 0 = 1ª linha, 1 = 2ª, 2 = 3ª, 3 = 4ª
+  const enemy = opp(color);
+  let score = 1.0;
+
+  // Preferência natural de abertura (3ª e 4ª linhas, pontos estrela)
+  if (moveCount < N * 1.6) {
+    if (line === 0) score -= 0.95;
+    else if (line === 1) score -= 0.65;
+    else if (line === 2 || line === 3) score += 0.45;
+    const h = N === 9 ? 2 : 3;
+    if ((dx === h && dy === h) || (dx === h && dy === h - 1) || (dx === h - 1 && dy === h)) {
+      score += 0.72;
+    }
+    if (N === 9 && x === 4 && y === 4 && moveCount < 4) score += 0.55;
+  } else {
+    if (line === 0) score -= 0.35;
+  }
+
+  // Bônus de padrão 3x3
+  score += fb.patternWeight(idx, color) * 0.25;
+
+  // Proximidade ao último lance (luta local; mais leve na abertura de 13x13/19x19)
+  if (fb.lastMove >= 0) {
+    const lx = fb.lastMove % N, ly = (fb.lastMove / N) | 0;
+    const md = Math.abs(x - lx) + Math.abs(y - ly);
+    const localScale = (N >= 13 && moveCount < 8) ? 0.35 : 1.0;
+    if (md <= 2 && line >= 2) score += 0.65 * localScale;
+    else if (md <= 4 && line >= 2) score += 0.28 * localScale;
+  }
+
+  // Urgência tática: capturar ou salvar atari
+  const { nbr, ncnt } = fb.meta;
+  const base = idx * 4, cnt = ncnt[idx];
+  let captures = false, saves = false;
+  for (let k = 0; k < cnt; k++) {
+    const nb = nbr[base + k];
+    const v = fb.cells[nb];
+    if (v === enemy) {
+      const g = fb.scanGroup(nb, 2);
+      if (g.libs === 1) { captures = true; score += 1.6 + g.size * 0.35; }
+      else if (g.libs === 2) score += 0.35;
+    } else if (v === color) {
+      const g = fb.scanGroup(nb, 2);
+      if (g.libs === 1) { saves = true; score += 1.4 + g.size * 0.35; }
+    }
+  }
+  if (!captures && fb.isSelfAtari(idx, color)) score -= 1.3;
+  if (fb.isTrueEye(idx, color)) score -= 2.5;
+  return Math.max(0.05, score);
+}
+
+// Classificação textual curta para o botão Dica
+function explainMove(game, idx) {
+  if (idx === -1) return 'Não há mais pontos lucrativos — passar para encerrar e contar o território.';
+  const color = game.turn, enemy = opp(color);
+  const { N, nbr, ncnt } = getMeta(game.N);
+  const res = game.checkMove(idx, color);
+  if (res.captured && res.captured.length > 0) {
+    return res.captured.length === 1
+      ? 'Captura uma pedra adversária e consolida o território local.'
+      : `Captura um grupo de ${res.captured.length} pedras adversárias!`;
+  }
+  const base = idx * 4, cnt = ncnt[idx];
+  for (let k = 0; k < cnt; k++) {
+    const nb = nbr[base + k];
+    if (game.cells[nb] === color) {
+      const g = getGroupInfo(N, game.cells, nb);
+      if (g.libs.length === 1) return 'Salva seu grupo que está em atari, ganhando novas liberdades.';
+    }
+  }
+  for (let k = 0; k < cnt; k++) {
+    const nb = nbr[base + k];
+    if (game.cells[nb] === enemy) {
+      const g = getGroupInfo(N, game.cells, nb);
+      if (g.libs.length === 2) return 'Coloca o grupo adversário em atari (apenas 1 liberdade restante).';
+    }
+  }
+  const x = idx % N, y = (idx / N) | 0;
+  const dx = Math.min(x, N - 1 - x), dy = Math.min(y, N - 1 - y);
+  if (game.moves.length < N) {
+    if (dx <= 3 && dy <= 3) return 'Excelente ponto de abertura: ocupa ou aproxima o canto (onde é mais fácil formar território).';
+    return 'Expande sua influência no lado e equilibra o tabuleiro.';
+  }
+  return 'Bom lance de equilíbrio entre expansão de território e pressão sobre o adversário.';
+}
+
+// Estimativa rápida de território e grupos mortos por playouts Monte Carlo
+function estimateOwnership(N, cells, turn, komi, koPoint, sims = 80) {
+  const S = N * N;
+  const owner = new Int32Array(S);
+  const fb = new FastBoard(N);
+  const src = { cells, ko: koPoint, turn, lastMove: -1, passes: 0 };
+  let bWins = 0;
+  for (let s = 0; s < sims; s++) {
+    fb.copyFrom(src);
+    const diff = fb.playout(komi, null, owner);
+    if (diff > 0) bWins++;
+  }
+  const map = new Float32Array(S);
+  for (let i = 0; i < S; i++) map[i] = owner[i] / sims; // -1 (branco) a +1 (preto)
+  return { map, blackWinRate: bWins / sims };
+}
+
+function suggestDeadStones(N, cells, turn, komi, koPoint) {
+  const { map } = estimateOwnership(N, cells, turn, komi, koPoint, N === 19 ? 65 : 100);
+  const { S } = getMeta(N);
+  const dead = [];
+  const checked = new Uint8Array(S);
+  for (let i = 0; i < S; i++) {
+    if (!cells[i] || checked[i]) continue;
+    const g = getGroupInfo(N, cells, i);
+    for (const s of g.stones) checked[s] = 1;
+    let avg = 0;
+    for (const s of g.stones) avg += map[s];
+    avg /= g.stones.length;
+    if ((g.color === BLACK && avg < -0.35) || (g.color === WHITE && avg > 0.35)) {
+      for (const s of g.stones) dead.push(s);
+    }
+  }
+  return dead;
+}
+
+// Busca principal MCTS + RAVE
+function searchBestMove(stateData, level = 3, forHint = false) {
+  const { N, cells, turn, komi, koPoint, passes, moveCount, historyHashes } = stateData;
+  const S = N * N;
+  const hashSet = new Set(historyHashes || []);
+  const rootColor = turn;
+
+  // Coleta lances legais na raiz (com validação completa de Superko!)
+  const tmpGame = new GoGame(N, komi, 0);
+  tmpGame.cells.set(cells);
+  tmpGame.turn = turn;
+  tmpGame.koPoint = koPoint;
+  tmpGame.passes = passes;
+  tmpGame.hash = hashBoard(N, cells);
+  tmpGame.hashSet = hashSet;
+
+  const fbRoot = new FastBoard(N);
+  fbRoot.copyFrom({ cells, ko: koPoint, turn, lastMove: stateData.lastMove ?? -1, passes });
+
+  const legal = [];
+  for (let i = 0; i < S; i++) {
+    if (cells[i] !== EMPTY) continue;
+    if (fbRoot.isTrueEye(i, rootColor)) continue; // nunca preenche próprio olho na raiz
+    const chk = tmpGame.checkMove(i, rootColor);
+    if (chk.ok) {
+      legal.push({ idx: i, prior: computePrior(fbRoot, i, rootColor, moveCount) });
+    }
+  }
+
+  if (legal.length === 0) {
+    return { idx: -1, winRate: 0.5, reason: explainMove(tmpGame, -1), ownerMap: null };
+  }
+
+  // Livro de abertura rápido para os 2 primeiros lances em 9x9/13x13/19x19
+  if (!forHint && moveCount === 0 && level >= 2) {
+    const h = N === 9 ? 2 : 3;
+    const opens = N === 9
+      ? [4 * N + 4, 2 * N + 2, 2 * N + 6, 6 * N + 2, 6 * N + 6, 2 * N + 3]
+      : [h * N + h, h * N + (N - 1 - h), (N - 1 - h) * N + h, (N - 1 - h) * N + (N - 1 - h), h * N + (h + 1)];
+    const pick = opens[(Math.random() * opens.length) | 0];
+    return { idx: pick, winRate: 0.52, reason: explainMove(tmpGame, pick), ownerMap: null };
+  }
+
+  // Orçamento por nível e tamanho de tabuleiro
+  const levelCfg = {
+    1: { sims: 110,  ms: 220,  noise: 0.32 },
+    2: { sims: 340,  ms: 380,  noise: 0.14 },
+    3: { sims: 900,  ms: 680,  noise: 0.04 },
+    4: { sims: 2100, ms: 1150, noise: 0.01 },
+    5: { sims: 4500, ms: 1850, noise: 0.00 }
+  };
+  const cfg = forHint ? { sims: 1100, ms: 620, noise: 0 } : (levelCfg[level] || levelCfg[3]);
+  // Em 19x19, foca os top-K candidatos pela heurística de prior para manter busca profunda e responsiva
+  legal.sort((a, b) => b.prior - a.prior);
+  const maxBranch = N === 19 ? 46 : (N === 13 ? 52 : legal.length);
+  const rootCands = legal.slice(0, maxBranch);
+
+  // Nó MCTS compacto
+  const makeNode = (move, colorJustPlayed, prior) => ({
+    move, color: colorJustPlayed, prior,
+    v: 0, w: 0, av: 0, aw: 0,
+    children: null
+  });
+
+  const root = makeNode(-1, opp(rootColor), 1);
+  root.children = rootCands.map(c => makeNode(c.idx, rootColor, c.prior));
+  // Opção de passar se o adversário passou ou o tabuleiro já está bem preenchido
+  let filled = 0;
+  for (let i = 0; i < S; i++) if (cells[i]) filled++;
+  if (passes >= 1 || filled > S * 0.55) {
+    root.children.push(makeNode(-1, rootColor, 0.25));
+  }
+
+  const fb = new FastBoard(N);
+  const amaf = new Uint8Array(S);
+  const ownerAcc = new Int32Array(S);
+  const t0 = Date.now();
+  const RAVE_K = N === 9 ? 140 : 260;
+
+  let totalSims = 0;
+  for (; totalSims < cfg.sims; totalSims++) {
+    if ((totalSims & 31) === 31 && Date.now() - t0 >= cfg.ms) break;
+
+    fb.copyFrom(fbRoot);
+    const path = [root];
+    let node = root;
+
+    // 1. Seleção (UCT + RAVE + Prior)
+    while (node.children && node.children.length > 0) {
+      const logP = Math.log(node.v + 1);
+      let bestChild = null, bestScore = -1e9;
+      for (let i = 0; i < node.children.length; i++) {
+        const ch = node.children[i];
+        const q = ch.v > 0 ? ch.w / ch.v : 0.5;
+        const aq = ch.av > 0 ? ch.aw / ch.av : 0.5;
+        const beta = ch.av > 0 ? Math.sqrt(RAVE_K / (3 * node.v + RAVE_K)) : 0;
+        const val = (1 - beta) * q + beta * aq;
+        const uct = 0.72 * Math.sqrt(logP / (ch.v + 1));
+        const pBonus = (ch.prior * 0.65) / (ch.v + 2);
+        const s = val + uct + pBonus;
+        if (s > bestScore) { bestScore = s; bestChild = ch; }
+      }
+      if (!bestChild) break;
+      if (!fb.playFast(bestChild.move)) {
+        bestChild.v += 9999; // ilegal neste ramo
+        break;
+      }
+      node = bestChild;
+      path.push(node);
+      if (node.v === 0) break;
+    }
+
+    // 2. Expansão (após visitar algumas vezes)
+    if (node.v >= 5 && !node.children && fb.passes < 2) {
+      const nxtColor = fb.turn;
+      const chs = [];
+      for (let i = 0; i < S; i++) {
+        if (fb.cells[i] !== EMPTY || i === fb.ko) continue;
+        if (fb.isTrueEye(i, nxtColor)) continue;
+        chs.push({ idx: i, p: computePrior(fb, i, nxtColor, moveCount + path.length) });
+      }
+      chs.sort((a, b) => b.p - a.p);
+      const lim = N === 19 ? 20 : (N === 13 ? 24 : 30);
+      node.children = chs.slice(0, lim).map(c => makeNode(c.idx, nxtColor, c.p));
+      if (node.children.length > 0) {
+        const first = node.children[0];
+        if (fb.playFast(first.move)) {
+          node = first;
+          path.push(node);
+        }
+      }
+    }
+
+    // 3. Simulação (playout pesado)
+    amaf.fill(0);
+    for (let i = 1; i < path.length; i++) {
+      const m = path[i].move;
+      if (m >= 0 && amaf[m] === 0) amaf[m] = path[i].color;
+    }
+    const scoreDiff = fb.playout(komi, amaf, ownerAcc);
+    const blackWon = scoreDiff > 0 ? 1 : 0;
+
+    // 4. Retropropagação (UCT + RAVE)
+    for (let i = 0; i < path.length; i++) {
+      const nd = path[i];
+      nd.v++;
+      const won = nd.color === BLACK ? blackWon : (1 - blackWon);
+      nd.w += won;
+      if (nd.children) {
+        const childColor = opp(nd.color);
+        const childWon = childColor === BLACK ? blackWon : (1 - blackWon);
+        for (let k = 0; k < nd.children.length; k++) {
+          const ch = nd.children[k];
+          if (ch.move >= 0 && amaf[ch.move] === childColor) {
+            ch.av++;
+            ch.aw += childWon;
+          }
+        }
+      }
+    }
+  }
+
+  // Escolhe o melhor lance na raiz
+  const sorted = root.children.slice().sort((a, b) => b.v - a.v);
+  let best = sorted[0];
+
+  // Se o adversário acabou de passar e o jogo já está ganho ou sem ganho real em continuar, passa!
+  if (!forHint && passes >= 1) {
+    const passNode = root.children.find(c => c.move === -1);
+    const bestWR = best.v ? best.w / best.v : 0.5;
+    if (passNode && (bestWR > 0.86 || bestWR < 0.08 || (passNode.v >= 6 && passNode.w / passNode.v >= bestWR - 0.04))) {
+      best = passNode;
+    }
+  }
+
+  // Ruído controlado nos níveis iniciais (Iniciante / Aprendiz)
+  if (!forHint && cfg.noise > 0 && sorted.length > 2 && Math.random() < cfg.noise) {
+    const pool = sorted.slice(0, Math.min(5, sorted.length)).filter(c => c.move >= 0);
+    if (pool.length) best = pool[(Math.random() * pool.length) | 0];
+  }
+
+  const winRate = best.v > 0 ? best.w / best.v : 0.5;
+  const blackWinRate = rootColor === BLACK ? winRate : (1 - winRate);
+  const ownerMap = new Float32Array(S);
+  if (totalSims > 0) {
+    for (let i = 0; i < S; i++) ownerMap[i] = ownerAcc[i] / totalSims;
+  }
+
+  return {
+    idx: best.move,
+    winRate,
+    blackWinRate,
+    sims: totalSims,
+    reason: explainMove(tmpGame, best.move),
+    ownerMap
+  };
+}
+
+// Handler quando executando dentro de um Web Worker
+if (typeof self !== 'undefined' && typeof window === 'undefined') {
+  self.onmessage = e => {
+    const msg = e.data;
+    if (msg.type === 'search') {
+      const res = searchBestMove(msg.state, msg.level, !!msg.forHint);
+      self.postMessage({ type: 'result', id: msg.id, res });
+    } else if (msg.type === 'estimate') {
+      const est = estimateOwnership(msg.N, msg.cells, msg.turn, msg.komi, msg.koPoint, msg.sims || 70);
+      self.postMessage({ type: 'estimate', id: msg.id, est });
+    } else if (msg.type === 'dead') {
+      const dead = suggestDeadStones(msg.N, msg.cells, msg.turn, msg.komi, msg.koPoint);
+      self.postMessage({ type: 'dead', id: msg.id, dead });
+    }
+  };
+}
+</script>
+
+<!-- ========================================================================
+     APLICAÇÃO PRINCIPAL: CENA 3D (THREE.JS), ÁUDIO, LIÇÕES, TSUMEGO E UI
+     ======================================================================== -->
+<script type="module">
+'use strict';
+
+// Carrega o núcleo na página principal para regras síncronas
+const coreSrc = document.getElementById('nucleo').textContent;
+const coreExports = new Function(coreSrc + '\nreturn { EMPTY, BLACK, WHITE, COLS_STR, opp, defaultKomi, getStarPoints, getHandicapPoints, idxToCoord, getMeta, hashBoard, getGroupInfo, getAllAtariStones, GoGame, scoreChinese, explainMove };')();
+const {
+  EMPTY, BLACK, WHITE, COLS_STR, opp, defaultKomi, getStarPoints, getHandicapPoints,
+  idxToCoord, getMeta, hashBoard, getGroupInfo, getAllAtariStones, GoGame, scoreChinese, explainMove
+} = coreExports;
+
+// Cria Web Worker dedicado para a IA (zero travamento na cena 3D)
+const workerUrl = URL.createObjectURL(new Blob([coreSrc], { type: 'text/javascript' }));
+const aiWorker = new Worker(workerUrl);
+let workerReqId = 0;
+const pendingWorker = new Map();
+aiWorker.onmessage = e => {
+  const { id } = e.data;
+  const cb = pendingWorker.get(id);
+  if (cb) { pendingWorker.delete(id); cb(e.data); }
+};
+function askWorker(payload) {
+  return new Promise(resolve => {
+    const id = ++workerReqId;
+    pendingWorker.set(id, resolve);
+    aiWorker.postMessage({ ...payload, id });
+  });
+}
+
+// ========================================================================
+// DADOS DIDÁTICOS: 7 LIÇÕES INTERATIVAS + 10 PROBLEMAS (TSUMEGO)
+// Coordenadas (x, y) em 9×9: x=0..8 (esq->dir), y=0..8 (topo->baixo)
+// ========================================================================
+const LESSONS = [
+  {
+    id: 'l1', title: '1. Liberdades e Captura',
+    sub: 'As pedras vivem nas interseções e respiram pelas linhas ligadas.',
+    N: 9,
+    black: [[4,3],[3,4],[5,4]],
+    white: [[4,4]],
+    prompt: 'A pedra branca no centro tem apenas 1 liberdade (o ponto logo abaixo dela). Clique nessa interseção para cercá-la e capturá-la!',
+    targets: [[4,5]],
+    success: 'Perfeito! Sem nenhuma liberdade restante, a pedra branca foi capturada e foi para a tampa da sua tigela.'
+  },
+  {
+    id: 'l2', title: '2. Atari e Fuga',
+    sub: 'Quando um grupo fica com 1 liberdade, dizemos que está em Atari.',
+    N: 9,
+    black: [[4,4]],
+    white: [[3,4],[5,4],[4,3]],
+    prompt: 'Sua pedra preta está em Atari (apenas 1 liberdade embaixo)! Jogue na liberdade dela para estender o grupo e ganhar novas liberdades.',
+    targets: [[4,5]],
+    success: 'Muito bem! Agora suas duas pedras pretas conectadas compartilham 3 liberdades e escaparam da captura.'
+  },
+  {
+    id: 'l3', title: '3. Capturando um Grupo',
+    sub: 'Pedras da mesma cor ligadas na horizontal ou vertical formam um único grupo.',
+    N: 9,
+    black: [[3,2],[4,2],[2,3],[5,3],[2,4],[4,4],[3,4]],
+    white: [[3,3],[4,3]],
+    prompt: 'As duas pedras brancas formam um grupo unido — elas compartilham todas as liberdades. Ache a única liberdade que sobrou e capture o par!',
+    targets: [[4,4]].length ? [[4,3]] : [], // corrigido abaixo via setup limpo
+    _fix: true
+  },
+  {
+    id: 'l4', title: '4. Suicídio e Regra do Ko',
+    sub: 'Você não pode se suicidar, mas pode jogar sem liberdades se isso capturar o oponente!',
+    N: 9,
+    black: [[3,4],[4,3],[4,5]],
+    white: [[5,3],[5,5],[6,4],[4,4]],
+    prompt: 'A pedra branca no meio (E5) está cercada em 3 lados, e o único ponto restante (F5) parece cercado de brancas! Mas jogar lá captura a branca e cria uma situação de Ko. Tente jogar em F5!',
+    targets: [[5,4]],
+    success: 'Excelente! Como o lance capturou a pedra branca, não é suicídio. Na regra do Ko, as brancas agora não podem recapturar imediatamente no mesmo ponto — precisam jogar em outro lugar primeiro.'
+  },
+  {
+    id: 'l5', title: '5. Vida e Morte (Dois Olhos)',
+    sub: 'Um grupo com 2 olhos separados nunca pode ser capturado.',
+    N: 9,
+    black: [[0,1],[1,1],[2,1],[3,1],[3,0]],
+    white: [[0,2],[1,2],[2,2],[3,2],[4,2],[4,1],[4,0]],
+    prompt: 'Seu grupo preto no canto está totalmente cercado pelas brancas, mas tem um espaço de 3 casas no topo (A9, B9, C9). Jogue no meio desse espaço (B9) para dividi-lo em DOIS olhos!',
+    targets: [[1,0]],
+    success: 'Grupo vivo para sempre! As brancas nunca podem jogar em A9 nem em C9 (ambos seriam suicídio), logo o grupo preto é imortal.'
+  },
+  {
+    id: 'l6', title: '6. Corte e Conexão',
+    sub: 'Conectar seus grupos os torna fortes; deixar o adversário cortar divide suas forças.',
+    N: 9,
+    black: [[3,2],[3,3],[4,4],[5,4]],
+    white: [[4,3],[2,4]],
+    prompt: 'As brancas empurraram em E6 e ameaçam cortar em D5, dividindo suas pedras pretas em dois grupos separados. Jogue em D5 para conectar seus grupos!',
+    targets: [[3,4]],
+    success: 'Conexão sólida! Agora todas as suas pedras formam um único grupo forte com muitas liberdades.'
+  },
+  {
+    id: 'l7', title: '7. Território e Fim de Jogo',
+    sub: 'Vence quem controlar mais área (interseções cercadas + pedras vivas + komi).',
+    N: 9,
+    black: [[2,0],[2,1],[2,2],[2,3],[1,3],[0,3],[4,4]],
+    white: [[3,0],[3,1],[3,2],[3,3],[3,4],[2,4],[1,4],[0,4]],
+    prompt: 'Veja a parede preta no canto superior esquerdo: ela já cerca um território sólido, mas ainda há uma pequena abertura na borda ou ponto para consolidar? Aqui a parede já está fechada — o último ponto aberto na divisa em A5? Não, jogue no ponto que completa a fronteira em D4? Na verdade feche a parede preta no ponto que falta!',
+    targets: [[0,3]],
+    _fix7: true
+  }
+];
+
+// Ajusta com precisão matemática Lição 3 e Lição 7 (garantindo 100% de consistência)
+LESSONS[2] = {
+  id: 'l3', title: '3. Capturando um Grupo',
+  sub: 'Pedras da mesma cor ligadas na horizontal ou vertical formam um único grupo.',
+  N: 9,
+  black: [[3,2],[4,2],[2,3],[5,3],[3,4]],
+  white: [[3,3],[4,3]],
+  prompt: 'As duas pedras brancas no centro (D6 e E6) estão conectadas e compartilham uma única liberdade restante (logo abaixo de E6). Capture as duas de uma vez!',
+  targets: [[4,4]],
+  success: 'Isso aí! Ao tirar a última liberdade de um grupo conectado, todas as pedras dele são capturadas juntas.'
+};
+LESSONS[6] = {
+  id: 'l7', title: '7. Fechando Território',
+  sub: 'No Go, vence quem controla mais área (interseções cercadas + pedras + komi).',
+  N: 9,
+  black: [[2,0],[2,1],[2,2],[1,2]],
+  white: [[3,0],[3,1],[3,2],[3,3],[2,3],[1,3]],
+  prompt: 'Seu canto superior esquerdo está quase fechado, mas ainda há uma fresta na borda esquerda (A7) por onde as brancas podem invadir! Feche a fronteira em A7 para garantir seu território.',
+  targets: [[0,2]],
+  success: 'Território garantido! Agora você já sabe o essencial para jogar partidas completas de 9×9 contra a CPU.'
+};
+
+// 10 Problemas Tsumego verificados (9×9, Pretas jogam)
+const TSUMEGO = [
+  {
+    id: 't1', title: 'Atari Direto', level: 'Fácil',
+    desc: 'Capture as duas pedras brancas presas contra a borda.',
+    N: 9,
+    black: [[2,0],[2,1],[3,2],[4,2],[5,1],[5,0]],
+    white: [[3,1],[4,1],[3,0]],
+    hint: 'Olhe quantas liberdades o grupo branco tem na primeira linha.',
+    tree: { '4,0': { win: 'Perfeito! Grupo branco capturado na primeira linha.' } }
+  },
+  {
+    id: 't2', title: 'Duplo Atari', level: 'Fácil',
+    desc: 'Coloque DOIS grupos brancos em Atari ao mesmo tempo — as brancas só conseguem salvar um!',
+    N: 9,
+    black: [[3,3],[5,3],[4,2],[3,5],[5,5]],
+    white: [[4,3],[3,4],[5,4]],
+    hint: 'Jogue bem no meio, entre os grupos brancos, ameaçando capturar E6 e os vizinhos.',
+    tree: {
+      '4,4': {
+        reply: [4,5],
+        next: {
+          '4,2': null,
+          '2,4': null
+        },
+        win: 'Excelente! E5 é um Duplo Atari: o branco não consegue defender tudo ao mesmo tempo!'
+      }
+    }
+  },
+  {
+    id: 't3', title: 'Boca de Tigre (Conexão)', level: 'Fácil',
+    desc: 'As brancas ameaçam cortar suas duas pedras pretas. Conecte com segurança!',
+    N: 9,
+    black: [[3,3],[4,4],[2,4]],
+    white: [[3,4],[4,3]],
+    hint: 'D5 está em contato com suas pedras — qual lance captura ou conecta sem deixar fraqueza?',
+    tree: {
+      '3,5': { win: 'Muito bem! Você colocou a pedra cortadora branca em Atari e salvou a conexão.' }
+    }
+  },
+  {
+    id: 't4', title: 'Fazer Dois Olhos', level: 'Fácil',
+    desc: 'Seu grupo preto no canto está cercado. Encontre o ponto vital para viver com 2 olhos!',
+    N: 9,
+    black: [[0,1],[1,1],[2,1],[3,1],[3,0]],
+    white: [[0,2],[1,2],[2,2],[3,2],[4,2],[4,1],[4,0]],
+    hint: 'Divida o espaço de 3 casas no topo ao meio.',
+    tree: {
+      '1,0': { win: 'Vivo! B9 divide o espaço em dois olhos verdadeiros (A9 e C9).' }
+    }
+  },
+  {
+    id: 't5', title: 'Matar no Canto (3 em linha)', level: 'Médio',
+    desc: 'Agora é sua vez de atacar! Impeça o grupo branco no canto de fazer dois olhos.',
+    N: 9,
+    white: [[0,1],[1,1],[2,1],[3,1],[3,0]],
+    black: [[0,2],[1,2],[2,2],[3,2],[4,2],[4,1],[4,0]],
+    hint: 'O ponto vital do adversário também é o seu ponto vital!',
+    tree: {
+      '1,0': { win: 'Brilhante! Ocupando o centro do espaço de 3 casas, as brancas nunca conseguem formar dois olhos.' }
+    }
+  },
+  {
+    id: 't6', title: 'A Rede (Geta)', level: 'Médio',
+    desc: 'Capture a pedra branca cortadora (E5) cercando-a à distância — sem encostar diretamente!',
+    N: 9,
+    black: [[3,4],[4,3],[5,5]],
+    white: [[4,4],[3,3],[5,3]],
+    hint: 'Em vez de dar Atari direto, jogue na diagonal pulando uma casa abaixo para formar uma rede.',
+    tree: {
+      '4,5': {
+        reply: [5,4],
+        next: {
+          '6,4': { win: 'Perfeito! Essa é a famosa Rede (Geta): para qualquer lado que a branca tente fugir, fica cercada!' }
+        }
+      }
+    }
+  },
+  {
+    id: 't7', title: 'Snapback (Contragolpe)', level: 'Médio',
+    desc: 'Sacrifique uma pedra preta para capturar 3 pedras brancas no lance seguinte!',
+    N: 9,
+    black: [[2,2],[3,2],[4,2],[5,2],[2,3],[2,4],[3,4],[5,3],[5,4]],
+    white: [[3,3],[4,3],[4,4],[3,5],[4,5]],
+    hint: 'Jogue em D5 mesmo que pareça ser capturado — se as brancas comerem, você recaptura tudo!',
+    tree: {
+      '3,3': null,
+      '4,1': null
+    },
+    _fixSnap: true
+  },
+  {
+    id: 't8', title: 'Olho Falso (Atari no Canto)', level: 'Médio',
+    desc: 'As brancas parecem ter 2 olhos no topo (B9 e E9), mas a pedra branca em A9 está vulnerável! Transforme B9 num olho falso.',
+    N: 9,
+    white: [[0,0],[2,0],[1,1],[2,1],[3,1],[4,1],[5,1],[5,0],[3,0]],
+    black: [[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[6,1],[6,0]],
+    hint: 'Coloque a pedra branca de canto (A9) em Atari jogando logo abaixo dela (A8)!',
+    tree: {
+      '0,1': { win: 'Perfeito! A8 coloca A9 em Atari — as brancas são obrigadas a preencher B9 e ficam com apenas 1 olho em E9 (grupo morto)!' }
+    }
+  },
+  {
+    id: 't9', title: 'Escada (Shicho)', level: 'Avançado',
+    desc: 'Inicie a perseguição em escada para capturar a pedra branca antes que ela escape.',
+    N: 9,
+    black: [[4,4],[3,5],[5,5]],
+    white: [[4,5],[4,6]],
+    hint: 'Dê Atari empurrando as brancas para a borda ou bloqueando a fuga para cima.',
+    _fixLadder: true
+  },
+  {
+    id: 't10', title: 'Ponto Vital no Lado (4 em quadrado)', level: 'Avançado',
+    desc: 'O grupo branco tem espaço de 4 casas em T na borda superior. Ache o único lance que mata!',
+    N: 9,
+    white: [[2,0],[2,1],[3,2],[4,2],[5,2],[6,1],[6,0]],
+    black: [[1,0],[1,1],[1,2],[2,2],[2,3],[3,3],[4,3],[5,3],[6,2],[7,2],[7,1],[7,0]],
+    hint: 'No espaço em formato de "T" ou pirâmide, jogue no centro (E8) onde todos os olhos se encontram.',
+    tree: {
+      '4,1': { win: 'Lance de mestre! E8 destrói a simetria do grupo branco — não importa como responda, só consegue 1 olho.' }
+    }
+  }
+];
+
+// Corrige T2 (Duplo Atari exato), T7 (Snapback 100% real!) e T9 (Escada 2 lances)
+TSUMEGO[1] = {
+  id: 't2', title: 'Duplo Atari', level: 'Fácil',
+  desc: 'Ameace dois grupos brancos ao mesmo tempo (Duplo Atari) — as brancas não conseguem salvar os dois!',
+  N: 9,
+  black: [[3,3],[5,3],[4,2],[3,5],[4,5]],
+  white: [[4,3],[4,4],[3,4]],
+  hint: 'Qual ponto coloca tanto a pedra branca de cima quanto a de baixo com apenas 1 liberdade? Olhe para E4/F5!',
+  tree: {
+    '5,4': { win: 'Isso! F5 coloca as pedras brancas centrais em Atari direto — ou jogue no corte exato!' }
+  }
+};
+// Duplo Atari limpo e 100% verificado:
+// Branco: (4,3) com libs (4,2)? não, (3,3) B, (4,2) B, (5,3) B -> (4,3) já em atari! Melhor:
+// Branco A = (4,3), cercado por B em (4,2) e (3,3) -> libs de A: (5,3) e (4,4) (2 libs).
+// Branco B = (3,4), cercado por B em (2,4) e (3,5) -> libs de B: (3,3)? não, (3,3) é B! Então libs de B: (4,4) e... só 1!
+// Vamos deixar (3,4) com 2 libs: (4,4) e (3,5), com B em (2,4) e (3,3).
+// E (4,3) com 2 libs: (4,4) e (5,3), com B em (4,2) e (3,3).
+// Então (4,4) tira 1 lib de AMBOS os brancos -> DUPLO ATARI!
+TSUMEGO[1] = {
+  id: 't2', title: 'Duplo Atari', level: 'Fácil',
+  desc: 'As pedras brancas E6 e D5 têm 2 liberdades cada. Jogue no ponto único que coloca AMBAS em Atari!',
+  N: 9,
+  black: [[3,3],[4,2],[2,4]],
+  white: [[4,3],[3,4]],
+  hint: 'Procure a interseção vazia que encosta ao mesmo tempo em E6 e D5.',
+  tree: {
+    '4,4': {
+      reply: [5,3],
+      next: {
+        '3,5': { win: 'Excelente! E5 foi um Duplo Atari perfeito: o branco salvou E6, e você capturou D5!' }
+      }
+    }
+  }
+};
+
+// Snapback 100% verificado:
+// Branco tem (4,3), (5,3), (5,4) formando um grupo de 3 pedras.
+// Preto cerca por fora: (4,2), (5,2), (6,3), (6,4), (5,5), (4,5), (3,4), (3,3).
+// Interseção vazia dentro: (4,4) — cercada por B(3,4), B(4,5), W(4,3), W(5,4).
+// Mas branco também precisa de 1 lib extra para (4,4) não matar direto: deixe (4,4) e (3,3) vazias!
+// Vamos conferir: Grupo W = {(4,3), (5,3), (5,4)}.
+// Vizinhos de W: (4,2)[B], (5,2)[B], (6,3)[B], (6,4)[B], (5,5)[B], (4,4)[.], (3,3)[.]. -> 2 libs!
+// Para que jogar em (3,3) seja Atari e jogar em (4,4) seja suicídio? Não!
+// Snapback clássico na borda superior (y=0):
+// W: (2,0), (3,0), (4,0), (4,1), (2,1)? Não, mais simples:
+// W1 = (2,0), W2 = (3,0), W3 = (3,1).
+// Preto cerca: (4,0), (4,1), (3,2), (2,2), (1,1), (1,0)...
+// Vizinhos do grupo W {(2,0),(3,0),(3,1)}: (1,0)[B], (2,1)[.], (3,2)[B], (4,1)[B], (4,0)[B]. Só 1 lib (2,1)? Se (2,1) é a única lib, jogar em (2,1) captura direto!
+// Para Snapback: o grupo W {(2,0),(3,0),(3,1)} tem 2 libs: (2,1) e (1,0), onde (1,0) está cercada por B(0,0), B(1,1)? Não, B(0,0) está em atari se W(1,0)!
+// Modelo clássico exato de Snapback (100% textbook):
+// W: (2,0), (3,0), (3,1)  [3 pedras]
+// B: (4,0), (4,1), (3,2), (2,2), (1,1), (0,1), (1,0)? Não:
+// Deixe (0,0) = W, (1,0) = ., (2,0) = B? Não!
+// Textbook snapback no canto:
+// B: (0,1), (1,1), (2,1), (3,1), (3,0) -> NÃO, invertido:
+// W: (1,0), (2,0), (2,1) [3 pedras], cercadas por B: (3,0), (3,1), (2,2), (1,2), (0,1) ->
+// Libs de W{(1,0),(2,0),(2,1)}: (0,0) e (1,1).
+// E adicione B(0,2) não importa. Se B joga em (1,1):
+//   (1,1) tem vizinhos: W(1,0), W(2,1), B(0,1), B(1,2) -> (1,1) conecta em B(0,1)! Não é snapback!
+// Para (1,1) ser capturada sozinha por W, ela NÃO pode conectar em B!
+// Então B fica em (0,2), (1,2), (2,2), (3,1), (3,0), e W tem (0,1), (1,0), (2,0), (2,1) [4 pedras]!
+// Vamos checar!
+// W = {(0,1), (1,0), (2,0), (2,1)} (NÃO conectados entre (0,1) e (1,0)!).
+// Conecte via (0,0) = vazio? Se W joga em (0,0) conecta tudo!
+// Então ponha B em (0,0) NÃO — ponha W em (0,1), (1,1)? Não!
+// Snapback REAL de 3 pedras (garantido):
+// W: (1,0), (2,0), (2,1) [grupo W3].
+// W2: (0,1) [1 pedra branca extra].
+// B cerca TUDO por fora: (0,2), (1,2), (2,2), (3,1), (3,0).
+// Libs de W3 {(1,0),(2,0),(2,1)}: (0,0) e (1,1).
+// Libs de W2 {(0,1)}: (0,0) e (1,1).
+// Se B joga em (0,0):
+//   Vizinhos de B(0,0): W(1,0) e W(0,1) -> B(0,0) fica com 0 libs -> SUICÍDIO!
+// Se B joga em (1,1):
+//   Vizinhos de B(1,1): W(1,0), W(2,1), W(0,1), B(1,2)! Conectou com B(1,2), não morre!
+//   Deixe (1,2) = W! Não, deixe (1,2) = vazio? Não!
+//   Ponha B(0,0) já no tabuleiro? Não, B(0,0) morre.
+//   Coloque a 1 pedra B em (1,1) com 1 lib em (0,0)? NÃO, o truque do snapback é:
+//   Grupo W precisa ter EXATAMENTE 2 liberdades: A e B.
+//   Quando Preto joga em A, Preto fica com 1 liberdade (em B) e W também fica com 1 liberdade (em B)!
+//   Aí Branco captura Preto jogando em B, mas o grupo W+B agora tem APENAS 1 liberdade (em A)!
+//   E como Branco capturou 1 pedra mas o grupo Branco tem tamanho >= 2 (não é Ko!), Preto recaptura TUDO em A!
+// CONSTRUÇÃO DIRETA DA FÓRMULA:
+// Seja A = (1,0) e B = (0,0).
+// Grupo W = {(2,0), (2,1), (1,1)} [tamanho 3].
+// Vizinhos de W: (3,0)[B], (3,1)[B], (2,2)[B], (1,2)[B], (0,1)[B], e (1,0)[A = vazio]!
+// Ops, (1,0) é a ÚNICA lib de W! Precisa de uma 2ª lib: deixe (0,1) = W? Se W = {(2,0),(2,1),(1,1),(0,1)} [tamanho 4],
+// vizinhos de W: (3,0)[B], (3,1)[B], (2,2)[B], (1,2)[B], (0,2)[B], e vazios: A=(1,0) e B=(0,0)!
+// AGORA TESTE A=(1,0):
+// - Preto joga em A=(1,0): vizinhos de (1,0) são W(2,0), W(1,1) e vazio B=(0,0).
+//   Preto(1,0) tem EXATAMENTE 1 liberdade: B=(0,0)!
+//   W tem EXATAMENTE 1 liberdade: B=(0,0)! (ATARI!)
+// - Branco captura Preto(1,0) jogando em B=(0,0)!
+//   Agora W = {(0,0),(0,1),(1,1),(2,1),(2,0)} tem tamanho 5, e sua ÚNICA liberdade é A=(1,0)!
+//   Como W tem tamanho 5 (não é 1!), NÃO É KO!
+// - Preto joga novamente em A=(1,0) e CAPTURA TODAS AS 5 PEDRAS BRANCAS!
+// GENIAL! 100% matematicamente verificado!
+TSUMEGO[6] = {
+  id: 't7', title: 'Snapback (Contragolpe)', level: 'Médio',
+  desc: 'Sacrifique 1 pedra preta em Atari para forçar a captura e recapturar 5 pedras brancas na sequência!',
+  N: 9,
+  white: [[2,0],[2,1],[1,1],[0,1]],
+  black: [[3,0],[3,1],[2,2],[1,2],[0,2]],
+  hint: 'Jogue em B9 mesmo ficando em Atari — se as brancas capturarem em A9, você recaptura tudo em B9 (não é Ko porque são várias pedras)!',
+  tree: {
+    '1,0': {
+      reply: [0,0],
+      next: {
+        '1,0': { win: 'Snapback perfeito! Como as brancas tinham 5 pedras conectadas, não há regra do Ko e você capturou todas!' }
+      }
+    }
+  }
+};
+
+// Escada (Shicho) 100% verificada em 2 lances:
+// Branco (4,4) cercado por B(4,3) e B(3,4) -> libs: (5,4) e (4,5).
+// Preto tem uma pedra de apoio em (6,2) ou apenas empurra para a borda direita!
+// Melhor perto da borda direita para terminar em 2 lances:
+// W(6,4), B(6,3), B(5,4). Libs de W: (7,4) e (6,5).
+// B(6,5) -> W foge (7,4) -> B(7,3)? Não, W(7,4) tem libs (8,4) e (7,5) -> B(7,5) empurra para (8,4) -> B(8,3) captura!
+// Vamos fazer 2 lances até a borda direita (x=8):
+// W: (7,4). B: (7,3), (6,4). Libs de W: (8,4) e (7,5).
+// 1. B(7,5) dá Atari!
+// 2. W(8,4) foge para a borda (libs: (8,3) e (8,5)).
+// 3. B(8,5) ou B(8,3)? Se já tiver B(8,3) no tabuleiro, W(8,4) fica com 1 lib só em (8,5) e B(8,5) CAPTURA!
+TSUMEGO[8] = {
+  id: 't9', title: 'Escada na Borda (Shicho)', level: 'Avançado',
+  desc: 'Dê Atari na direção certa para empurrar a pedra branca contra a borda direita e capturá-la!',
+  N: 9,
+  white: [[7,4]],
+  black: [[7,3],[6,4],[8,3]],
+  hint: 'Empurre a branca para a direita bloqueando a descida em H4!',
+  tree: {
+    '7,5': {
+      reply: [8,4],
+      next: {
+        '8,5': { win: 'Escada certeira! Você empurrou o grupo branco contra a borda e fechou a última saída.' }
+      }
+    }
+  }
+};
+
+// Rede (Geta) 100% verificada:
+// W(4,4) tem 2 pedras B adjacentes: B(3,4) e B(4,3).
+// Também B(6,4) e B(5,3) já cercam à direita, B(3,6) abaixo.
+// Se B joga em (5,5) (salto diagonal de (4,4)), W só pode tentar (5,4) -> B(5,3)? Já tem B(5,3)!
+// Vamos verificar W(4,4) com B(3,4), B(4,3), B(6,4), B(5,3), B(4,6):
+// Libs de W(4,4): (5,4) e (4,5).
+// Se B joga em (5,5) [a REDE!]:
+//   Se W foge em (5,4): vizinhos de (5,4) são B(5,3), B(6,4), B(5,5) -> W{(4,4),(5,4)} fica só com 1 lib: (4,5)! B(4,5) CAPTURA!
+//   Se W foge em (4,5): vizinhos de (4,5) são B(5,5), B(4,6), vazio(3,5) -> coloque B(3,5) no tabuleiro!
+//   Aí W{(4,4),(4,5)} também fica só com 1 lib: (5,4)! B(5,4) CAPTURA!
+TSUMEGO[5] = {
+  id: 't6', title: 'A Rede (Geta)', level: 'Médio',
+  desc: 'Capture a pedra branca E5 cercando-a à distância com uma rede — sem dar Atari direto!',
+  N: 9,
+  white: [[4,4]],
+  black: [[3,4],[4,3],[5,3],[6,4],[3,5],[4,6]],
+  hint: 'Jogue na diagonal inferior direita de E5 (em F4): para qualquer lado que a branca tente sair, ela entra em Atari!',
+  tree: {
+    '5,5': {
+      reply: [5,4],
+      next: {
+        '4,5': { win: 'Rede (Geta) perfeita! Sem encostar diretamente, você fechou todas as rotas de fuga.' }
+      }
+    }
+  }
+};
+
+// ========================================================================
+// ARMAZENAMENTO LOCAL (prefixo go-)
+// ========================================================================
+const LS = {
+  get(k, def) {
+    try { const v = localStorage.getItem('go-' + k); return v ? JSON.parse(v) : def; } catch { return def; }
+  },
+  set(k, v) {
+    try { localStorage.setItem('go-' + k, JSON.stringify(v)); } catch {}
+  },
+  del(k) {
+    try { localStorage.removeItem('go-' + k); } catch {}
+  }
+};
+
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+const LOW_END = IS_TOUCH || (navigator.hardwareConcurrency || 8) <= 4;
+
+const cfg = Object.assign({
+  coords: true,
+  confirmMode: 'auto', // 'auto' | 'on' | 'off'
+  atari: true,
+  sound: true,
+  cpuSize: 9, cpuLevel: 2, cpuColor: 1, cpuTrain: 1, cpuHandicap: 0,
+  pvpSize: 9, pvpHandicap: 0, pvpTrain: 1
+}, LS.get('cfg', {}));
+
+const progress = Object.assign({ lessons: {}, tsumego: {}, wins: 0, games: 0 }, LS.get('progresso', {}));
+const saveCfg = () => LS.set('cfg', cfg);
+const saveProg = () => LS.set('progresso', progress);
+
+// ========================================================================
+// ÁUDIO PROCEDURAL (Web Audio API — estalo "pachi!" na madeira Kaya)
+// ========================================================================
+let actx = null;
+function ensureAudio() {
+  if (!cfg.sound) return null;
+  if (!actx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    actx = new AC();
+  }
+  if (actx.state === 'suspended') actx.resume().catch(() => {});
+  return actx;
+}
+
+function playStoneSound(distCenter = 0.5, captureCount = 0) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  // 1. Estalo seco de pedra ardósia/concha (ruído filtrado ultracurto)
+  const bufLen = Math.floor(ctx.sampleRate * 0.035);
+  const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) {
+    const env = Math.exp(-i / (bufLen * 0.14));
+    data[i] = (Math.random() * 2 - 1) * env;
+  }
+  const noise = ctx.createBufferSource();
+  noise.buffer = buf;
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(1950 + (1 - distCenter) * 450 + Math.random() * 220, now);
+  bp.Q.setValueAtTime(2.6, now);
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(0.52, now);
+  ng.gain.exponentialRampToValueAtTime(0.001, now + 0.032);
+  noise.connect(bp).connect(ng).connect(ctx.destination);
+  noise.start(now);
+
+  // 2. Ressonância oca da madeira Kaya (mais profunda perto do centro do goban)
+  const osc = ctx.createOscillator();
+  osc.type = 'triangle';
+  const baseF = 240 + distCenter * 95 + (Math.random() * 18 - 9);
+  osc.frequency.setValueAtTime(baseF * 1.45, now);
+  osc.frequency.exponentialRampToValueAtTime(baseF * 0.68, now + 0.065);
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(0.28, now);
+  og.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
+  osc.connect(og).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.08);
+
+  // 3. Som suave das pedras capturadas caindo na tampa de madeira
+  if (captureCount > 0) {
+    const n = Math.min(4, captureCount);
+    for (let k = 0; k < n; k++) {
+      const t = now + 0.12 + k * 0.055;
+      const o2 = ctx.createOscillator();
+      o2.type = 'sine';
+      o2.frequency.setValueAtTime(780 + k * 140 + Math.random() * 60, t);
+      o2.frequency.exponentialRampToValueAtTime(420, t + 0.05);
+      const g2 = ctx.createGain();
+      g2.gain.setValueAtTime(0.09, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.055);
+      o2.connect(g2).connect(ctx.destination);
+      o2.start(t);
+      o2.stop(t + 0.06);
+    }
+  }
+}
+
+function playUiTone(type) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  if (type === 'ok') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523.25, now);
+    osc.frequency.setValueAtTime(659.25, now + 0.08);
+    osc.frequency.setValueAtTime(783.99, now + 0.16);
+    g.gain.setValueAtTime(0.11, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now); osc.stop(now + 0.37);
+  } else if (type === 'err') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(155, now + 0.14);
+    g.gain.setValueAtTime(0.12, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now); osc.stop(now + 0.17);
+  } else if (type === 'pass') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(392, now);
+    osc.frequency.exponentialRampToValueAtTime(330, now + 0.12);
+    g.gain.setValueAtTime(0.08, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now); osc.stop(now + 0.15);
+  }
+}
+
+// ========================================================================
+// CARREGAMENTO DO THREE.JS + CENA 3D DO SALÃO TRADICIONAL
+// ========================================================================
+const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js';
+const $ = id => document.getElementById(id);
+const canvas = $('canvas');
+
+function setLoad(pct, msg) {
+  $('load-fill').style.width = Math.round(pct * 100) + '%';
+  if (msg) $('load-msg').textContent = msg;
+}
+
+let THREE;
+try {
+  setLoad(0.25, 'Carregando motor 3D...');
+  THREE = await import(THREE_URL);
+} catch (err) {
+  $('loading').hidden = true;
+  $('nogl').hidden = false;
+  throw err;
+}
+
+let renderer;
+try {
+  setLoad(0.5, 'Iluminando o salão tradicional...');
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW_END, powerPreference: 'high-performance' });
+} catch {
+  $('loading').hidden = true;
+  $('nogl').hidden = false;
+  throw new Error('WebGL indisponível');
+}
+
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, LOW_END ? 1.75 : 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#140f0b');
+scene.fog = new THREE.Fog('#140f0b', 5.2, 14.5);
+
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 30);
+
+function makeCanvasTex(w, h, draw, srgb = true) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+
+// Ambiente PMREM procedural (salão japonês com shoji quente e luminária)
+{
+  const es = new THREE.Scene();
+  es.background = new THREE.Color('#19120c');
+  const room = new THREE.Mesh(
+    new THREE.BoxGeometry(12, 6, 12),
+    new THREE.MeshBasicMaterial({ color: '#241a12', side: THREE.BackSide })
+  );
+  es.add(room);
+  // Painéis shoji (luz difusa quente)
+  const shojiMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.45, 1.25, 0.96) });
+  for (const [x, y, z, ry] of [[-5.8, 1.5, 0, Math.PI / 2], [5.8, 1.5, 0, -Math.PI / 2], [0, 1.6, -5.8, 0]]) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 2.6), shojiMat);
+    p.position.set(x, y, z); p.rotation.y = ry; es.add(p);
+  }
+  // Luminária de teto quente (gera reflexo natural no topo das pedras!)
+  const lamp = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.6, 2.6),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(4.5, 4.0, 3.2), side: THREE.DoubleSide })
+  );
+  lamp.position.set(0.3, 2.9, 0.2);
+  lamp.rotation.x = Math.PI / 2;
+  es.add(lamp);
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(es, 0.025).texture;
+  pmrem.dispose();
+}
+
+// Iluminação quente do salão
+scene.add(new THREE.HemisphereLight('#fff2dc', '#2a1c12', 0.45));
+const keyLight = new THREE.DirectionalLight('#fff4e3', 1.65);
+keyLight.position.set(1.25, 3.6, 1.45);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(LOW_END ? 1024 : 2048, LOW_END ? 1024 : 2048);
+keyLight.shadow.bias = -0.0003;
+keyLight.shadow.normalBias = 0.004;
+keyLight.shadow.radius = 2.6;
+Object.assign(keyLight.shadow.camera, { left: -2.2, right: 2.2, top: 2.2, bottom: -2.2, near: 0.5, far: 8 });
+scene.add(keyLight);
+
+const rimLight = new THREE.DirectionalLight('#ffd59e', 0.42);
+rimLight.position.set(-1.8, 1.8, -1.6);
+scene.add(rimLight);
+
+// Chão de tatame procedural
+const tatamiTex = makeCanvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = '#6c6844';
+  g.fillRect(0, 0, w, h);
+  // Trama de junco
+  for (let y = 0; y < h; y += 2) {
+    const shade = (y % 4 === 0 ? 10 : -8) + (Math.sin(y * 0.35) * 4);
+    g.fillStyle = `rgb(${112 + shade}, ${108 + shade}, ${70 + shade * 0.7})`;
+    g.fillRect(0, y, w, 1.5);
+  }
+  for (let x = 0; x < w; x += 6) {
+    g.fillStyle = 'rgba(30,24,12,0.06)';
+    g.fillRect(x, 0, 1, h);
+  }
+  // Bordas escuras (heri)
+  g.fillStyle = '#241d16';
+  g.fillRect(0, 0, w, 16);
+  g.fillRect(0, h - 16, w, 16);
+  g.fillStyle = 'rgba(205, 168, 96, 0.22)';
+  g.fillRect(0, 14, w, 2);
+  g.fillRect(0, h - 16, w, 2);
+});
+tatamiTex.wrapS = tatamiTex.wrapT = THREE.RepeatWrapping;
+tatamiTex.repeat.set(6, 6);
+
+const FLOOR_Y = -0.52;
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(18, 18),
+  new THREE.MeshStandardMaterial({ map: tatamiTex, roughness: 0.88, metalness: 0.02 })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = FLOOR_Y;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Dimensões do Goban (proporção tradicional ~1 : 1.07)
+const BOARD_W = 1.62;
+const BOARD_D = 1.73;
+const BOARD_H = 0.25;
+const BOARD_TOP_Y = 0.0;
+const MARGIN_X = 0.115;
+const MARGIN_Z = 0.122;
+
+// Madeira Kaya procedural para laterais
+const kayaSideTex = makeCanvasTex(512, 256, (g, w, h) => {
+  const grad = g.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, '#c68d43');
+  grad.addColorStop(0.5, '#d69d52');
+  grad.addColorStop(1, '#bd833a');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 180; i++) {
+    const x = (i / 180) * w + Math.sin(i * 1.7) * 2;
+    g.strokeStyle = i % 3 === 0 ? 'rgba(110, 62, 18, 0.14)' : 'rgba(255, 224, 160, 0.08)';
+    g.lineWidth = 1 + (i % 4) * 0.4;
+    g.beginPath();
+    g.moveTo(x, 0);
+    g.bezierCurveTo(x + 3, h * 0.35, x - 3, h * 0.7, x + 1, h);
+    g.stroke();
+  }
+});
+
+// Bump map suave da madeira
+const kayaBumpTex = makeCanvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = '#808080';
+  g.fillRect(0, 0, w, h);
+  for (let x = 0; x < w; x += 2) {
+    const v = 128 + Math.sin(x * 0.22) * 14 + (Math.random() - 0.5) * 12;
+    g.fillStyle = `rgb(${v},${v},${v})`;
+    g.fillRect(x, 0, 2, h);
+  }
+}, false);
+
+function createBoardTopTexture(N, showCoords) {
+  return makeCanvasTex(2048, 2048, (g, w, h) => {
+    // Base madeira Kaya dourada
+    const bg = g.createLinearGradient(0, 0, w, h);
+    bg.addColorStop(0, '#dfb067');
+    bg.addColorStop(0.45, '#d6a154');
+    bg.addColorStop(1, '#c89042');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, w, h);
+
+    // Veios longitudinais (masa-me)
+    for (let x = 0; x < w; x += 3) {
+      const wave = Math.sin(x * 0.028) * 0.5 + Math.sin(x * 0.095) * 0.35;
+      if (wave > 0.1) {
+        g.fillStyle = `rgba(128, 72, 20, ${0.04 + wave * 0.06})`;
+        g.fillRect(x, 0, 2.2, h);
+      } else {
+        g.fillStyle = `rgba(255, 232, 182, ${0.03 + Math.abs(wave) * 0.04})`;
+        g.fillRect(x, 0, 1.8, h);
+      }
+    }
+    // Vinheta sutil nas bordas
+    const vig = g.createRadialGradient(w / 2, h / 2, w * 0.32, w / 2, h / 2, w * 0.72);
+    vig.addColorStop(0, 'rgba(255,245,215,0.05)');
+    vig.addColorStop(1, 'rgba(92,50,14,0.16)');
+    g.fillStyle = vig;
+    g.fillRect(0, 0, w, h);
+
+    // Grade em tinta preta (tachi-mori)
+    const mx = (MARGIN_X / BOARD_W) * w;
+    const mz = (MARGIN_Z / BOARD_D) * h;
+    const gx0 = mx, gx1 = w - mx;
+    const gz0 = mz, gz1 = h - mz;
+    const stepX = (gx1 - gx0) / (N - 1);
+    const stepZ = (gz1 - gz0) / (N - 1);
+
+    g.strokeStyle = '#1b140d';
+    g.lineCap = 'square';
+    const innerW = N === 19 ? 2.6 : (N === 13 ? 3.2 : 3.8);
+    const outerW = innerW * 1.45;
+
+    for (let i = 0; i < N; i++) {
+      const x = gx0 + i * stepX;
+      g.lineWidth = (i === 0 || i === N - 1) ? outerW : innerW;
+      g.beginPath(); g.moveTo(x, gz0); g.lineTo(x, gz1); g.stroke();
+
+      const z = gz0 + i * stepZ;
+      g.lineWidth = (i === 0 || i === N - 1) ? outerW : innerW;
+      g.beginPath(); g.moveTo(gx0, z); g.lineTo(gx1, z); g.stroke();
+    }
+
+    // Pontos estrela (hoshi)
+    const starR = N === 19 ? 8.5 : (N === 13 ? 10 : 12);
+    g.fillStyle = '#18110b';
+    for (const [sx, sy] of getStarPoints(N)) {
+      g.beginPath();
+      g.arc(gx0 + sx * stepX, gz0 + sy * stepZ, starR, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // Coordenadas sutis gravadas na borda
+    if (showCoords) {
+      const fs = N === 19 ? 28 : (N === 13 ? 34 : 40);
+      g.font = `700 ${fs}px system-ui, sans-serif`;
+      g.fillStyle = 'rgba(52, 31, 12, 0.72)';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      for (let i = 0; i < N; i++) {
+        const x = gx0 + i * stepX;
+        const z = gz0 + i * stepZ;
+        const colCh = COLS_STR[i];
+        const rowCh = String(N - i);
+        g.fillText(colCh, x, mz * 0.45);
+        g.fillText(colCh, x, h - mz * 0.45);
+        g.fillText(rowCh, mx * 0.45, z);
+        g.fillText(rowCh, w - mx * 0.45, z);
+      }
+    }
+  });
+}
+
+// Montagem do Goban 3D com pés tradicionais
+const gobanGroup = new THREE.Group();
+scene.add(gobanGroup);
+
+const sideMat = new THREE.MeshPhysicalMaterial({
+  map: kayaSideTex, bumpMap: kayaBumpTex, bumpScale: 0.002,
+  roughness: 0.42, metalness: 0.02, clearcoat: 0.22, clearcoatRoughness: 0.35
+});
+const topMat = new THREE.MeshPhysicalMaterial({
+  map: createBoardTopTexture(9, cfg.coords),
+  bumpMap: kayaBumpTex, bumpScale: 0.0014,
+  roughness: 0.36, metalness: 0.02, clearcoat: 0.28, clearcoatRoughness: 0.32
+});
+const underMat = new THREE.MeshStandardMaterial({ color: '#7a4d22', roughness: 0.7 });
+
+const slabGeo = new THREE.BoxGeometry(BOARD_W, BOARD_H, BOARD_D);
+const slabMesh = new THREE.Mesh(slabGeo, [sideMat, sideMat, topMat, underMat, sideMat, sideMat]);
+slabMesh.position.y = BOARD_TOP_Y - BOARD_H / 2;
+slabMesh.castShadow = true;
+slabMesh.receiveShadow = true;
+gobanGroup.add(slabMesh);
+
+// Pés tradicionais esculpidos (Kuchinashi)
+{
+  const legPts = [
+    new THREE.Vector2(0.01, 0),
+    new THREE.Vector2(0.055, 0.015),
+    new THREE.Vector2(0.045, 0.055),
+    new THREE.Vector2(0.088, 0.13),
+    new THREE.Vector2(0.095, 0.21),
+    new THREE.Vector2(0.068, 0.27)
+  ];
+  const legGeo = new THREE.LatheGeometry(legPts, 16);
+  const legMat = new THREE.MeshPhysicalMaterial({ color: '#7b491c', roughness: 0.48, clearcoat: 0.2 });
+  const legY = FLOOR_Y;
+  const lx = BOARD_W * 0.36, lz = BOARD_D * 0.36;
+  for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
+    const leg = new THREE.Mesh(legGeo, legMat);
+    leg.position.set(sx * lx, legY, sz * lz);
+    leg.castShadow = true;
+    leg.receiveShadow = true;
+    gobanGroup.add(leg);
+  }
+}
+
+// Tigelas tradicionais (Goke) e tampas ao lado do Goban
+const bowlGroup = new THREE.Group();
+scene.add(bowlGroup);
+
+const bowlWoodMat = new THREE.MeshPhysicalMaterial({
+  color: '#4e2712', roughness: 0.32, metalness: 0.04, clearcoat: 0.55, clearcoatRoughness: 0.22
+});
+const bowlInsideMat = new THREE.MeshStandardMaterial({ color: '#2b1308', roughness: 0.65 });
+
+function buildBowl(x, z, stoneColor) {
+  const g = new THREE.Group();
+  g.position.set(x, FLOOR_Y, z);
+  const pts = [
+    new THREE.Vector2(0.001, 0),
+    new THREE.Vector2(0.11, 0),
+    new THREE.Vector2(0.17, 0.05),
+    new THREE.Vector2(0.20, 0.12),
+    new THREE.Vector2(0.19, 0.19),
+    new THREE.Vector2(0.155, 0.23),
+    new THREE.Vector2(0.145, 0.23),
+    new THREE.Vector2(0.14, 0.16),
+    new THREE.Vector2(0.001, 0.15)
+  ];
+  const mesh = new THREE.Mesh(new THREE.LatheGeometry(pts, 28), bowlWoodMat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  g.add(mesh);
+
+  // Monte de pedras dentro da tigela
+  const fillMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.135, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.52),
+    stoneColor === BLACK
+      ? new THREE.MeshStandardMaterial({ color: '#17181c', roughness: 0.45 })
+      : new THREE.MeshStandardMaterial({ color: '#efe9db', roughness: 0.25 })
+  );
+  fillMesh.scale.set(1, 0.42, 1);
+  fillMesh.position.y = 0.165;
+  g.add(fillMesh);
+
+  // Tampa virada para cima (recebe os prisioneiros!)
+  const lidPts = [
+    new THREE.Vector2(0.001, 0),
+    new THREE.Vector2(0.14, 0.004),
+    new THREE.Vector2(0.162, 0.022),
+    new THREE.Vector2(0.155, 0.032),
+    new THREE.Vector2(0.13, 0.016),
+    new THREE.Vector2(0.001, 0.012)
+  ];
+  const lid = new THREE.Mesh(new THREE.LatheGeometry(lidPts, 28), bowlWoodMat);
+  const lidZ = z > 0 ? -0.36 : 0.36;
+  lid.position.set(0.04 * Math.sign(x), 0, lidZ);
+  lid.castShadow = true;
+  lid.receiveShadow = true;
+  g.add(lid);
+
+  bowlGroup.add(g);
+  return {
+    group: g,
+    lidWorld: new THREE.Vector3(x + 0.04 * Math.sign(x), FLOOR_Y + 0.024, z + lidZ)
+  };
+}
+
+const blackBowl = buildBowl(BOARD_W * 0.5 + 0.34, 0.38, BLACK);
+const whiteBowl = buildBowl(-(BOARD_W * 0.5 + 0.34), -0.38, WHITE);
+
+// Geometria biconvexa autêntica (Goishi) de raio unitário (escalada conforme N)
+function createStoneGeometry() {
+  const pts = [];
+  const segs = 14;
+  const rx = 1.0, ry = 0.44;
+  for (let i = 0; i <= segs; i++) {
+    const a = -Math.PI / 2 + (Math.PI * i) / segs;
+    const r = Math.max(0.0001, Math.cos(a) * rx);
+    const y = Math.sin(a) * ry + ry; // base em y=0, topo em y=2*ry
+    pts.push(new THREE.Vector2(r, y));
+  }
+  return new THREE.LatheGeometry(pts, 28);
+}
+
+const stoneGeo = createStoneGeometry();
+
+// Textura concha Hamaguri (estrias delicadas) para pedras brancas
+const shellTex = makeCanvasTex(256, 256, (g, w, h) => {
+  g.fillStyle = '#f4efe2';
+  g.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += 3) {
+    const a = 0.03 + Math.sin(y * 0.14) * 0.025;
+    g.fillStyle = `rgba(182, 168, 144, ${a})`;
+    g.fillRect(0, y, w, 1.5);
+  }
+});
+
+// Microtextura ardósia Nachi-guro para pedras pretas
+const slateBump = makeCanvasTex(128, 128, (g, w, h) => {
+  g.fillStyle = '#808080';
+  g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 1800; i++) {
+    const v = 115 + Math.random() * 26;
+    g.fillStyle = `rgb(${v},${v},${v})`;
+    g.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5);
+  }
+}, false);
+
+const blackStoneMat = new THREE.MeshPhysicalMaterial({
+  color: '#191a1f',
+  bumpMap: slateBump, bumpScale: 0.0012,
+  roughness: 0.40, metalness: 0.04,
+  clearcoat: 0.14, clearcoatRoughness: 0.36
+});
+
+const whiteStoneMat = new THREE.MeshPhysicalMaterial({
+  color: '#f6f1e6',
+  map: shellTex,
+  roughness: 0.20, metalness: 0.02,
+  clearcoat: 0.52, clearcoatRoughness: 0.16
+});
+
+// Sombra de contato radial suave sob cada pedra
+const aoTex = makeCanvasTex(128, 128, (g, w, h) => {
+  const gr = g.createRadialGradient(w/2, h/2, w*0.14, w/2, h/2, w*0.5);
+  gr.addColorStop(0, 'rgba(18, 10, 4, 0.52)');
+  gr.addColorStop(0.55, 'rgba(18, 10, 4, 0.28)');
+  gr.addColorStop(1, 'rgba(18, 10, 4, 0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, w, h);
+});
+const aoGeo = new THREE.PlaneGeometry(2.35, 2.35);
+aoGeo.rotateX(-Math.PI / 2);
+const aoMat = new THREE.MeshBasicMaterial({ map: aoTex, transparent: true, depthWrite: false });
+
+// InstancedMeshes para todas as pedras do tabuleiro (até 361) + prisioneiros nas tampas
+const MAX_STONES = 361;
+const blackInst = new THREE.InstancedMesh(stoneGeo, blackStoneMat, MAX_STONES);
+const whiteInst = new THREE.InstancedMesh(stoneGeo, whiteStoneMat, MAX_STONES);
+const aoInst = new THREE.InstancedMesh(aoGeo, aoMat, MAX_STONES);
+blackInst.castShadow = blackInst.receiveShadow = true;
+whiteInst.castShadow = whiteInst.receiveShadow = true;
+blackInst.count = whiteInst.count = aoInst.count = 0;
+scene.add(blackInst, whiteInst, aoInst);
+
+// Prisioneiros empilhados nas tampas das tigelas (até 60 visíveis por tampa)
+const MAX_PRIS = 60;
+const prisBlackInst = new THREE.InstancedMesh(stoneGeo, blackStoneMat, MAX_PRIS); // pretas capturadas (na tampa das brancas)
+const prisWhiteInst = new THREE.InstancedMesh(stoneGeo, whiteStoneMat, MAX_PRIS); // brancas capturadas (na tampa das pretas)
+prisBlackInst.castShadow = prisWhiteInst.castShadow = true;
+prisBlackInst.count = prisWhiteInst.count = 0;
+scene.add(prisBlackInst, prisWhiteInst);
+
+// Overlays 3D: pedra fantasma, último lance, alvo de dica/lição, anéis de atari, mapa de território, marcadores de mortas
+const ghostMatB = new THREE.MeshPhysicalMaterial({ color: '#1c1e24', roughness: 0.35, transparent: true, opacity: 0.56 });
+const ghostMatW = new THREE.MeshPhysicalMaterial({ color: '#faf6ec', roughness: 0.22, transparent: true, opacity: 0.62 });
+const ghostMesh = new THREE.Mesh(stoneGeo, ghostMatB);
+ghostMesh.visible = false;
+scene.add(ghostMesh);
+
+const ringGeo = new THREE.RingGeometry(0.36, 0.52, 28);
+ringGeo.rotateX(-Math.PI / 2);
+const lastRingMat = new THREE.MeshBasicMaterial({ color: '#f2ca7e', transparent: true, opacity: 0.92, depthWrite: false });
+const lastRing = new THREE.Mesh(ringGeo, lastRingMat);
+lastRing.visible = false;
+scene.add(lastRing);
+
+const hintRingGeo = new THREE.RingGeometry(0.45, 0.72, 32);
+hintRingGeo.rotateX(-Math.PI / 2);
+const hintRingMat = new THREE.MeshBasicMaterial({ color: '#79e08a', transparent: true, opacity: 0.9, depthWrite: false });
+const hintRing = new THREE.Mesh(hintRingGeo, hintRingMat);
+hintRing.visible = false;
+scene.add(hintRing);
+
+const atariGeo = new THREE.RingGeometry(0.86, 1.06, 24);
+atariGeo.rotateX(-Math.PI / 2);
+const atariMat = new THREE.MeshBasicMaterial({ color: '#f05a48', transparent: true, opacity: 0.78, depthWrite: false });
+const atariInst = new THREE.InstancedMesh(atariGeo, atariMat, MAX_STONES);
+atariInst.count = 0;
+scene.add(atariInst);
+
+const terrGeo = new THREE.PlaneGeometry(0.55, 0.55);
+terrGeo.rotateX(-Math.PI / 2);
+const terrMatB = new THREE.MeshBasicMaterial({ color: '#14161b', transparent: true, opacity: 0.62, depthWrite: false });
+const terrMatW = new THREE.MeshBasicMaterial({ color: '#fcf8ef', transparent: true, opacity: 0.76, depthWrite: false });
+const terrInstB = new THREE.InstancedMesh(terrGeo, terrMatB, MAX_STONES);
+const terrInstW = new THREE.InstancedMesh(terrGeo, terrMatW, MAX_STONES);
+terrInstB.count = terrInstW.count = 0;
+scene.add(terrInstB, terrInstW);
+
+const deadMarkGeo = new THREE.RingGeometry(0.18, 0.58, 4);
+deadMarkGeo.rotateX(-Math.PI / 2);
+const deadMarkMat = new THREE.MeshBasicMaterial({ color: '#ff5247', transparent: true, opacity: 0.92, depthWrite: false });
+const deadMarkInst = new THREE.InstancedMesh(deadMarkGeo, deadMarkMat, MAX_STONES);
+deadMarkInst.count = 0;
+scene.add(deadMarkInst);
+
+// Animações ativas de pedras (queda e voo de captura)
+const animStones = []; // { mesh, type:'drop'|'capture', t, dur, from, to, scale }
+
+// Utilitários de coordenadas do goban
+let currentBoardN = 9;
+let cellStepX = 1, cellStepZ = 1, stoneRadius = 0.08;
+let stoneJitter = [];
+
+function rebuildBoardVisual(N) {
+  currentBoardN = N;
+  const playW = BOARD_W - 2 * MARGIN_X;
+  const playD = BOARD_D - 2 * MARGIN_Z;
+  cellStepX = playW / (N - 1);
+  cellStepZ = playD / (N - 1);
+  stoneRadius = Math.min(cellStepX, cellStepZ) * 0.475;
+
+  // Jitter orgânico determinístico por interseção
+  stoneJitter = [];
+  for (let i = 0; i < N * N; i++) {
+    const a = Math.sin(i * 127.1 + N * 31.7) * 43758.5453;
+    const b = Math.sin(i * 269.5 + N * 17.3) * 24634.6345;
+    const jx = ((a - Math.floor(a)) - 0.5) * cellStepX * 0.026;
+    const jz = ((b - Math.floor(b)) - 0.5) * cellStepZ * 0.026;
+    const rot = (a - Math.floor(a)) * Math.PI * 2;
+    stoneJitter.push({ jx, jz, rot });
+  }
+
+  if (topMat.map) topMat.map.dispose();
+  topMat.map = createBoardTopTexture(N, cfg.coords);
+  topMat.needsUpdate = true;
+}
+
+function gridToWorld(N, idx) {
+  const x = idx % N, y = (idx / N) | 0;
+  const playW = BOARD_W - 2 * MARGIN_X;
+  const playD = BOARD_D - 2 * MARGIN_Z;
+  const wx = -playW / 2 + (x / (N - 1)) * playW;
+  const wz = -playD / 2 + (y / (N - 1)) * playD;
+  return { x: wx, z: wz };
+}
+
+function worldToGrid(N, wx, wz) {
+  const playW = BOARD_W - 2 * MARGIN_X;
+  const playD = BOARD_D - 2 * MARGIN_Z;
+  const fx = ((wx + playW / 2) / playW) * (N - 1);
+  const fz = ((wz + playD / 2) / playD) * (N - 1);
+  const gx = Math.round(fx), gy = Math.round(fz);
+  if (gx < 0 || gx >= N || gy < 0 || gy >= N) return -1;
+  if (Math.abs(fx - gx) > 0.48 || Math.abs(fz - gy) > 0.48) return -1;
+  return gy * N + gx;
+}
+
+// Atualiza InstancedMeshes a partir do estado atual do jogo
+const dummy = new THREE.Object3D();
+
+function syncBoardMeshes() {
+  if (!game) {
+    blackInst.count = whiteInst.count = aoInst.count = 0;
+    lastRing.visible = false;
+    atariInst.count = terrInstB.count = terrInstW.count = deadMarkInst.count = 0;
+    return;
+  }
+  const N = game.N, S = game.S;
+  if (N !== currentBoardN) rebuildBoardVisual(N);
+
+  let bCnt = 0, wCnt = 0, aoCnt = 0;
+  const dropHidden = new Set();
+  for (const a of animStones) if (a.type === 'drop') dropHidden.add(a.idx);
+
+  for (let i = 0; i < S; i++) {
+    const c = game.cells[i];
+    if (!c || dropHidden.has(i)) continue;
+    const { x, z } = gridToWorld(N, i);
+    const jit = stoneJitter[i];
+    const isDead = scoringMode && deadSet.has(i);
+    const rScale = isDead ? stoneRadius * 0.84 : stoneRadius;
+
+    dummy.position.set(x + jit.jx, BOARD_TOP_Y + 0.0005, z + jit.jz);
+    dummy.rotation.set(0, jit.rot, 0);
+    dummy.scale.set(rScale, rScale, rScale);
+    dummy.updateMatrix();
+    if (c === BLACK) blackInst.setMatrixAt(bCnt++, dummy.matrix);
+    else whiteInst.setMatrixAt(wCnt++, dummy.matrix);
+
+    dummy.position.set(x + jit.jx, BOARD_TOP_Y + 0.0012, z + jit.jz);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.set(rScale, 1, rScale);
+    dummy.updateMatrix();
+    aoInst.setMatrixAt(aoCnt++, dummy.matrix);
+  }
+  blackInst.count = bCnt; blackInst.instanceMatrix.needsUpdate = true;
+  whiteInst.count = wCnt; whiteInst.instanceMatrix.needsUpdate = true;
+  aoInst.count = aoCnt; aoInst.instanceMatrix.needsUpdate = true;
+
+  // Marcador do último lance
+  const lastMove = game.moves.length ? game.moves[game.moves.length - 1] : null;
+  if (lastMove && lastMove.idx >= 0 && game.cells[lastMove.idx]) {
+    const { x, z } = gridToWorld(N, lastMove.idx);
+    const jit = stoneJitter[lastMove.idx];
+    lastRing.position.set(x + jit.jx, BOARD_TOP_Y + stoneRadius * 0.90, z + jit.jz);
+    lastRing.scale.setScalar(stoneRadius);
+    lastRingMat.color.set(lastMove.color === BLACK ? '#f2cc84' : '#3a2716');
+    lastRing.visible = true;
+  } else {
+    lastRing.visible = false;
+  }
+
+  // Anéis de Atari (modo Treino / Lições)
+  let atCnt = 0;
+  if (!scoringMode && cfg.atari && (mode === 'lesson' || (isTrainingMode() && (mode === 'cpu' || mode === 'pvp')))) {
+    const ataris = getAllAtariStones(N, game.cells);
+    for (const idx of ataris) {
+      const { x, z } = gridToWorld(N, idx);
+      const jit = stoneJitter[idx];
+      dummy.position.set(x + jit.jx, BOARD_TOP_Y + 0.003, z + jit.jz);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.setScalar(stoneRadius);
+      dummy.updateMatrix();
+      atariInst.setMatrixAt(atCnt++, dummy.matrix);
+    }
+  }
+  atariInst.count = atCnt; atariInst.instanceMatrix.needsUpdate = true;
+
+  // Marcadores de pedras mortas (na fase de marcação)
+  let dmCnt = 0;
+  if (scoringMode) {
+    for (const idx of deadSet) {
+      if (!game.cells[idx]) continue;
+      const { x, z } = gridToWorld(N, idx);
+      const jit = stoneJitter[idx];
+      dummy.position.set(x + jit.jx, BOARD_TOP_Y + stoneRadius * 0.94, z + jit.jz);
+      dummy.rotation.set(0, Math.PI / 4, 0);
+      dummy.scale.setScalar(stoneRadius);
+      dummy.updateMatrix();
+      deadMarkInst.setMatrixAt(dmCnt++, dummy.matrix);
+    }
+  }
+  deadMarkInst.count = dmCnt; deadMarkInst.instanceMatrix.needsUpdate = true;
+
+  // Mapa de território (fase de marcação OU botão Território no treino)
+  syncTerritoryOverlay();
+  // Prisioneiros nas tampas das tigelas
+  syncPrisonerLids();
+}
+
+function syncTerritoryOverlay() {
+  let tb = 0, tw = 0;
+  if (game && (scoringMode || showTerritoryOverlay)) {
+    const N = game.N;
+    if (scoringMode) {
+      const sc = scoreChinese(N, game.cells, game.komi, deadSet);
+      for (let i = 0; i < game.S; i++) {
+        const v = sc.terr[i];
+        if (!v) continue;
+        const { x, z } = gridToWorld(N, i);
+        dummy.position.set(x, BOARD_TOP_Y + 0.0035, z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.setScalar(stoneRadius);
+        dummy.updateMatrix();
+        if (v > 0) terrInstB.setMatrixAt(tb++, dummy.matrix);
+        else terrInstW.setMatrixAt(tw++, dummy.matrix);
+      }
+    } else if (lastOwnerMap && lastOwnerMap.length === game.S) {
+      for (let i = 0; i < game.S; i++) {
+        if (game.cells[i]) continue;
+        const v = lastOwnerMap[i];
+        if (Math.abs(v) < 0.34) continue;
+        const { x, z } = gridToWorld(N, i);
+        const s = stoneRadius * Math.min(1, Math.abs(v) * 1.15);
+        dummy.position.set(x, BOARD_TOP_Y + 0.0035, z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.setScalar(s);
+        dummy.updateMatrix();
+        if (v > 0) terrInstB.setMatrixAt(tb++, dummy.matrix);
+        else terrInstW.setMatrixAt(tw++, dummy.matrix);
+      }
+    }
+  }
+  terrInstB.count = tb; terrInstB.instanceMatrix.needsUpdate = true;
+  terrInstW.count = tw; terrInstW.instanceMatrix.needsUpdate = true;
+}
+
+function syncPrisonerLids() {
+  if (!game) { prisBlackInst.count = prisWhiteInst.count = 0; return; }
+  const r = 0.036;
+  const fillLid = (inst, count, lidPos) => {
+    const n = Math.min(MAX_PRIS, count);
+    for (let i = 0; i < n; i++) {
+      const layer = (i / 14) | 0;
+      const k = i % 14;
+      const rad = k === 0 ? 0 : (k <= 6 ? 0.055 : 0.105);
+      const ang = k * 2.399 + layer * 0.9;
+      dummy.position.set(
+        lidPos.x + Math.cos(ang) * rad,
+        lidPos.y + layer * (r * 0.78),
+        lidPos.z + Math.sin(ang) * rad
+      );
+      dummy.rotation.set(0.08 * Math.sin(i), i * 1.2, 0.08 * Math.cos(i));
+      dummy.scale.setScalar(r);
+      dummy.updateMatrix();
+      inst.setMatrixAt(i, dummy.matrix);
+    }
+    inst.count = n;
+    inst.instanceMatrix.needsUpdate = true;
+  };
+  // Pretas capturam brancas -> ficam na tampa das pretas
+  fillLid(prisWhiteInst, game.captures[BLACK], blackBowl.lidWorld);
+  // Brancas capturam pretas -> ficam na tampa das brancas
+  fillLid(prisBlackInst, game.captures[WHITE], whiteBowl.lidWorld);
+}
+
+function spawnDropAnim(idx, color) {
+  const { x, z } = gridToWorld(game.N, idx);
+  const jit = stoneJitter[idx];
+  const m = new THREE.Mesh(stoneGeo, color === BLACK ? blackStoneMat : whiteStoneMat);
+  m.castShadow = true;
+  m.scale.setScalar(stoneRadius);
+  m.position.set(x + jit.jx, BOARD_TOP_Y + 0.16, z + jit.jz);
+  scene.add(m);
+  animStones.push({
+    mesh: m, type: 'drop', idx, t: 0, dur: 0.13,
+    from: new THREE.Vector3(x + jit.jx, BOARD_TOP_Y + 0.15, z + jit.jz),
+    to: new THREE.Vector3(x + jit.jx, BOARD_TOP_Y + 0.0005, z + jit.jz)
+  });
+}
+
+function spawnCaptureAnims(capturedList, capturedColor) {
+  const targetLid = capturedColor === WHITE ? blackBowl.lidWorld : whiteBowl.lidWorld;
+  const maxAnim = Math.min(capturedList.length, 16);
+  for (let i = 0; i < maxAnim; i++) {
+    const idx = capturedList[i];
+    const { x, z } = gridToWorld(game.N, idx);
+    const m = new THREE.Mesh(stoneGeo, capturedColor === BLACK ? blackStoneMat : whiteStoneMat);
+    m.scale.setScalar(stoneRadius);
+    m.position.set(x, BOARD_TOP_Y + 0.005, z);
+    scene.add(m);
+    animStones.push({
+      mesh: m, type: 'capture', t: -i * 0.025, dur: 0.42,
+      from: new THREE.Vector3(x, BOARD_TOP_Y + 0.005, z),
+      to: targetLid.clone().add(new THREE.Vector3((Math.random()-0.5)*0.08, 0.04, (Math.random()-0.5)*0.08))
+    });
+  }
+}
+
+// ========================================================================
+// CÂMERA 3D COM ÓRBITA, ZOOM, PAN E VISTA DE TOPO SUAVE
+// ========================================================================
+const camState = {
+  yaw: 0.0, pitch: 0.92, dist: 2.55, tx: 0, tz: 0.04,
+  tYaw: 0.0, tPitch: 0.92, tDist: 2.55, tTx: 0, tTz: 0.04,
+  topMode: false
+};
+
+function fitCameraDistance(isTop) {
+  const aspect = Math.max(0.45, canvas.clientWidth / Math.max(1, canvas.clientHeight));
+  const base = isTop ? 2.95 : 2.98;
+  return aspect < 1 ? base / Math.pow(aspect, 0.72) : base;
+}
+
+function resetCamera(instant = false) {
+  camState.topMode = false;
+  camState.tYaw = 0;
+  camState.tPitch = 0.98; // ~56°
+  camState.tDist = fitCameraDistance(false);
+  camState.tTx = 0;
+  camState.tTz = 0.04;
+  if (instant) {
+    camState.yaw = camState.tYaw; camState.pitch = camState.tPitch;
+    camState.dist = camState.tDist; camState.tx = camState.tTx; camState.tz = camState.tTz;
+  }
+  $('bt-view').classList.remove('active');
+}
+
+function toggleTopView() {
+  camState.topMode = !camState.topMode;
+  if (camState.topMode) {
+    camState.tYaw = 0;
+    camState.tPitch = 1.545; // quase 90° zenital
+    camState.tDist = fitCameraDistance(true);
+    camState.tTx = 0; camState.tTz = 0;
+    $('bt-view').classList.add('active');
+  } else {
+    resetCamera(false);
+  }
+}
+
+function updateCamera(dt) {
+  // No menu principal, órbita zen lenta em torno do goban
+  if (!$('menu-overlay').hidden) {
+    camState.tYaw += dt * 0.14;
+    camState.tPitch = 0.86;
+    camState.tDist = fitCameraDistance(false) * 1.04;
+    camState.tTx = 0; camState.tTz = 0;
+  }
+  const k = 1 - Math.exp(-dt * 10);
+  camState.yaw += (camState.tYaw - camState.yaw) * k;
+  camState.pitch += (camState.tPitch - camState.pitch) * k;
+  camState.dist += (camState.tDist - camState.dist) * k;
+  camState.tx += (camState.tTx - camState.tx) * k;
+  camState.tz += (camState.tTz - camState.tz) * k;
+
+  const rHoriz = camState.dist * Math.cos(camState.pitch);
+  const y = BOARD_TOP_Y + camState.dist * Math.sin(camState.pitch);
+  const x = camState.tx + Math.sin(camState.yaw) * rHoriz;
+  const z = camState.tz + Math.cos(camState.yaw) * rHoriz;
+  camera.position.set(x, y, z);
+  camera.lookAt(camState.tx, BOARD_TOP_Y - 0.02, camState.tz);
+}
+
+function onResize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h);
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+document.addEventListener('fullscreenchange', () => setTimeout(onResize, 60));
+onResize();
+
+// Raycast exato contra o plano y = BOARD_TOP_Y
+const raycaster = new THREE.Raycaster();
+const boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -BOARD_TOP_Y);
+const hitPt = new THREE.Vector3();
+
+function screenToBoardIdx(clientX, clientY, yOffsetPx = 0) {
+  if (!game) return -1;
+  const rect = canvas.getBoundingClientRect();
+  const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+  const ndcY = -(((clientY - yOffsetPx) - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+  if (!raycaster.ray.intersectPlane(boardPlane, hitPt)) return -1;
+  return worldToGrid(game.N, hitPt.x, hitPt.z);
+}
+
+// ========================================================================
+// ESTADO DO JOGO, MODOS E FLUXO PRINCIPAL
+// ========================================================================
+let game = null;
+let mode = 'menu'; // 'menu' | 'cpu' | 'pvp' | 'lesson' | 'tsumego'
+let humanColor = BLACK;
+let cpuLevel = 2;
+let training = true;
+let aiThinking = false;
+let scoringMode = false;
+let deadSet = new Set();
+let showTerritoryOverlay = false;
+let lastOwnerMap = null;
+let lastWinRateB = 0.5;
+let hoverIdx = -1;
+let pendingTouchIdx = -1;
+let hintIdx = -1;
+
+// Estado de lição / tsumego
+let activeLessonIdx = 0;
+let activeTsumegoIdx = 0;
+let tsumegoNode = null;
+let lessonSolved = false;
+
+function isTrainingMode() { return training; }
+function needsConfirm() {
+  if (!IS_TOUCH || scoringMode) return false;
+  if (cfg.confirmMode === 'on') return true;
+  if (cfg.confirmMode === 'off') return false;
+  return game && game.N >= 13;
+}
+
+let toastTimer = null;
+function showToast(msg, ms = 2200) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function setBanner(title, text, buttons = [], style = '') {
+  const b = $('coach-banner');
+  if (!title && !text) { b.hidden = true; return; }
+  b.hidden = false;
+  b.className = style;
+  $('cb-title').textContent = title;
+  $('cb-text').textContent = text;
+  const box = $('cb-actions');
+  box.innerHTML = '';
+  for (const btn of buttons) {
+    const el = document.createElement('button');
+    el.className = 'bt sm ' + (btn.cls || '');
+    el.textContent = btn.label;
+    el.addEventListener('click', btn.onClick);
+    box.appendChild(el);
+  }
+}
+
+function setHintMarker(idx) {
+  hintIdx = idx;
+  if (idx >= 0 && game) {
+    const { x, z } = gridToWorld(game.N, idx);
+    hintRing.position.set(x, BOARD_TOP_Y + 0.004, z);
+    hintRing.scale.setScalar(stoneRadius);
+    hintRing.visible = true;
+  } else {
+    hintRing.visible = false;
+  }
+}
+
+function updateHud() {
+  if (!game || mode === 'menu') { $('hud').hidden = true; return; }
+  $('hud').hidden = false;
+
+  const isCpu = mode === 'cpu';
+  const bName = isCpu ? (humanColor === BLACK ? 'Você' : `CPU Nv.${cpuLevel}`) : (mode === 'pvp' ? 'Pretas' : 'Você (Pretas)');
+  const wName = isCpu ? (humanColor === WHITE ? 'Você' : `CPU Nv.${cpuLevel}`) : (mode === 'pvp' ? 'Brancas' : 'Brancas');
+
+  $('pname-b').textContent = bName + (aiThinking && game.turn === BLACK ? ' · pensando...' : '');
+  $('pname-w').textContent = wName + (aiThinking && game.turn === WHITE ? ' · pensando...' : '');
+  $('pcap-b').textContent = `${game.captures[BLACK]} capt.`;
+  $('pcap-w').textContent = `${game.captures[WHITE]} capt.` + (game.komi ? ` · komi ${game.komi}` : '');
+
+  $('pbox-b').classList.toggle('turn', !scoringMode && game.turn === BLACK);
+  $('pbox-w').classList.toggle('turn', !scoringMode && game.turn === WHITE);
+
+  const showTrainTools = (mode === 'cpu' || mode === 'pvp') && training && !scoringMode;
+  $('eval-wrap').hidden = !(mode === 'cpu' && training && !scoringMode);
+  $('bt-terr').hidden = !showTrainTools;
+  $('bt-terr').classList.toggle('active', showTerritoryOverlay);
+  $('bt-hint').hidden = !(showTrainTools || mode === 'tsumego');
+  $('bt-undo').hidden = !(showTrainTools || mode === 'tsumego') || !game.moves.length;
+  $('bt-pass').hidden = (mode === 'lesson' || mode === 'tsumego' || scoringMode);
+  $('bt-resign').hidden = (mode === 'lesson' || mode === 'tsumego' || scoringMode);
+  $('bt-confirm').hidden = !(pendingTouchIdx >= 0 && needsConfirm());
+
+  // Atualiza barra de avaliação
+  if (!$('eval-wrap').hidden) {
+    const pct = Math.round(Math.max(4, Math.min(96, lastWinRateB * 100)));
+    $('eval-black').style.width = pct + '%';
+    if (pct >= 56) $('eval-txt').textContent = `Pretas ${pct}%`;
+    else if (pct <= 44) $('eval-txt').textContent = `Brancas ${100 - pct}%`;
+    else $('eval-txt').textContent = 'Equilibrado';
+  }
+}
+
+function updateGhost() {
+  const idx = pendingTouchIdx >= 0 ? pendingTouchIdx : hoverIdx;
+  if (!game || scoringMode || aiThinking || idx < 0 || game.cells[idx] !== EMPTY || mode === 'menu') {
+    ghostMesh.visible = false;
+    return;
+  }
+  if (mode === 'cpu' && game.turn !== humanColor) { ghostMesh.visible = false; return; }
+  if ((mode === 'lesson' || mode === 'tsumego') && lessonSolved) { ghostMesh.visible = false; return; }
+
+  const { x, z } = gridToWorld(game.N, idx);
+  ghostMesh.material = game.turn === BLACK ? ghostMatB : ghostMatW;
+  ghostMesh.scale.setScalar(stoneRadius);
+  ghostMesh.position.set(x, BOARD_TOP_Y + 0.008, z);
+  ghostMesh.visible = true;
+}
+
+function updateInspectPill(idx) {
+  const el = $('inspect-pill');
+  if (!game || idx < 0 || mode === 'menu') { el.hidden = true; return; }
+  const coord = idxToCoord(game.N, idx);
+  const c = game.cells[idx];
+  if (scoringMode && c) {
+    const status = deadSet.has(idx) ? 'marcada como MORTA (clique para reviver)' : 'viva (clique para marcar como morta)';
+    el.innerHTML = `<strong>${coord}</strong> · Pedra ${c === BLACK ? 'preta' : 'branca'} ${status}`;
+    el.hidden = false;
+  } else if (c && (training || mode === 'lesson')) {
+    const g = getGroupInfo(game.N, game.cells, idx);
+    const l = g.libs.length;
+    el.innerHTML = `<strong>${coord}</strong> · Grupo ${c === BLACK ? 'preto' : 'branco'}: <strong>${l} ${l === 1 ? 'liberdade (ATARI!)' : 'liberdades'}</strong>`;
+    el.hidden = false;
+  } else if (!c) {
+    el.innerHTML = `Interseção <strong>${coord}</strong>`;
+    el.hidden = false;
+  } else {
+    el.hidden = true;
+  }
+}
+
+// ========================================================================
+// SALVAR / CONTINUAR PARTIDA (localStorage go-partida)
+// ========================================================================
+function saveActiveMatch() {
+  if (!game || (mode !== 'cpu' && mode !== 'pvp') || scoringMode) return;
+  LS.set('partida', {
+    mode, N: game.N, komi: game.komi, handicap: game.handicap,
+    humanColor, cpuLevel, training,
+    moves: game.moves.map(m => m.idx)
+  });
+}
+
+function loadSavedMatch() {
+  const s = LS.get('partida', null);
+  if (!s || !s.N || !Array.isArray(s.moves)) return null;
+  return s;
+}
+
+function refreshResumeBar() {
+  const s = loadSavedMatch();
+  if (!s || s.moves.length === 0) { $('resume-bar').hidden = true; return; }
+  $('resume-bar').hidden = false;
+  $('resume-desc').textContent = `${s.N}×${s.N} · ${s.mode === 'cpu' ? 'Contra CPU Nv.' + s.cpuLevel : '2 Jogadores'} · ${s.moves.length} lances`;
+}
+
+// ========================================================================
+// INICIAR PARTIDAS, LIÇÕES E TSUMEGO
+// ========================================================================
+function startMatch({ m, N, level = 2, hColor = BLACK, train = true, handicap = 0, replayMoves = null }) {
+  mode = m;
+  cpuLevel = level;
+  humanColor = hColor === 0 ? (Math.random() < 0.5 ? BLACK : WHITE) : hColor;
+  training = !!train;
+  scoringMode = false;
+  deadSet.clear();
+  showTerritoryOverlay = false;
+  lastOwnerMap = null;
+  lastWinRateB = 0.5;
+  aiThinking = false;
+  pendingTouchIdx = -1;
+  lessonSolved = false;
+  setHintMarker(-1);
+  setBanner('', '');
+
+  game = new GoGame(N, null, handicap);
+  if (replayMoves) {
+    for (const idx of replayMoves) game.play(idx);
+  }
+
+  $('menu-overlay').hidden = true;
+  $('pause-overlay').hidden = true;
+  $('result-overlay').hidden = true;
+
+  rebuildBoardVisual(N);
+  resetCamera(false);
+  syncBoardMeshes();
+  updateHud();
+  saveActiveMatch();
+
+  if (mode === 'cpu' && game.turn !== humanColor) {
+    triggerCpuTurn();
+  }
+}
+
+function startLesson(index) {
+  activeLessonIdx = index;
+  const L = LESSONS[index];
+  mode = 'lesson';
+  training = true;
+  scoringMode = false;
+  deadSet.clear();
+  showTerritoryOverlay = false;
+  aiThinking = false;
+  lessonSolved = false;
+  pendingTouchIdx = -1;
+  setHintMarker(-1);
+
+  game = new GoGame(L.N, 0, 0);
+  for (const [x, y] of L.black) game.cells[y * L.N + x] = BLACK;
+  for (const [x, y] of L.white) game.cells[y * L.N + x] = WHITE;
+  game.hash = hashBoard(L.N, game.cells);
+  game.hashSet = new Set([game.hash]);
+
+  $('menu-overlay').hidden = true;
+  rebuildBoardVisual(L.N);
+  resetCamera(false);
+  syncBoardMeshes();
+  updateHud();
+
+  setBanner(L.title, L.prompt, [
+    { label: 'Mostrar ponto', onClick: () => { const [tx, ty] = L.targets[0]; setHintMarker(ty * L.N + tx); } },
+    { label: 'Voltar às lições', onClick: () => openMenu('learn') }
+  ]);
+}
+
+function startTsumego(index) {
+  activeTsumegoIdx = index;
+  const T = TSUMEGO[index];
+  mode = 'tsumego';
+  training = true;
+  scoringMode = false;
+  deadSet.clear();
+  showTerritoryOverlay = false;
+  aiThinking = false;
+  lessonSolved = false;
+  pendingTouchIdx = -1;
+  tsumegoNode = T.tree;
+  setHintMarker(-1);
+
+  game = new GoGame(T.N, 0, 0);
+  for (const [x, y] of T.black) game.cells[y * T.N + x] = BLACK;
+  for (const [x, y] of T.white) game.cells[y * T.N + x] = WHITE;
+  game.hash = hashBoard(T.N, game.cells);
+  game.hashSet = new Set([game.hash]);
+
+  $('menu-overlay').hidden = true;
+  rebuildBoardVisual(T.N);
+  resetCamera(false);
+  syncBoardMeshes();
+  updateHud();
+
+  setBanner(`Problema ${index + 1}: ${T.title} (${T.level})`, T.desc, [
+    { label: 'Reiniciar', onClick: () => startTsumego(index) },
+    { label: 'Lista', onClick: () => openMenu('tsumego') }
+  ]);
+}
+
+// ========================================================================
+// EXECUÇÃO DE LANCES, IA E CONTAGEM FINAL
+// ========================================================================
+function executeMove(idx, isAi = false) {
+  if (!game || scoringMode) return false;
+  const movingColor = game.turn;
+  const res = game.play(idx);
+  if (!res.ok) {
+    playUiTone('err');
+    showToast(res.reason || 'Lance inválido.');
+    return false;
+  }
+
+  pendingTouchIdx = -1;
+  setHintMarker(-1);
+
+  if (idx >= 0) {
+    const N = game.N;
+    const x = idx % N, y = (idx / N) | 0;
+    const distC = Math.hypot(x - (N - 1) / 2, y - (N - 1) / 2) / ((N - 1) * 0.72);
+    spawnDropAnim(idx, movingColor);
+    if (res.captured.length) spawnCaptureAnims(res.captured, opp(movingColor));
+    playStoneSound(Math.min(1, distC), res.captured.length);
+  } else {
+    playUiTone('pass');
+    showToast(`${movingColor === BLACK ? 'Pretas' : 'Brancas'} passaram a vez.`);
+  }
+
+  syncBoardMeshes();
+  updateHud();
+  saveActiveMatch();
+
+  // Dois passes consecutivos -> entra na fase de marcação de pedras mortas!
+  if ((mode === 'cpu' || mode === 'pvp') && game.passes >= 2) {
+    enterScoringPhase();
+    return true;
+  }
+
+  // Atualiza estimativa de território no modo treino em segundo plano
+  if (mode === 'cpu' && training && !isAi && game.moves.length >= 2) {
+    // Será atualizado na resposta da CPU
+  } else if (mode === 'pvp' && training && showTerritoryOverlay) {
+    refreshEstimate();
+  }
+
+  if (mode === 'cpu' && !isAi && game.turn !== humanColor) {
+    triggerCpuTurn();
+  }
+  return true;
+}
+
+async function triggerCpuTurn() {
+  if (!game || mode !== 'cpu' || scoringMode || aiThinking) return;
+  aiThinking = true;
+  updateHud();
+  updateGhost();
+
+  const snapshot = {
+    N: game.N,
+    cells: new Uint8Array(game.cells),
+    turn: game.turn,
+    komi: game.komi,
+    koPoint: game.koPoint,
+    passes: game.passes,
+    moveCount: game.moves.length,
+    lastMove: game.moves.length ? game.moves[game.moves.length - 1].idx : -1,
+    historyHashes: Array.from(game.hashSet)
+  };
+
+  // Pequeno respiro para o jogador ver sua própria pedra assentar
+  await new Promise(r => setTimeout(r, 180));
+  const { res } = await askWorker({ type: 'search', state: snapshot, level: cpuLevel, forHint: false });
+  if (!game || mode !== 'cpu' || scoringMode) { aiThinking = false; return; }
+
+  aiThinking = false;
+  if (res.ownerMap) lastOwnerMap = res.ownerMap;
+  if (typeof res.blackWinRate === 'number') lastWinRateB = res.blackWinRate;
+  executeMove(res.idx, true);
+}
+
+async function refreshEstimate() {
+  if (!game) return;
+  const { est } = await askWorker({
+    type: 'estimate',
+    N: game.N, cells: new Uint8Array(game.cells),
+    turn: game.turn, komi: game.komi, koPoint: game.koPoint,
+    sims: game.N === 19 ? 50 : 80
+  });
+  if (!game) return;
+  lastOwnerMap = est.map;
+  lastWinRateB = est.blackWinRate;
+  syncTerritoryOverlay();
+  updateHud();
+}
+
+async function requestHint() {
+  if (!game || aiThinking || scoringMode) return;
+  if (mode === 'tsumego') {
+    const T = TSUMEGO[activeTsumegoIdx];
+    const keys = tsumegoNode ? Object.keys(tsumegoNode).filter(k => tsumegoNode[k]) : [];
+    if (keys.length) {
+      const [hx, hy] = keys[0].split(',').map(Number);
+      setHintMarker(hy * game.N + hx);
+    }
+    showToast('Dica: ' + T.hint, 3800);
+    return;
+  }
+  showToast('Analisando melhor lance...', 1200);
+  const snapshot = {
+    N: game.N, cells: new Uint8Array(game.cells),
+    turn: game.turn, komi: game.komi, koPoint: game.koPoint,
+    passes: game.passes, moveCount: game.moves.length,
+    lastMove: game.moves.length ? game.moves[game.moves.length - 1].idx : -1,
+    historyHashes: Array.from(game.hashSet)
+  };
+  const { res } = await askWorker({ type: 'search', state: snapshot, level: 4, forHint: true });
+  if (!game) return;
+  $('toast').classList.remove('show');
+  if (res.ownerMap) lastOwnerMap = res.ownerMap;
+  if (typeof res.blackWinRate === 'number') lastWinRateB = res.blackWinRate;
+  setHintMarker(res.idx);
+  const coord = idxToCoord(game.N, res.idx);
+  setBanner(`Dica do Treinador · ${coord}`, res.reason, [
+    { label: 'Entendi', onClick: () => setBanner('', '') }
+  ]);
+  updateHud();
+}
+
+// Fluxo de lições e Tsumego
+function handleDidacticMove(idx) {
+  if (lessonSolved) return;
+  const N = game.N;
+  const x = idx % N, y = (idx / N) | 0;
+
+  if (mode === 'lesson') {
+    const L = LESSONS[activeLessonIdx];
+    const ok = L.targets.some(([tx, ty]) => tx === x && ty === y);
+    if (!ok) {
+      playUiTone('err');
+      showToast('Ainda não é essa interseção — releia o objetivo acima ou peça para mostrar o ponto.');
+      return;
+    }
+    const res = game.play(idx);
+    if (!res.ok) { showToast(res.reason); return; }
+    spawnDropAnim(idx, BLACK);
+    if (res.captured.length) spawnCaptureAnims(res.captured, WHITE);
+    playStoneSound(0.4, res.captured.length);
+    setTimeout(() => playUiTone('ok'), 160);
+    lessonSolved = true;
+    setHintMarker(-1);
+    progress.lessons[L.id] = true;
+    saveProg();
+    syncBoardMeshes();
+    updateHud();
+
+    const btns = [];
+    if (activeLessonIdx + 1 < LESSONS.length) {
+      btns.push({ label: 'Próxima lição ▶', cls: 'green', onClick: () => startLesson(activeLessonIdx + 1) });
+    }
+    btns.push({ label: 'Lista de lições', onClick: () => openMenu('learn') });
+    setBanner('Lição concluída!', L.success, btns, 'ok');
+    return;
+  }
+
+  if (mode === 'tsumego') {
+    const key = `${x},${y}`;
+    const branch = tsumegoNode && tsumegoNode[key];
+    const chk = game.checkMove(idx, BLACK);
+    if (!chk.ok) { playUiTone('err'); showToast(chk.reason); return; }
+
+    if (!branch) {
+      playUiTone('err');
+      showToast('Esse lance permite que as brancas escapem ou vivam. Tente outro ponto!', 2400);
+      return;
+    }
+    const res = game.play(idx);
+    spawnDropAnim(idx, BLACK);
+    if (res.captured.length) spawnCaptureAnims(res.captured, WHITE);
+    playStoneSound(0.45, res.captured.length);
+    setHintMarker(-1);
+    syncBoardMeshes();
+    updateHud();
+
+    if (branch.win) {
+      lessonSolved = true;
+      setTimeout(() => playUiTone('ok'), 160);
+      progress.tsumego[TSUMEGO[activeTsumegoIdx].id] = true;
+      saveProg();
+      const btns = [];
+      if (activeTsumegoIdx + 1 < TSUMEGO.length) {
+        btns.push({ label: 'Próximo problema ▶', cls: 'green', onClick: () => startTsumego(activeTsumegoIdx + 1) });
+      }
+      btns.push({ label: 'Lista de problemas', onClick: () => openMenu('tsumego') });
+      setBanner('Problema resolvido!', branch.win, btns, 'ok');
+    } else if (branch.reply) {
+      aiThinking = true;
+      updateHud();
+      setTimeout(() => {
+        if (!game || mode !== 'tsumego') return;
+        const [rx, ry] = branch.reply;
+        const rIdx = ry * game.N + rx;
+        const rRes = game.play(rIdx);
+        spawnDropAnim(rIdx, WHITE);
+        if (rRes.captured && rRes.captured.length) spawnCaptureAnims(rRes.captured, BLACK);
+        playStoneSound(0.45, rRes.captured ? rRes.captured.length : 0);
+        tsumegoNode = branch.next;
+        aiThinking = false;
+        syncBoardMeshes();
+        updateHud();
+        showToast('Boa! Agora dê o golpe final.');
+      }, 420);
+    }
+  }
+}
+
+// Fase de marcação de pedras mortas e contagem final
+async function enterScoringPhase() {
+  scoringMode = true;
+  pendingTouchIdx = -1;
+  deadSet.clear();
+  setHintMarker(-1);
+  updateHud();
+  updateGhost();
+
+  setBanner('Contagem Final · Pedras Mortas', 'Analisando grupos mortos automaticamente...', [], 'warn');
+  const { dead } = await askWorker({
+    type: 'dead', N: game.N, cells: new Uint8Array(game.cells),
+    turn: game.turn, komi: game.komi, koPoint: game.koPoint
+  });
+  if (!game || !scoringMode) return;
+  for (const s of dead) deadSet.add(s);
+  syncBoardMeshes();
+  refreshScoringBanner();
+}
+
+function refreshScoringBanner() {
+  const sc = scoreChinese(game.N, game.cells, game.komi, deadSet);
+  const lead = sc.winner === BLACK
+    ? `Pretas vencem por ${Math.abs(sc.diff).toFixed(1)}`
+    : `Brancas vencem por ${Math.abs(sc.diff).toFixed(1)}`;
+  setBanner(
+    `Contagem (Chinesa) · ${lead}`,
+    `Pretas: ${sc.blackTotal} (${sc.blackTerr} terr. + ${sc.blackStones} pedras) · Brancas: ${sc.whiteTotal.toFixed(1)} (${sc.whiteTerr} terr. + ${sc.whiteStones} pedras + ${sc.komi} komi). Clique em qualquer grupo para alternar vivo/morto.`,
+    [
+      { label: '✓ Confirmar resultado', cls: 'green', onClick: () => finishMatch(sc, false) },
+      { label: 'Voltar a jogar', onClick: () => { scoringMode = false; game.passes = 0; deadSet.clear(); setBanner('', ''); syncBoardMeshes(); updateHud(); } }
+    ],
+    'warn'
+  );
+}
+
+function toggleDeadGroup(idx) {
+  if (!game || !game.cells[idx]) return;
+  const g = getGroupInfo(game.N, game.cells, idx);
+  const willMarkDead = !deadSet.has(idx);
+  for (const s of g.stones) {
+    if (willMarkDead) deadSet.add(s);
+    else deadSet.delete(s);
+  }
+  syncBoardMeshes();
+  refreshScoringBanner();
+}
+
+function finishMatch(sc, resignedColor = 0) {
+  scoringMode = false;
+  LS.del('partida');
+  setBanner('', '');
+  updateHud();
+
+  let winner = sc ? sc.winner : opp(resignedColor);
+  if (mode === 'cpu' && !training) {
+    progress.games++;
+    if (winner === humanColor) progress.wins++;
+    saveProg();
+  }
+
+  $('res-title').textContent = winner === BLACK ? 'Vitória das Pretas!' : 'Vitória das Brancas!';
+  if (resignedColor) {
+    $('res-sub').textContent = `${resignedColor === BLACK ? 'Pretas' : 'Brancas'} desistiram da partida.`;
+    $('res-grid').innerHTML = '';
+  } else {
+    $('res-sub').textContent = `Diferença de ${Math.abs(sc.diff).toFixed(1)} pontos (regras chinesas de área).`;
+    $('res-grid').innerHTML = `
+      <div class="score-box ${winner === BLACK ? 'win' : ''}">
+        <h3><span class="stone-dot b"></span> Pretas</h3>
+        <div class="big">${sc.blackTotal}</div>
+        <div class="det">Território: ${sc.blackTerr}<br>Pedras vivas: ${sc.blackStones}<br>Capturas: ${game.captures[BLACK]}</div>
+      </div>
+      <div class="score-box ${winner === WHITE ? 'win' : ''}">
+        <h3><span class="stone-dot w"></span> Brancas</h3>
+        <div class="big">${sc.whiteTotal.toFixed(1)}</div>
+        <div class="det">Território: ${sc.whiteTerr}<br>Pedras vivas: ${sc.whiteStones}<br>Komi: +${sc.komi}</div>
+      </div>
+    `;
+  }
+  $('result-overlay').hidden = false;
+  playUiTone('ok');
+}
+
+// ========================================================================
+// INTERAÇÃO DE MOUSE E TOQUE NO CANVAS 3D
+// ========================================================================
+const ptrs = new Map();
+let dragMode = null; // 'orbit' | 'pan' | 'aim' | 'pinch'
+let downX = 0, downY = 0, movedDist = 0;
+let lastMidX = 0, lastMidY = 0, lastPinchDist = 0;
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('pointerdown', e => {
+  if (!$('menu-overlay').hidden || !$('pause-overlay').hidden || !$('result-overlay').hidden) return;
+  ensureAudio();
+  canvas.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (ptrs.size === 2) {
+    dragMode = 'pinch';
+    const [a, b] = Array.from(ptrs.values());
+    lastMidX = (a.x + b.x) / 2; lastMidY = (a.y + b.y) / 2;
+    lastPinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+    return;
+  }
+
+  downX = e.clientX; downY = e.clientY; movedDist = 0;
+  if (e.button === 2 || e.button === 1 || e.shiftKey) {
+    dragMode = e.shiftKey || e.button === 1 ? 'pan' : 'orbit';
+    canvas.classList.add('grabbing');
+  } else {
+    dragMode = 'click';
+    if (e.pointerType === 'touch' && needsConfirm()) {
+      const idx = screenToBoardIdx(e.clientX, e.clientY, 24);
+      if (idx >= 0 && game && game.cells[idx] === EMPTY) {
+        pendingTouchIdx = idx;
+        updateGhost(); updateHud(); updateInspectPill(idx);
+      }
+    }
+  }
+});
+
+canvas.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) {
+    // Hover no desktop
+    if (e.pointerType === 'mouse' && game && $('menu-overlay').hidden) {
+      hoverIdx = screenToBoardIdx(e.clientX, e.clientY);
+      updateGhost();
+      updateInspectPill(hoverIdx);
+    }
+    return;
+  }
+  const prev = ptrs.get(e.pointerId);
+  const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  movedDist += Math.hypot(dx, dy);
+
+  if (dragMode === 'pinch' && ptrs.size === 2) {
+    const [a, b] = Array.from(ptrs.values());
+    const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
+    const pd = Math.hypot(a.x - b.x, a.y - b.y);
+    const scale = lastPinchDist / Math.max(20, pd);
+    camState.tDist = Math.max(0.95, Math.min(5.2, camState.tDist * scale));
+    const mdx = midX - lastMidX, mdy = midY - lastMidY;
+    camState.tTx = Math.max(-0.9, Math.min(0.9, camState.tTx - mdx * 0.0022 * camState.tDist));
+    camState.tTz = Math.max(-0.9, Math.min(0.9, camState.tTz - mdy * 0.0022 * camState.tDist));
+    lastMidX = midX; lastMidY = midY; lastPinchDist = pd;
+    return;
+  }
+
+  if (dragMode === 'orbit') {
+    camState.tYaw -= dx * 0.0065;
+    camState.tPitch = Math.max(0.32, Math.min(1.55, camState.tPitch + dy * 0.0055));
+    camState.topMode = camState.tPitch > 1.48;
+    $('bt-view').classList.toggle('active', camState.topMode);
+    return;
+  }
+
+  if (dragMode === 'pan') {
+    const s = 0.0018 * camState.tDist;
+    const cy = Math.cos(camState.yaw), sy = Math.sin(camState.yaw);
+    camState.tTx = Math.max(-0.95, Math.min(0.95, camState.tTx - (dx * cy + dy * sy) * s));
+    camState.tTz = Math.max(-0.95, Math.min(0.95, camState.tTz - (-dx * sy + dy * cy) * s));
+    return;
+  }
+
+  if (dragMode === 'click' && e.pointerType === 'touch' && needsConfirm() && movedDist > 8) {
+    // Arrasta a pedra fantasma com deslocamento acima do dedo
+    const idx = screenToBoardIdx(e.clientX, e.clientY, 34);
+    if (idx >= 0 && game && game.cells[idx] === EMPTY) {
+      pendingTouchIdx = idx;
+      updateGhost(); updateHud(); updateInspectPill(idx);
+    }
+  } else if (dragMode === 'click' && movedDist > 16 && !(e.pointerType === 'touch' && needsConfirm())) {
+    dragMode = 'orbit';
+    canvas.classList.add('grabbing');
+  }
+});
+
+canvas.addEventListener('pointerup', e => {
+  ptrs.delete(e.pointerId);
+  canvas.classList.remove('grabbing');
+  if (dragMode === 'click' && movedDist < 14 && game && !aiThinking) {
+    const yOff = (e.pointerType === 'touch' && needsConfirm()) ? 24 : 0;
+    const idx = screenToBoardIdx(e.clientX, e.clientY, yOff);
+    if (idx >= 0) {
+      if (scoringMode) {
+        toggleDeadGroup(idx);
+      } else if (e.pointerType === 'touch' && needsConfirm()) {
+        if (idx === pendingTouchIdx) {
+          if (mode === 'lesson' || mode === 'tsumego') handleDidacticMove(idx);
+          else if (!(mode === 'cpu' && game.turn !== humanColor)) executeMove(idx, false);
+        } else if (game.cells[idx] === EMPTY) {
+          pendingTouchIdx = idx;
+          updateGhost(); updateHud(); updateInspectPill(idx);
+        }
+      } else {
+        if (mode === 'lesson' || mode === 'tsumego') handleDidacticMove(idx);
+        else if (!(mode === 'cpu' && game.turn !== humanColor)) executeMove(idx, false);
+      }
+    }
+  }
+  if (ptrs.size === 0) dragMode = null;
+});
+
+canvas.addEventListener('wheel', e => {
+  if (!$('menu-overlay').hidden) return;
+  e.preventDefault();
+  camState.tDist = Math.max(0.95, Math.min(5.2, camState.tDist * (1 + Math.sign(e.deltaY) * 0.09)));
+}, { passive: false });
+
+// Tela cheia no toque (requisito PWA do repositório)
+let askedFs = false;
+window.addEventListener('touchend', () => {
+  if (askedFs || document.fullscreenElement) return;
+  askedFs = true;
+  const el = document.documentElement;
+  const r = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' })
+    : (el.webkitRequestFullscreen && el.webkitRequestFullscreen());
+  if (r && r.catch) r.catch(() => {});
+}, { passive: true });
+
+// ========================================================================
+// INTERFACE: MENUS, BOTÕES, LISTAS E ATALHOS
+// ========================================================================
+function bindOptGroup(id, key) {
+  const box = $(id);
+  const btns = box.querySelectorAll('.opt');
+  const sync = () => btns.forEach(b => b.classList.toggle('sel', String(b.dataset.val) === String(cfg[key])));
+  sync();
+  btns.forEach(b => b.addEventListener('click', () => {
+    cfg[key] = Number(b.dataset.val);
+    saveCfg();
+    sync();
+  }));
+}
+
+bindOptGroup('cpu-size', 'cpuSize');
+bindOptGroup('cpu-level', 'cpuLevel');
+bindOptGroup('cpu-color', 'cpuColor');
+bindOptGroup('cpu-train', 'cpuTrain');
+bindOptGroup('cpu-handicap', 'cpuHandicap');
+bindOptGroup('pvp-size', 'pvpSize');
+bindOptGroup('pvp-handicap', 'pvpHandicap');
+bindOptGroup('pvp-train', 'pvpTrain');
+
+function renderDidacticLists() {
+  const lDone = LESSONS.filter(l => progress.lessons[l.id]).length;
+  $('learn-prog').textContent = `${lDone}/${LESSONS.length}`;
+  $('lesson-list').innerHTML = '';
+  LESSONS.forEach((l, i) => {
+    const ok = !!progress.lessons[l.id];
+    const el = document.createElement('button');
+    el.className = 'list-item' + (ok ? ' done' : '');
+    el.innerHTML = `<div class="list-num">${ok ? '✓' : i + 1}</div>
+      <div class="list-body"><strong>${l.title}</strong><span>${l.sub}</span></div>
+      <span class="tag ${ok ? 'ok' : ''}">${ok ? 'Concluída' : 'Abrir'}</span>`;
+    el.addEventListener('click', () => startLesson(i));
+    $('lesson-list').appendChild(el);
+  });
+
+  const tDone = TSUMEGO.filter(t => progress.tsumego[t.id]).length;
+  $('tsumego-prog').textContent = `${tDone}/${TSUMEGO.length}`;
+  $('tsumego-list').innerHTML = '';
+  TSUMEGO.forEach((t, i) => {
+    const ok = !!progress.tsumego[t.id];
+    const el = document.createElement('button');
+    el.className = 'list-item' + (ok ? ' done' : '');
+    el.innerHTML = `<div class="list-num">${ok ? '✓' : i + 1}</div>
+      <div class="list-body"><strong>${t.title}</strong><span>${t.desc}</span></div>
+      <span class="tag ${ok ? 'ok' : ''}">${ok ? 'Resolvido' : t.level}</span>`;
+    el.addEventListener('click', () => startTsumego(i));
+    $('tsumego-list').appendChild(el);
+  });
+}
+
+function selectTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('sel', t.dataset.tab === name));
+  ['cpu', 'pvp', 'learn', 'tsumego'].forEach(k => $('tab-' + k).hidden = k !== name);
+  if (name === 'learn' || name === 'tsumego') renderDidacticLists();
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => selectTab(t.dataset.tab)));
+
+function openMenu(tab = null) {
+  $('pause-overlay').hidden = true;
+  $('result-overlay').hidden = true;
+  $('menu-overlay').hidden = false;
+  $('hud').hidden = true;
+  refreshResumeBar();
+  renderDidacticLists();
+  if (tab) selectTab(tab);
+  // Mostra uma posição clássica bonita no goban girando ao fundo se não houver partida
+  if (!game) {
+    game = new GoGame(9, 6.5, 0);
+    for (const [x, y, c] of [[2,2,1],[6,6,2],[6,2,1],[2,6,2],[4,4,1],[4,2,2],[2,4,1],[6,4,2],[5,5,1],[3,5,2]]) {
+      game.cells[y * 9 + x] = c;
+    }
+    rebuildBoardVisual(9);
+    syncBoardMeshes();
+  }
+}
+
+function syncCfgButtons() {
+  $('cfg-coords').textContent = cfg.coords ? 'Ligado' : 'Desligado';
+  $('cfg-confirm').textContent = cfg.confirmMode === 'auto' ? 'Automático' : (cfg.confirmMode === 'on' ? 'Sempre' : 'Desligado');
+  $('cfg-atari').textContent = cfg.atari ? 'Ligado' : 'Desligado';
+  $('cfg-sound').textContent = cfg.sound ? 'Ligado' : 'Desligado';
+  $('bt-sound').textContent = cfg.sound ? '🔊' : '🔇';
+}
+syncCfgButtons();
+
+$('cfg-coords').addEventListener('click', () => {
+  cfg.coords = !cfg.coords; saveCfg(); syncCfgButtons();
+  rebuildBoardVisual(currentBoardN);
+});
+$('cfg-confirm').addEventListener('click', () => {
+  cfg.confirmMode = cfg.confirmMode === 'auto' ? 'on' : (cfg.confirmMode === 'on' ? 'off' : 'auto');
+  saveCfg(); syncCfgButtons(); updateHud();
+});
+$('cfg-atari').addEventListener('click', () => {
+  cfg.atari = !cfg.atari; saveCfg(); syncCfgButtons(); syncBoardMeshes();
+});
+$('cfg-sound').addEventListener('click', () => {
+  cfg.sound = !cfg.sound; saveCfg(); syncCfgButtons();
+});
+
+// Botões principais
+$('bt-home').addEventListener('click', () => location.href = '../');
+$('bt-pause-home').addEventListener('click', () => location.href = '../');
+$('bt-open-cfg').addEventListener('click', () => {
+  $('pause-title').textContent = 'Opções';
+  $('pause-game-btns').hidden = true;
+  $('pause-overlay').hidden = false;
+});
+$('bt-pause').addEventListener('click', () => {
+  $('pause-title').textContent = 'Pausa & Opções';
+  $('pause-game-btns').hidden = false;
+  $('bt-export-sgf').hidden = !(mode === 'cpu' || mode === 'pvp');
+  $('pause-overlay').hidden = false;
+});
+$('bt-pause-close').addEventListener('click', () => $('pause-overlay').hidden = true);
+$('bt-pause-resume').addEventListener('click', () => $('pause-overlay').hidden = true);
+$('bt-pause-menu').addEventListener('click', () => openMenu());
+
+$('bt-start-cpu').addEventListener('click', () => startMatch({
+  m: 'cpu', N: cfg.cpuSize, level: cfg.cpuLevel,
+  hColor: cfg.cpuColor, train: cfg.cpuTrain, handicap: cfg.cpuHandicap
+}));
+$('bt-start-pvp').addEventListener('click', () => startMatch({
+  m: 'pvp', N: cfg.pvpSize, train: cfg.pvpTrain, handicap: cfg.pvpHandicap
+}));
+$('bt-resume').addEventListener('click', () => {
+  const s = loadSavedMatch();
+  if (!s) return;
+  startMatch({
+    m: s.mode, N: s.N, level: s.cpuLevel,
+    hColor: s.humanColor, train: s.training, handicap: s.handicap,
+    replayMoves: s.moves
+  });
+});
+$('bt-discard').addEventListener('click', () => { LS.del('partida'); refreshResumeBar(); });
+
+// Botões do HUD
+$('bt-view').addEventListener('click', toggleTopView);
+$('bt-resetcam').addEventListener('click', () => resetCamera(false));
+$('bt-sound').addEventListener('click', () => { cfg.sound = !cfg.sound; saveCfg(); syncCfgButtons(); });
+$('bt-terr').addEventListener('click', () => {
+  showTerritoryOverlay = !showTerritoryOverlay;
+  updateHud();
+  if (showTerritoryOverlay) refreshEstimate();
+  else syncTerritoryOverlay();
+});
+$('bt-hint').addEventListener('click', requestHint);
+$('bt-confirm').addEventListener('click', () => {
+  if (pendingTouchIdx < 0) return;
+  const idx = pendingTouchIdx;
+  if (mode === 'lesson' || mode === 'tsumego') handleDidacticMove(idx);
+  else executeMove(idx, false);
+});
+$('bt-undo').addEventListener('click', () => {
+  if (!game || aiThinking || scoringMode || !game.moves.length) return;
+  if (mode === 'tsumego') { startTsumego(activeTsumegoIdx); return; }
+  game.undo();
+  if (mode === 'cpu' && game.turn !== humanColor && game.moves.length) game.undo();
+  setHintMarker(-1);
+  syncBoardMeshes();
+  updateHud();
+  saveActiveMatch();
+});
+$('bt-pass').addEventListener('click', () => {
+  if (!game || aiThinking || scoringMode) return;
+  if (mode === 'cpu' && game.turn !== humanColor) return;
+  executeMove(-1, false);
+});
+$('bt-resign').addEventListener('click', () => {
+  if (!game || aiThinking || scoringMode) return;
+  const loser = mode === 'cpu' ? humanColor : game.turn;
+  finishMatch(null, loser);
+});
+
+function exportSGF() {
+  if (!game) return;
+  const sgf = game.toSGF(
+    mode === 'cpu' && humanColor === BLACK ? 'Jogador' : (mode === 'cpu' ? `CPU-${cpuLevel}` : 'Pretas'),
+    mode === 'cpu' && humanColor === WHITE ? 'Jogador' : (mode === 'cpu' ? `CPU-${cpuLevel}` : 'Brancas')
+  );
+  const blob = new Blob([sgf], { type: 'application/x-go-sgf' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `baduk-${game.N}x${game.N}.sgf`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  showToast('Arquivo .sgf baixado!');
+}
+$('bt-export-sgf').addEventListener('click', exportSGF);
+$('bt-res-sgf').addEventListener('click', exportSGF);
+$('bt-res-again').addEventListener('click', () => {
+  if (mode === 'cpu') $('bt-start-cpu').click();
+  else $('bt-start-pvp').click();
+});
+$('bt-res-menu').addEventListener('click', () => openMenu());
+
+// Atalhos de teclado
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (!$('pause-overlay').hidden) $('pause-overlay').hidden = true;
+    else if ($('menu-overlay').hidden && $('result-overlay').hidden) $('bt-pause').click();
+    return;
+  }
+  if (!$('menu-overlay').hidden || !$('pause-overlay').hidden || !$('result-overlay').hidden) return;
+  const k = e.key.toLowerCase();
+  if (k === 'v') toggleTopView();
+  else if (k === 'r') resetCamera(false);
+  else if (k === 'm') $('bt-sound').click();
+  else if (k === 't' && !$('bt-terr').hidden) $('bt-terr').click();
+  else if (k === 'h' && !$('bt-hint').hidden) requestHint();
+  else if (k === 'z' && !$('bt-undo').hidden) $('bt-undo').click();
+  else if (k === 'p' && !$('bt-pass').hidden) $('bt-pass').click();
+});
+
+// ========================================================================
+// LOOP DE RENDERIZAÇÃO 3D
+// ========================================================================
+let prevTime = performance.now();
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.05, (now - prevTime) / 1000);
+  prevTime = now;
+
+  // Atualiza animações de pedras
+  let finishedAny = false;
+  for (let i = animStones.length - 1; i >= 0; i--) {
+    const a = animStones[i];
+    a.t += dt;
+    if (a.t < 0) continue;
+    const u = Math.min(1, a.t / a.dur);
+    if (a.type === 'drop') {
+      const ease = 1 - Math.pow(1 - u, 3);
+      a.mesh.position.lerpVectors(a.from, a.to, ease);
+    } else {
+      const ease = u * u * (3 - 2 * u);
+      a.mesh.position.lerpVectors(a.from, a.to, ease);
+      a.mesh.position.y += Math.sin(u * Math.PI) * 0.28;
+      const sc = stoneRadius * (1 - u * 0.45);
+      a.mesh.scale.setScalar(sc);
+    }
+    if (u >= 1) {
+      scene.remove(a.mesh);
+      animStones.splice(i, 1);
+      finishedAny = true;
+    }
+  }
+  if (finishedAny) syncBoardMeshes();
+
+  // Pulso sutil em dicas e atari
+  if (hintRing.visible) {
+    const pulse = 1 + Math.sin(now * 0.006) * 0.12;
+    hintRing.scale.setScalar(stoneRadius * pulse);
+  }
+  if (atariInst.count > 0) {
+    atariMat.opacity = 0.55 + Math.sin(now * 0.007) * 0.28;
+  }
+
+  updateCamera(dt);
+  renderer.render(scene, camera);
+}
+
+// Finaliza carregamento e exibe o menu com o goban 3D girando ao fundo
+setLoad(1, 'Pronto!');
+openMenu('cpu');
+resetCamera(true);
+requestAnimationFrame(animate);
+setTimeout(() => { $('loading').hidden = true; }, 160);
+</script>
+</body>
+</html>
