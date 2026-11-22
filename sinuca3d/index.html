@@ -1026,28 +1026,28 @@
   }
   function castCue(T,balls,cx,cy,dx,dy){
     const R=T.R;let best={t:1e9,ball:null};for(const o of balls){
-      if(!o.on||o.id===0)continue;const ox=o.x-cx,oy=o.y-cy,p=ox*dx+oy*dy;if(p<=0)continue;const q=ox*ox+oy*oy-p*p,r2=4*R*R;if(q>=r2)continue;const t=p-Math.sqrt(r2-q);if(t<best.t)best={t,ball:o}
+      if(!o.on||o.id===0)continue;const ox=o.x-cx,oy=o.y-cy,p=ox*dx+oy*dy;if(p<=0)continue;const q=ox*ox+oy*oy-p*p,r2=4*R*R;if(q>=r2)continue;const t=Math.max(0,p-Math.sqrt(r2-q));if(t<best.t)best={t,ball:o}
     }
     const bx=T.hx-R,by=T.hy-R;let tw=1e9,wn=null;if(dx>1e-9){
-      const t=(bx-cx)/dx;if(t<tw){
+      const t=Math.max(0,(bx-cx)/dx);if(t<tw){
         tw=t;wn=[-1,0]
       }
       
     }
     if(dx<-1e-9){
-      const t=(-bx-cx)/dx;if(t<tw){
+      const t=Math.max(0,(-bx-cx)/dx);if(t<tw){
         tw=t;wn=[1,0]
       }
       
     }
     if(dy>1e-9){
-      const t=(by-cy)/dy;if(t<tw){
+      const t=Math.max(0,(by-cy)/dy);if(t<tw){
         tw=t;wn=[0,-1]
       }
       
     }
     if(dy<-1e-9){
-      const t=(-by-cy)/dy;if(t<tw){
+      const t=Math.max(0,(-by-cy)/dy);if(t<tw){
         tw=t;wn=[0,1]
       }
       
@@ -1751,7 +1751,7 @@
   }
   const guide=new THREE.Group();scene.add(guide);const gMat=new THREE.LineDashedMaterial({
     color:'#ffffff',dashSize:.02,gapSize:.014,transparent:!0,opacity:.75,depthTest:!0
-  });const gMat2=new THREE.LineBasicMaterial({color:'#ffffff',transparent:!0,opacity:.85});const gMat3=new THREE.LineBasicMaterial({color:'#9fe7ff',transparent:!0,opacity:.6});const gLine1=new THREE.Line(new THREE.BufferGeometry(),gMat),gLine2=new THREE.Line(new THREE.BufferGeometry(),gMat2),gLine3=new THREE.Line(new THREE.BufferGeometry(),gMat3);const ring=new THREE.LineLoop(new THREE.BufferGeometry(),gMat2);guide.add(gLine1,gLine2,gLine3,ring);const badMark=new THREE.Mesh(new THREE.RingGeometry(.012,.02,24),new THREE.MeshBasicMaterial({
+  });const gMat2=new THREE.LineBasicMaterial({color:'#ffffff',transparent:!0,opacity:.85});const gMat3=new THREE.LineBasicMaterial({color:'#9fe7ff',transparent:!0,opacity:.6});const gLine1=new THREE.Line(new THREE.BufferGeometry(),gMat),gLine2=new THREE.Line(new THREE.BufferGeometry(),gMat2),gLine3=new THREE.Line(new THREE.BufferGeometry(),gMat3);const ring=new THREE.LineLoop(new THREE.BufferGeometry(),gMat2);for(const o of[gLine1,gLine2,gLine3,ring])o.frustumCulled=!1;guide.add(gLine1,gLine2,gLine3,ring);const badMark=new THREE.Mesh(new THREE.RingGeometry(.012,.02,24),new THREE.MeshBasicMaterial({
     color:'#ff5a4a',transparent:!0,opacity:.9,depthTest:!1
   }));badMark.rotation.x=-Math.PI/2;guide.add(badMark);function setLine(l,pts){
     l.geometry.setFromPoints(pts);if(l.computeLineDistances)l.computeLineDistances()
