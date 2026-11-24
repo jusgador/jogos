@@ -533,6 +533,10 @@
 
       <div>
         <div class="row-inline">
+          <div><strong>Piso do salão</strong><small>Alterna entre tatame tradicional, madeira escura e ardósia zen</small></div>
+          <button class="bt sm" id="cfg-floor">Tatame</button>
+        </div>
+        <div class="row-inline">
           <div><strong>Coordenadas na borda</strong><small>Mostra letras (A–T) e números (1–19) no goban</small></div>
           <button class="bt sm" id="cfg-coords">Ligado</button>
         </div>
@@ -2045,6 +2049,7 @@ const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in wi
 const LOW_END = IS_TOUCH || (navigator.hardwareConcurrency || 8) <= 4;
 
 const cfg = Object.assign({
+  floorStyle: 'tatami', // 'tatami' | 'wood' | 'slate'
   coords: true,
   confirmMode: 'auto', // 'auto' | 'on' | 'off'
   atari: true,
@@ -2203,10 +2208,10 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#140f0b');
-scene.fog = new THREE.Fog('#140f0b', 5.2, 14.5);
+scene.background = new THREE.Color('#17110c');
+scene.fog = new THREE.Fog('#17110c', 6.8, 17.5);
 
-const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 30);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 36);
 
 function makeCanvasTex(w, h, draw, srgb = true) {
   const c = document.createElement('canvas');
@@ -2218,87 +2223,122 @@ function makeCanvasTex(w, h, draw, srgb = true) {
   return t;
 }
 
+// Ruído 2D determinístico suave (value noise + fbm) e conversor para Normal Map
+function makeNoise2(seed) {
+  const p = new Float32Array(512);
+  let s = seed | 0 || 1;
+  for (let i = 0; i < 512; i++) {
+    s = (s * 16807) % 2147483647;
+    p[i] = s / 2147483647;
+  }
+  const h = (a, b) => p[(((a * 57 + b * 131) & 511) + 512) & 511];
+  return (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = h(xi, yi) + (h(xi + 1, yi) - h(xi, yi)) * u;
+    const b = h(xi, yi + 1) + (h(xi + 1, yi + 1) - h(xi, yi + 1)) * u;
+    return a + (b - a) * v;
+  };
+}
+
+function fbm2(n, x, y, oct = 3) {
+  let sum = 0, amp = 0.5, freq = 1, norm = 0;
+  for (let i = 0; i < oct; i++) {
+    sum += n(x * freq, y * freq) * amp;
+    norm += amp;
+    amp *= 0.5;
+    freq *= 2.03;
+  }
+  return sum / norm;
+}
+
+function heightToNormalTex(heights, w, h, strength = 2.0, wrap = true) {
+  return makeCanvasTex(w, h, (g) => {
+    const img = g.createImageData(w, h);
+    const d = img.data;
+    const idx = (x, y) => {
+      const xx = wrap ? ((x % w) + w) % w : Math.max(0, Math.min(w - 1, x));
+      const yy = wrap ? ((y % h) + h) % h : Math.max(0, Math.min(h - 1, y));
+      return yy * w + xx;
+    };
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = (heights[idx(x + 1, y)] - heights[idx(x - 1, y)]) * strength;
+        const dy = (heights[idx(x, y + 1)] - heights[idx(x, y - 1)]) * strength;
+        const inv = 1 / Math.hypot(-dx, -dy, 1);
+        const o = (y * w + x) * 4;
+        d[o]     = (-dx * inv * 0.5 + 0.5) * 255;
+        d[o + 1] = (-dy * inv * 0.5 + 0.5) * 255;
+        d[o + 2] = (inv * 0.5 + 0.5) * 255;
+        d[o + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }, false);
+}
+
 // Ambiente PMREM procedural (salão japonês com shoji quente e luminária)
 {
   const es = new THREE.Scene();
-  es.background = new THREE.Color('#19120c');
+  es.background = new THREE.Color('#1c140e');
   const room = new THREE.Mesh(
     new THREE.BoxGeometry(12, 6, 12),
-    new THREE.MeshBasicMaterial({ color: '#241a12', side: THREE.BackSide })
+    new THREE.MeshBasicMaterial({ color: '#2b1f15', side: THREE.BackSide })
   );
   es.add(room);
-  // Painéis shoji (luz difusa quente)
-  const shojiMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.45, 1.25, 0.96) });
-  for (const [x, y, z, ry] of [[-5.8, 1.5, 0, Math.PI / 2], [5.8, 1.5, 0, -Math.PI / 2], [0, 1.6, -5.8, 0]]) {
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 2.6), shojiMat);
+  // Painéis shoji (luz difusa quente ao redor)
+  const shojiEnvMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.55, 1.32, 1.0) });
+  for (const [x, y, z, ry] of [
+    [-5.8, 1.4, 0, Math.PI / 2],
+    [5.8, 1.4, 0, -Math.PI / 2],
+    [0, 1.5, -5.8, 0],
+    [0, 1.4, 5.8, Math.PI]
+  ]) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 2.7), shojiEnvMat);
     p.position.set(x, y, z); p.rotation.y = ry; es.add(p);
   }
-  // Luminária de teto quente (gera reflexo natural no topo das pedras!)
+  // Luminária de teto quente (gera reflexo natural no topo das pedras e nos chanfros!)
   const lamp = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.6, 2.6),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(4.5, 4.0, 3.2), side: THREE.DoubleSide })
+    new THREE.PlaneGeometry(2.8, 2.8),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(4.4, 3.9, 3.1), side: THREE.DoubleSide })
   );
-  lamp.position.set(0.3, 2.9, 0.2);
+  lamp.position.set(0.25, 2.9, 0.2);
   lamp.rotation.x = Math.PI / 2;
   es.add(lamp);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(es, 0.025).texture;
+  scene.environmentIntensity = 0.92;
   pmrem.dispose();
 }
 
-// Iluminação quente do salão
-scene.add(new THREE.HemisphereLight('#fff2dc', '#2a1c12', 0.45));
-const keyLight = new THREE.DirectionalLight('#fff4e3', 1.65);
-keyLight.position.set(1.25, 3.6, 1.45);
+// Iluminação quente e equilibrada do salão (principal + rebote lateral + contra-luz)
+scene.add(new THREE.HemisphereLight('#fff2dc', '#3a2819', 0.56));
+const keyLight = new THREE.DirectionalLight('#fff4e2', 1.52);
+keyLight.position.set(1.35, 3.7, 1.55);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(LOW_END ? 1024 : 2048, LOW_END ? 1024 : 2048);
-keyLight.shadow.bias = -0.0003;
-keyLight.shadow.normalBias = 0.004;
-keyLight.shadow.radius = 2.6;
-Object.assign(keyLight.shadow.camera, { left: -2.2, right: 2.2, top: 2.2, bottom: -2.2, near: 0.5, far: 8 });
+keyLight.shadow.bias = -0.00025;
+keyLight.shadow.normalBias = 0.003;
+keyLight.shadow.radius = 2.8;
+Object.assign(keyLight.shadow.camera, { left: -2.8, right: 2.8, top: 2.8, bottom: -2.8, near: 0.5, far: 9 });
 scene.add(keyLight);
 
-const rimLight = new THREE.DirectionalLight('#ffd59e', 0.42);
-rimLight.position.set(-1.8, 1.8, -1.6);
+// Luz de rebote suave do lado oposto (revela veios da lateral sombreada e facetas dos pés)
+const fillLight = new THREE.DirectionalLight('#f4d2a4', 0.44);
+fillLight.position.set(-2.6, 1.15, 1.25);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight('#ffd7a2', 0.42);
+rimLight.position.set(-1.6, 1.85, -2.0);
 scene.add(rimLight);
 
-// Chão de tatame procedural
-const tatamiTex = makeCanvasTex(512, 512, (g, w, h) => {
-  g.fillStyle = '#6c6844';
-  g.fillRect(0, 0, w, h);
-  // Trama de junco
-  for (let y = 0; y < h; y += 2) {
-    const shade = (y % 4 === 0 ? 10 : -8) + (Math.sin(y * 0.35) * 4);
-    g.fillStyle = `rgb(${112 + shade}, ${108 + shade}, ${70 + shade * 0.7})`;
-    g.fillRect(0, y, w, 1.5);
-  }
-  for (let x = 0; x < w; x += 6) {
-    g.fillStyle = 'rgba(30,24,12,0.06)';
-    g.fillRect(x, 0, 1, h);
-  }
-  // Bordas escuras (heri)
-  g.fillStyle = '#241d16';
-  g.fillRect(0, 0, w, 16);
-  g.fillRect(0, h - 16, w, 16);
-  g.fillStyle = 'rgba(205, 168, 96, 0.22)';
-  g.fillRect(0, 14, w, 2);
-  g.fillRect(0, h - 16, w, 2);
-});
-tatamiTex.wrapS = tatamiTex.wrapT = THREE.RepeatWrapping;
-tatamiTex.repeat.set(6, 6);
-
+// ========================================================================
+// SALÃO TRADICIONAL (WASHITSU): TATAME MODULAR 2:1, ENGAWA, ZABUTON, SHOJI
+// + ESTILOS ALTERNATIVOS DE PISO (MADEIRA ESCURA / ARDÓSIA ZEN)
+// ========================================================================
 const FLOOR_Y = -0.52;
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(18, 18),
-  new THREE.MeshStandardMaterial({ map: tatamiTex, roughness: 0.88, metalness: 0.02 })
-);
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = FLOOR_Y;
-floor.receiveShadow = true;
-scene.add(floor);
-
-// Dimensões do Goban (proporção tradicional ~1 : 1.07)
 const BOARD_W = 1.62;
 const BOARD_D = 1.73;
 const BOARD_H = 0.25;
@@ -2306,61 +2346,665 @@ const BOARD_TOP_Y = 0.0;
 const MARGIN_X = 0.115;
 const MARGIN_Z = 0.122;
 
-// Madeira Kaya procedural para laterais
-const kayaSideTex = makeCanvasTex(512, 256, (g, w, h) => {
-  const grad = g.createLinearGradient(0, 0, w, 0);
-  grad.addColorStop(0, '#c68d43');
-  grad.addColorStop(0.5, '#d69d52');
-  grad.addColorStop(1, '#bd833a');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, w, h);
-  for (let i = 0; i < 180; i++) {
-    const x = (i / 180) * w + Math.sin(i * 1.7) * 2;
-    g.strokeStyle = i % 3 === 0 ? 'rgba(110, 62, 18, 0.14)' : 'rgba(255, 224, 160, 0.08)';
-    g.lineWidth = 1 + (i % 4) * 0.4;
-    g.beginPath();
-    g.moveTo(x, 0);
-    g.bezierCurveTo(x + 3, h * 0.35, x - 3, h * 0.7, x + 1, h);
-    g.stroke();
-  }
-});
+const floorGroup = new THREE.Group();
+scene.add(floorGroup);
 
-// Bump map suave da madeira
-const kayaBumpTex = makeCanvasTex(512, 512, (g, w, h) => {
-  g.fillStyle = '#808080';
-  g.fillRect(0, 0, w, h);
-  for (let x = 0; x < w; x += 2) {
-    const v = 128 + Math.sin(x * 0.22) * 14 + (Math.random() - 0.5) * 12;
-    g.fillStyle = `rgb(${v},${v},${v})`;
-    g.fillRect(x, 0, 2, h);
+// 1. Texturas procedurais do Tatame (junco igusa orgânico sem moiré + heri de tecido escuro)
+const tatamiAssets = (() => {
+  const w = 512, h = 1024;
+  const n1 = makeNoise2(41), n2 = makeNoise2(97);
+  const heights = new Float32Array(w * h);
+  const heriPx = 16; // faixa heri elegante nas 2 bordas longas (esquerda/direita na textura vertical)
+
+  const colorTex = makeCanvasTex(w, h, (g) => {
+    const img = g.createImageData(w, h);
+    const d = img.data;
+    for (let y = 0; y < h; y++) {
+      // Variação natural de cada fibra de junco ao longo da largura
+      const stalkShift = (n1(y * 0.21, 3.7) - 0.5) * 14 + (n2(y * 0.62, 1.1) - 0.5) * 6;
+      const weaveRow = Math.sin(y * Math.PI * 0.65);
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const o = i * 4;
+        const inHeri = x < heriPx || x >= w - heriPx;
+        const edgeDist = Math.min(x, w - 1 - x);
+        if (inHeri) {
+          // Heri de tecido escuro fosco (verde-carvão/índigo profundo com micro-trama brocada)
+          const dia = ((x + y) % 10 < 5) ^ ((x - y + 2048) % 10 < 5) ? 1 : 0;
+          const tex = (n2(x * 0.5, y * 0.5) - 0.5) * 8 + dia * 4.5;
+          const seamShade = Math.abs(edgeDist - (heriPx - 1)) <= 1 ? -10 : 0;
+          d[o]     = Math.max(12, Math.min(255, 31 + tex + seamShade));
+          d[o + 1] = Math.max(12, Math.min(255, 34 + tex + seamShade));
+          d[o + 2] = Math.max(12, Math.min(255, 30 + tex + seamShade));
+          d[o + 3] = 255;
+          heights[i] = 0.56 + dia * 0.03;
+        } else {
+          // Trama de junco igusa maduro (mais sóbrio e quente, sem listras artificiais)
+          const macro = (fbm2(n1, x / 180, y / 220, 3) - 0.5) * 15;
+          const rib = Math.sin((x + (y & 2)) * 0.42) * 0.5 + 0.5;
+          const weave = (weaveRow * 0.35 + (rib - 0.5) * 0.65) * 7.5;
+          const grain = (n2(x * 0.25, y * 0.08) - 0.5) * 9;
+          // Sombra suave de costura junto ao heri e nas pontas curtas
+          const nearHeri = Math.min(x - heriPx, w - 1 - heriPx - x);
+          const heriAO = nearHeri < 12 ? (1 - nearHeri / 12) * -15 : 0;
+          const endDist = Math.min(y, h - 1 - y);
+          const endAO = endDist < 10 ? (1 - endDist / 10) * -12 : 0;
+
+          const v = stalkShift * 0.55 + macro + weave + grain + heriAO + endAO;
+          d[o]     = Math.max(20, Math.min(255, 97 + v * 0.92));
+          d[o + 1] = Math.max(20, Math.min(255, 94 + v * 0.88));
+          d[o + 2] = Math.max(20, Math.min(255, 67 + v * 0.66));
+          d[o + 3] = 255;
+          heights[i] = 0.5 + (weaveRow * 0.08 + (rib - 0.5) * 0.14) * 0.6 + (macro * 0.002);
+        }
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }, true);
+
+  const normalTex = heightToNormalTex(heights, w, h, 1.35, false);
+  return { colorTex, normalTex };
+})();
+
+// 2. Textura de tábuas de cedro/nogueira escura (para Engawa e opção "Madeira Escura")
+const darkPlankAssets = (() => {
+  const w = 512, h = 512;
+  const n1 = makeNoise2(13), n2 = makeNoise2(59);
+  const heights = new Float32Array(w * h);
+  const plankW = 64;
+
+  const colorTex = makeCanvasTex(w, h, (g) => {
+    const img = g.createImageData(w, h);
+    const d = img.data;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const pl = Math.floor(x / plankW);
+        const px = x % plankW;
+        const offset = ((pl * 173) % h);
+        const py = (y + offset) % h;
+        const seam = (px <= 1 || px >= plankW - 1 || py <= 1) ? 1 : 0;
+        const warp = fbm2(n1, (x + pl * 31) / 36, (y + pl * 77) / 140, 3) * 8;
+        const ring = Math.sin((px * 0.42 + warp) * 0.85) * 0.5 + 0.5;
+        const plankTone = 0.88 + n2(pl * 3.7, 1.3) * 0.24;
+        const streak = (n2(x * 0.22, y * 0.04) - 0.5) * 0.12;
+        const k = (0.76 + ring * 0.18 + streak) * plankTone * (seam ? 0.42 : 1.0);
+        const i = y * w + x, o = i * 4;
+        d[o]     = Math.max(8, Math.min(255, 68 * k));
+        d[o + 1] = Math.max(6, Math.min(255, 45 * k));
+        d[o + 2] = Math.max(5, Math.min(255, 29 * k));
+        d[o + 3] = 255;
+        heights[i] = seam ? 0.12 : (0.52 + ring * 0.08 + streak * 0.25);
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }, true);
+  colorTex.wrapS = colorTex.wrapT = THREE.RepeatWrapping;
+
+  const normalTex = heightToNormalTex(heights, w, h, 1.8, true);
+  normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
+  return { colorTex, normalTex };
+})();
+
+// 3. Textura de lajes de Ardósia Zen (opção "Ardósia Zen")
+const slateFloorAssets = (() => {
+  const w = 512, h = 512;
+  const n1 = makeNoise2(83), n2 = makeNoise2(149);
+  const heights = new Float32Array(w * h);
+  const tile = 256;
+
+  const colorTex = makeCanvasTex(w, h, (g) => {
+    const img = g.createImageData(w, h);
+    const d = img.data;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const tx = Math.floor(x / tile), ty = Math.floor(y / tile);
+        const lx = x % tile, ly = y % tile;
+        const grout = (lx < 3 || ly < 3) ? 1 : 0;
+        const tileTint = (n2(tx * 5.1 + 1, ty * 7.3 + 2) - 0.5) * 7;
+        const mineral = (fbm2(n1, x / 54, y / 54, 4) - 0.5) * 20;
+        const fine = (n2(x * 0.35, y * 0.35) - 0.5) * 7;
+        const base = grout ? 24 : (46 + tileTint + mineral + fine);
+        const i = y * w + x, o = i * 4;
+        d[o]     = Math.max(12, Math.min(255, base * 0.96));
+        d[o + 1] = Math.max(12, Math.min(255, base * 1.00));
+        d[o + 2] = Math.max(14, Math.min(255, base * 1.06));
+        d[o + 3] = 255;
+        heights[i] = grout ? 0.15 : (0.55 + mineral * 0.012 + fine * 0.008);
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }, true);
+  colorTex.wrapS = colorTex.wrapT = THREE.RepeatWrapping;
+  colorTex.repeat.set(9, 9);
+
+  const normalTex = heightToNormalTex(heights, w, h, 1.7, true);
+  normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
+  normalTex.repeat.set(9, 9);
+  return { colorTex, normalTex };
+})();
+
+// Grupo do Tatame modular Rokujō (6 esteiras 2:1 em disposição auspiciosa fushikime)
+// A esteira central (4.4 × 2.2) acolhe integralmente o goban e as duas tigelas!
+const tatamiGroup = new THREE.Group();
+floorGroup.add(tatamiGroup);
+{
+  const U = 2.2;
+  const matH = 0.032;
+  const gap = 0.007;
+  // Base escura sob as juntas para profundidade real entre esteiras
+  const subFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(4 * U + 0.1, 3 * U + 0.1),
+    new THREE.MeshStandardMaterial({ color: '#14100b', roughness: 0.96 })
+  );
+  subFloor.rotation.x = -Math.PI / 2;
+  subFloor.position.y = FLOOR_Y - 0.012;
+  tatamiGroup.add(subFloor);
+
+  // [cx, cz, isVertical, tintHex]
+  const matsSpec = [
+    [0,       0,       false, '#f6f3e8'], // 1. Centro (sob goban e tigelas)
+    [0,      -U,       false, '#ece8dc'], // 2. Norte-centro
+    [-1.5*U, -0.5*U,   true,  '#f2efe3'], // 3. Oeste (trama rotacionada 90°)
+    [ 1.5*U, -0.5*U,   true,  '#ebe7da'], // 4. Leste (trama rotacionada 90°)
+    [-U,      U,       false, '#ede9dd'], // 5. Sudoeste
+    [ U,      U,       false, '#f4f0e4']  // 6. Sudeste
+  ];
+  const matEdgeMat = new THREE.MeshStandardMaterial({ color: '#21221e', roughness: 0.92 });
+
+  for (const [cx, cz, isVert, tint] of matsSpec) {
+    // Na textura tatamiAssets, o eixo longo (1024) é Y/Z (com heri nos lados X).
+    // Portanto, sem rotação a esteira é vertical (U × 2U); rotacionada 90° em Y fica horizontal (2U × U)!
+    const geo = new THREE.BoxGeometry(U - gap, matH, 2 * U - gap);
+    const topMatTat = new THREE.MeshStandardMaterial({
+      color: tint,
+      map: tatamiAssets.colorTex,
+      normalMap: tatamiAssets.normalTex,
+      normalScale: new THREE.Vector2(0.45, 0.45),
+      roughness: 0.89,
+      metalness: 0.01
+    });
+    const m = new THREE.Mesh(geo, [matEdgeMat, matEdgeMat, topMatTat, matEdgeMat, matEdgeMat, matEdgeMat]);
+    m.position.set(cx, FLOOR_Y - matH / 2, cz);
+    if (!isVert) m.rotation.y = Math.PI / 2;
+    m.receiveShadow = true;
+    tatamiGroup.add(m);
   }
-}, false);
+
+  // Moldura de madeira (engawa / corredor de cedro) ao redor do tatame 8.8 × 6.6
+  const engColor = darkPlankAssets.colorTex.clone();
+  engColor.needsUpdate = true;
+  engColor.repeat.set(9, 9);
+  const engNorm = darkPlankAssets.normalTex.clone();
+  engNorm.needsUpdate = true;
+  engNorm.repeat.set(9, 9);
+  const engMat = new THREE.MeshStandardMaterial({
+    map: engColor,
+    normalMap: engNorm,
+    normalScale: new THREE.Vector2(0.55, 0.55),
+    roughness: 0.62,
+    metalness: 0.04
+  });
+  const outerR = 14;
+  const engawa = new THREE.Mesh(new THREE.PlaneGeometry(outerR * 2, outerR * 2), engMat);
+  engawa.rotation.x = -Math.PI / 2;
+  engawa.position.y = FLOOR_Y - 0.022;
+  engawa.receiveShadow = true;
+  tatamiGroup.add(engawa);
+
+  // Rodapé de moldura (shikii) de cedro contornando as 6 esteiras
+  const trimMat = new THREE.MeshStandardMaterial({ color: '#3b2616', roughness: 0.58, metalness: 0.03 });
+  const rw = 4 * U, rd = 3 * U, tw = 0.09, th = 0.028;
+  for (const [x, z, bw, bd] of [
+    [0, -rd / 2 - tw / 2, rw + tw * 2, tw],
+    [0,  rd / 2 + tw / 2, rw + tw * 2, tw],
+    [-rw / 2 - tw / 2, 0, tw, rd],
+    [ rw / 2 + tw / 2, 0, tw, rd]
+  ]) {
+    const tMesh = new THREE.Mesh(new THREE.BoxGeometry(bw, th, bd), trimMat);
+    tMesh.position.set(x, FLOOR_Y - th / 2 + 0.002, z);
+    tMesh.receiveShadow = true;
+    tatamiGroup.add(tMesh);
+  }
+}
+
+// Piso alternativo 1: Salão de Madeira Escura (tábua corrida de cedro/nogueira)
+const woodFloorMesh = (() => {
+  const cTex = darkPlankAssets.colorTex.clone();
+  cTex.needsUpdate = true;
+  cTex.repeat.set(10, 10);
+  const nTex = darkPlankAssets.normalTex.clone();
+  nTex.needsUpdate = true;
+  nTex.repeat.set(10, 10);
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(26, 26),
+    new THREE.MeshPhysicalMaterial({
+      map: cTex,
+      normalMap: nTex,
+      normalScale: new THREE.Vector2(0.6, 0.6),
+      roughness: 0.56,
+      metalness: 0.03,
+      clearcoat: 0.16,
+      clearcoatRoughness: 0.45
+    })
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = FLOOR_Y;
+  m.receiveShadow = true;
+  m.visible = false;
+  floorGroup.add(m);
+  return m;
+})();
+
+// Piso alternativo 2: Pedra Zen / Ardósia Escura
+const slateFloorMesh = (() => {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(26, 26),
+    new THREE.MeshStandardMaterial({
+      map: slateFloorAssets.colorTex,
+      normalMap: slateFloorAssets.normalTex,
+      normalScale: new THREE.Vector2(0.65, 0.65),
+      roughness: 0.78,
+      metalness: 0.06
+    })
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = FLOOR_Y;
+  m.receiveShadow = true;
+  m.visible = false;
+  floorGroup.add(m);
+  return m;
+})();
+
+// Dois Zabuton (almofadas tradicionais dos jogadores — dão escala e aconchego ao salão)
+const zabutonGroup = new THREE.Group();
+floorGroup.add(zabutonGroup);
+{
+  const zabTex = makeCanvasTex(256, 256, (g, w, h) => {
+    const n = makeNoise2(111);
+    const img = g.createImageData(w, h);
+    const d = img.data;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        // Tecido linho escuro quente (carvão-ameixa japonês) com trama cruzada sutil e vinheta
+        const weave = ((x & 1) ? 3.5 : -3.5) + ((y & 1) ? 2.5 : -2.5);
+        const cloth = (fbm2(n, x / 24, y / 24, 3) - 0.5) * 12;
+        const dx = (x / w - 0.5) * 2, dy = (y / h - 0.5) * 2;
+        const tuft = Math.exp(-(dx * dx + dy * dy) * 20) * -12;
+        const rim = Math.max(0, Math.hypot(dx, dy) - 0.82) * -16;
+        const k = weave * 0.45 + cloth + tuft + rim;
+        const o = (y * w + x) * 4;
+        d[o]     = Math.max(12, Math.min(255, 52 + k * 0.72));
+        d[o + 1] = Math.max(12, Math.min(255, 42 + k * 0.68));
+        d[o + 2] = Math.max(12, Math.min(255, 38 + k * 0.65));
+        d[o + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }, true);
+
+  // Geometria almofadada suave (caixa subdividida com topo abaulado e centro levemente afundado)
+  const zw = 0.88, zh = 0.068, zd = 0.82;
+  const zGeo = new THREE.BoxGeometry(zw, zh, zd, 16, 4, 16);
+  const pos = zGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const nx = x / (zw * 0.5), nz = z / (zd * 0.5);
+    const rEdge = Math.max(Math.abs(nx), Math.abs(nz));
+    const puff = Math.max(0, 1 - rEdge * rEdge * 0.78);
+    const dimple = Math.exp(-(nx * nx + nz * nz) * 12) * 0.22;
+    const ny = y > 0
+      ? (zh * 0.5) * (0.22 + 0.78 * Math.sqrt(puff) - dimple)
+      : Math.max(-zh * 0.5, y * (0.50 + 0.50 * Math.sqrt(puff)));
+    // Arredonda suavemente os 4 cantos no plano XZ
+    const corner = Math.hypot(Math.max(0, Math.abs(nx) - 0.72), Math.max(0, Math.abs(nz) - 0.72));
+    const shrink = corner > 0 ? Math.max(0.84, 1 - corner * 0.34) : 1;
+    pos.setXYZ(i, x * shrink, ny, z * shrink);
+  }
+  zGeo.computeVertexNormals();
+
+  const zabMat = new THREE.MeshPhysicalMaterial({
+    map: zabTex,
+    roughness: 0.94,
+    metalness: 0.0,
+    sheen: 0.38,
+    sheenRoughness: 0.8,
+    sheenColor: new THREE.Color('#7a6554')
+  });
+  const tuftMat = new THREE.MeshStandardMaterial({ color: '#241c18', roughness: 0.88 });
+
+  for (const sz of [-1, 1]) {
+    const zg = new THREE.Group();
+    const cushion = new THREE.Mesh(zGeo, zabMat);
+    cushion.position.y = zh * 0.46;
+    cushion.castShadow = true;
+    cushion.receiveShadow = true;
+    zg.add(cushion);
+
+    // Pequeno nó de costura central tradicional
+    const knot = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.010, 12), tuftMat);
+    knot.position.y = zh * 0.76;
+    zg.add(knot);
+
+    zg.position.set(0, FLOOR_Y, sz * 1.94);
+    zg.rotation.y = sz > 0 ? 0.018 : -0.022;
+    zabutonGroup.add(zg);
+  }
+}
+
+// Painéis Shoji distantes ao fundo (substituem o "vazio preto" por um salão acolhedor)
+const shojiGroup = new THREE.Group();
+floorGroup.add(shojiGroup);
+{
+  const shojiTex = makeCanvasTex(512, 512, (g, w, h) => {
+    const n = makeNoise2(211);
+    // Papel washi quente iluminado suavemente
+    const grad = g.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#4f402e');
+    grad.addColorStop(0.55, '#68543c');
+    grad.addColorStop(1, '#3d2f21');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 600; i++) {
+      const rx = n(i * 1.3, 0.5) * w, ry = n(0.5, i * 1.7) * h;
+      g.fillStyle = 'rgba(255, 232, 192, 0.025)';
+      g.fillRect(rx, ry, 28, 3);
+    }
+    // Grade de madeira kumiko
+    g.fillStyle = '#20150d';
+    const cols = 4, rows = 6;
+    for (let c = 0; c <= cols; c++) {
+      const x = Math.round((c / cols) * w);
+      g.fillRect(x - (c === 0 || c === cols ? 10 : 4), 0, (c === 0 || c === cols ? 20 : 8), h);
+    }
+    for (let r = 0; r <= rows; r++) {
+      const y = Math.round((r / rows) * h);
+      g.fillRect(0, y - (r === 0 || r === rows ? 12 : 4), w, (r === 0 || r === rows ? 24 : 8));
+    }
+    // Rodapé fechado de madeira (koshi-ita) na base do painel
+    g.fillStyle = '#24180f';
+    g.fillRect(0, h * 0.78, w, h * 0.22);
+    g.fillStyle = '#180f09';
+    g.fillRect(0, h * 0.78, w, 6);
+  }, true);
+  shojiTex.wrapS = THREE.RepeatWrapping;
+  shojiTex.repeat.set(3, 1);
+
+  const shojiMat = new THREE.MeshStandardMaterial({
+    map: shojiTex,
+    emissive: new THREE.Color('#5a4228'),
+    emissiveMap: shojiTex,
+    emissiveIntensity: 0.42,
+    roughness: 0.92
+  });
+  const wallH = 3.8;
+  const wallConfigs = [
+    { x: 0,     z: -5.4, w: 12.6, ry: 0 },
+    { x: 0,     z:  5.4, w: 12.6, ry: Math.PI },
+    { x: -6.2,  z:  0,   w: 11.2, ry: Math.PI / 2 },
+    { x:  6.2,  z:  0,   w: 11.2, ry: -Math.PI / 2 }
+  ];
+  const beamMat = new THREE.MeshStandardMaterial({ color: '#24170e', roughness: 0.75 });
+  for (const wc of wallConfigs) {
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(wc.w, wallH), shojiMat);
+    panel.position.set(wc.x, FLOOR_Y + wallH / 2 - 0.02, wc.z);
+    panel.rotation.y = wc.ry;
+    shojiGroup.add(panel);
+    // Viga inferior (shikii) e superior (kamoi)
+    const beamBot = new THREE.Mesh(new THREE.BoxGeometry(wc.w, 0.14, 0.12), beamMat);
+    beamBot.position.set(wc.x, FLOOR_Y + 0.05, wc.z);
+    beamBot.rotation.y = wc.ry;
+    shojiGroup.add(beamBot);
+  }
+}
+
+// Sombras de contato (AO) no piso sob goban, pés, tigelas, tampas e zabutons
+const floorAoRectTex = makeCanvasTex(256, 256, (g, w, h) => {
+  // Retângulo suave com cantos bem esfumaçados para sombra de oclusão sob o goban/zabuton
+  g.clearRect(0, 0, w, h);
+  const layers = [
+    { pad: 10, a: 0.06 }, { pad: 22, a: 0.09 }, { pad: 36, a: 0.13 },
+    { pad: 52, a: 0.16 }, { pad: 70, a: 0.14 }
+  ];
+  for (const L of layers) {
+    g.fillStyle = `rgba(12, 7, 3, ${L.a})`;
+    const r = 34;
+    const x = L.pad, y = L.pad, rw = w - L.pad * 2, rh = h - L.pad * 2;
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.lineTo(x + rw - r, y);
+    g.quadraticCurveTo(x + rw, y, x + rw, y + r);
+    g.lineTo(x + rw, y + rh - r);
+    g.quadraticCurveTo(x + rw, y + rh, x + rw - r, y + rh);
+    g.lineTo(x + r, y + rh);
+    g.quadraticCurveTo(x, y + rh, x, y + rh - r);
+    g.lineTo(x, y + r);
+    g.quadraticCurveTo(x, y, x + r, y);
+    g.closePath();
+    g.fill();
+  }
+}, true);
+
+const floorAoRoundTex = makeCanvasTex(128, 128, (g, w, h) => {
+  const gr = g.createRadialGradient(w / 2, h / 2, w * 0.08, w / 2, h / 2, w * 0.5);
+  gr.addColorStop(0, 'rgba(10, 6, 2, 0.62)');
+  gr.addColorStop(0.5, 'rgba(10, 6, 2, 0.28)');
+  gr.addColorStop(1, 'rgba(10, 6, 2, 0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, w, h);
+}, true);
+
+const floorAoGroup = new THREE.Group();
+scene.add(floorAoGroup);
+function addFloorAo(tex, x, z, sx, sz, opacity = 0.82, yOff = 0.0025) {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(sx, sz),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity, depthWrite: false })
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(x, FLOOR_Y + yOff, z);
+  floorAoGroup.add(m);
+  return m;
+}
+// Sombra suave geral do bloco do goban + 4 pés + 2 zabutons
+addFloorAo(floorAoRectTex, 0, 0, BOARD_W * 1.24, BOARD_D * 1.24, 0.72, 0.002);
+for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
+  addFloorAo(floorAoRoundTex, sx * BOARD_W * 0.36, sz * BOARD_D * 0.36, 0.34, 0.34, 0.78, 0.003);
+}
+const zabAoA = addFloorAo(floorAoRectTex, 0, -1.94, 1.06, 0.98, 0.56, 0.002);
+const zabAoB = addFloorAo(floorAoRectTex, 0,  1.94, 1.06, 0.98, 0.56, 0.002);
+
+function applyFloorStyle(style) {
+  const s = (style === 'wood' || style === 'slate') ? style : 'tatami';
+  tatamiGroup.visible = (s === 'tatami');
+  woodFloorMesh.visible = (s === 'wood');
+  slateFloorMesh.visible = (s === 'slate');
+  // Zabutons ficam lindos no tatame e na madeira; na ardósia zen deixamos minimalista limpo
+  const showZab = (s !== 'slate');
+  zabutonGroup.visible = showZab;
+  zabAoA.visible = showZab;
+  zabAoB.visible = showZab;
+  shojiGroup.visible = (s !== 'slate');
+  const bgHex = s === 'slate' ? '#111316' : (s === 'wood' ? '#140e0a' : '#17110c');
+  scene.background.set(bgHex);
+  scene.fog.color.set(bgHex);
+}
+applyFloorStyle(cfg.floorStyle);
+
+// ========================================================================
+// MADEIRA HON-KAYA PROCEDURAL ORGÂNICA (TOPO MASAME, LATERAIS KIOMOTE,
+// FRENTE/TRÁS KOGUCHI COM ANÉIS CONTÍNUOS + NORMAL/ROUGHNESS MAPS)
+// ========================================================================
+const woodNoiseA = makeNoise2(19);
+const woodNoiseB = makeNoise2(73);
+const woodNoiseC = makeNoise2(137);
+
+// Função de anel de crescimento compartilhada entre o topo (masame) e frente/trás (koguchi)
+function kayaRingProfile(u) {
+  // ~44 anéis finos e sedosos com espaçamento orgânico típico de Hyuga Hon-Kaya
+  const jitter = (woodNoiseA(u * 5.2, 0.7) - 0.5) * 1.8 + Math.sin(u * Math.PI * 2.4) * 0.55;
+  const p = u * 44.0 + jitter;
+  const frac = p - Math.floor(p);
+  // Variação de intensidade de cada anel (evita aspecto de listras uniformes)
+  const strength = 0.55 + 0.45 * woodNoiseB(Math.floor(p) * 0.37, 2.3);
+  return Math.pow(Math.sin(frac * Math.PI), 4.2) * strength;
+}
+
+// 1. Base do topo Kaya (cacheada em 512×512 para reconstruir grade 9/13/19 instantaneamente)
+const kayaTopBase = (() => {
+  const w = 512, h = 512;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const img = g.createImageData(w, h);
+  const d = img.data;
+  const heights = new Float32Array(w * h);
+
+  for (let y = 0; y < h; y++) {
+    const v = y / h;
+    for (let x = 0; x < w; x++) {
+      const u = x / w;
+      // Leve ondulação longitudinal natural nos veios retos (masame)
+      const warp = (fbm2(woodNoiseA, u * 3.0, v * 1.4, 3) - 0.5) * 0.012;
+      const ring = kayaRingProfile(u + warp);
+      const wideTone = (fbm2(woodNoiseB, u * 4.2, v * 1.8, 3) - 0.5) * 11;
+      const pore = (woodNoiseC(u * 110, v * 20) - 0.5) * 5.5;
+      const sheen = Math.sin((u * 2.6 + v * 0.7) * Math.PI) * 3.0;
+
+      // Paleta dourada sedosa e quente de Hon-Kaya
+      const r  = 216 - ring * 15 + wideTone * 0.85 + pore * 0.6 + sheen;
+      const gr = 171 - ring * 17 + wideTone * 0.72 + pore * 0.5 + sheen * 0.8;
+      const b  = 100 - ring * 15 + wideTone * 0.48 + pore * 0.36 + sheen * 0.5;
+
+      const i = y * w + x, o = i * 4;
+      d[o]     = Math.max(20, Math.min(255, r));
+      d[o + 1] = Math.max(20, Math.min(255, gr));
+      d[o + 2] = Math.max(20, Math.min(255, b));
+      d[o + 3] = 255;
+      heights[i] = 0.52 - ring * 0.09 + pore * 0.01;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const normalTex = heightToNormalTex(heights, w, h, 0.75, false);
+  return { canvas: c, normalTex };
+})();
+
+// 2. Laterais esquerda/direita (Kiomote — fibra longitudinal HORIZONTAL contínua!)
+const kayaLongAssets = (() => {
+  const w = 512, h = 256;
+  const heights = new Float32Array(w * h);
+  const colorTex = makeCanvasTex(w, h, (g) => {
+    const img = g.createImageData(w, h);
+    const d = img.data;
+    for (let y = 0; y < h; y++) {
+      const v = y / h; // 0 = topo da lateral, 1 = base
+      for (let x = 0; x < w; x++) {
+        const u = x / w; // corre de frente para trás
+        // Veios horizontais sedosos e orgânicos correndo ao longo da lateral
+        const wave = (fbm2(woodNoiseA, u * 2.0, v * 3.0, 3) - 0.5) * 0.12
+                   + Math.sin(u * Math.PI * 1.2 + v * 2.0) * 0.025;
+        const p = (v + wave) * 20.0;
+        const frac = p - Math.floor(p);
+        const rStr = 0.55 + 0.45 * woodNoiseB(1.7, Math.floor(p) * 0.43);
+        const ring = Math.pow(Math.sin(frac * Math.PI), 4.0) * rStr;
+        const wideTone = (fbm2(woodNoiseB, u * 2.8, v * 4.0, 3) - 0.5) * 12;
+        const fiber = (woodNoiseC(u * 24, v * 95) - 0.5) * 6.5;
+        const botShade = Math.pow(v, 2.6) * -9;
+
+        const r  = 210 - ring * 16 + wideTone * 0.85 + fiber * 0.6 + botShade;
+        const gr = 164 - ring * 18 + wideTone * 0.72 + fiber * 0.5 + botShade * 0.85;
+        const b  = 94  - ring * 15 + wideTone * 0.48 + fiber * 0.36 + botShade * 0.6;
+
+        const i = y * w + x, o = i * 4;
+        d[o]     = Math.max(20, Math.min(255, r));
+        d[o + 1] = Math.max(20, Math.min(255, gr));
+        d[o + 2] = Math.max(20, Math.min(255, b));
+        d[o + 3] = 255;
+        heights[i] = 0.52 - ring * 0.11 + fiber * 0.012;
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }, true);
+  const normalTex = heightToNormalTex(heights, w, h, 1.05, false);
+  return { colorTex, normalTex };
+})();
+
+// 3. Frente e traseira (Koguchi — corte transversal / end-grain com anéis alinhados ao topo!)
+const kayaEndAssets = (() => {
+  const w = 512, h = 256;
+  const heights = new Float32Array(w * h);
+  const colorTex = makeCanvasTex(w, h, (g) => {
+    const img = g.createImageData(w, h);
+    const d = img.data;
+    for (let y = 0; y < h; y++) {
+      const v = y / h; // 0 = aresta superior (encontra o topo!), 1 = aresta inferior
+      for (let x = 0; x < w; x++) {
+        const u = x / w;
+        // Em v=0 casa com kayaRingProfile(u); descendo, os anéis abrem suavemente (corte Tenmasa)
+        const arch = (u - 0.49) * (v * v * 0.11);
+        const warp = (fbm2(woodNoiseA, u * 3.5, v * 2.2, 3) - 0.5) * 0.012 * (0.2 + v);
+        const ring = kayaRingProfile(u + arch + warp);
+        // Raios medulares finos e micro-poros típicos do topo da fibra
+        const ray = Math.pow(Math.sin((v * 28 + woodNoiseB(u * 4, v * 4) * 1.4) * Math.PI), 10) * 4.0;
+        const endPore = (woodNoiseC(u * 95, v * 60) - 0.5) * 8;
+        const wideTone = (fbm2(woodNoiseB, u * 4.2, v * 2.8, 3) - 0.5) * 10;
+        const botShade = Math.pow(v, 2.4) * -10;
+
+        // End-grain ~8% mais mel/âmbar que o topo, sedoso e natural
+        const r  = 200 - ring * 18 + wideTone * 0.8 + endPore * 0.6 + ray + botShade;
+        const gr = 153 - ring * 19 + wideTone * 0.68 + endPore * 0.48 + ray * 0.7 + botShade * 0.85;
+        const b  = 86  - ring * 16 + wideTone * 0.45 + endPore * 0.35 + ray * 0.4 + botShade * 0.6;
+
+        const i = y * w + x, o = i * 4;
+        d[o]     = Math.max(18, Math.min(255, r));
+        d[o + 1] = Math.max(18, Math.min(255, gr));
+        d[o + 2] = Math.max(18, Math.min(255, b));
+        d[o + 3] = 255;
+        heights[i] = 0.5 - ring * 0.12 + endPore * 0.015;
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }, true);
+  const normalTex = heightToNormalTex(heights, w, h, 1.2, false);
+  return { colorTex, normalTex };
+})();
+
+// 4. Face inferior do goban (madeira encerada + rebaixo acústico tradicional Heso + sombras dos pés)
+const kayaUnderTex = makeCanvasTex(512, 512, (g, w, h) => {
+  g.drawImage(kayaTopBase.canvas, 0, 0, w, h);
+  g.fillStyle = 'rgba(72, 40, 12, 0.42)';
+  g.fillRect(0, 0, w, h);
+  // Rebaixo piramidal central (Heso)
+  const hs = w * 0.19;
+  const cx = w / 2, cy = h / 2;
+  const gr = g.createRadialGradient(cx, cy, 4, cx, cy, hs * 0.82);
+  gr.addColorStop(0, 'rgba(18, 9, 3, 0.75)');
+  gr.addColorStop(0.75, 'rgba(38, 20, 6, 0.45)');
+  gr.addColorStop(1, 'rgba(38, 20, 6, 0)');
+  g.fillStyle = gr;
+  g.fillRect(cx - hs, cy - hs, hs * 2, hs * 2);
+  g.strokeStyle = 'rgba(26, 13, 4, 0.55)';
+  g.lineWidth = 4;
+  g.strokeRect(cx - hs * 0.65, cy - hs * 0.65, hs * 1.3, hs * 1.3);
+  // Sombra de encaixe nos 4 pés
+  for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
+    const px = w * (0.5 + sx * 0.36), py = h * (0.5 + sz * 0.36);
+    const rg = g.createRadialGradient(px, py, 6, px, py, w * 0.09);
+    rg.addColorStop(0, 'rgba(15, 8, 2, 0.72)');
+    rg.addColorStop(1, 'rgba(15, 8, 2, 0)');
+    g.fillStyle = rg;
+    g.fillRect(px - w * 0.1, py - h * 0.1, w * 0.2, h * 0.2);
+  }
+}, true);
 
 function createBoardTopTexture(N, showCoords) {
   return makeCanvasTex(2048, 2048, (g, w, h) => {
-    // Base madeira Kaya dourada
-    const bg = g.createLinearGradient(0, 0, w, h);
-    bg.addColorStop(0, '#dfb067');
-    bg.addColorStop(0.45, '#d6a154');
-    bg.addColorStop(1, '#c89042');
-    g.fillStyle = bg;
-    g.fillRect(0, 0, w, h);
+    // Base madeira Hon-Kaya orgânica cacheada
+    g.drawImage(kayaTopBase.canvas, 0, 0, w, h);
 
-    // Veios longitudinais (masa-me)
-    for (let x = 0; x < w; x += 3) {
-      const wave = Math.sin(x * 0.028) * 0.5 + Math.sin(x * 0.095) * 0.35;
-      if (wave > 0.1) {
-        g.fillStyle = `rgba(128, 72, 20, ${0.04 + wave * 0.06})`;
-        g.fillRect(x, 0, 2.2, h);
-      } else {
-        g.fillStyle = `rgba(255, 232, 182, ${0.03 + Math.abs(wave) * 0.04})`;
-        g.fillRect(x, 0, 1.8, h);
-      }
-    }
-    // Vinheta sutil nas bordas
-    const vig = g.createRadialGradient(w / 2, h / 2, w * 0.32, w / 2, h / 2, w * 0.72);
-    vig.addColorStop(0, 'rgba(255,245,215,0.05)');
-    vig.addColorStop(1, 'rgba(92,50,14,0.16)');
+    // Vinheta muito sutil nas bordas para dar volume ao bloco maciço
+    const vig = g.createRadialGradient(w / 2, h / 2, w * 0.35, w / 2, h / 2, w * 0.74);
+    vig.addColorStop(0, 'rgba(255, 246, 220, 0.04)');
+    vig.addColorStop(1, 'rgba(84, 46, 14, 0.11)');
     g.fillStyle = vig;
     g.fillRect(0, 0, w, h);
 
@@ -2417,115 +3061,186 @@ function createBoardTopTexture(N, showCoords) {
   });
 }
 
-// Montagem do Goban 3D com pés tradicionais
+// Geometria de Goban maciço com chanfro contínuo (bevel) em todas as 12 arestas e 8 cantos,
+// preservando 6 grupos de material e UVs planares 100% exatos para a grade do topo!
+function createBeveledGobanGeo(w, h, d, r = 0.0085) {
+  const geo = new THREE.BoxGeometry(2, 2, 2, 8, 8, 8);
+  const pos = geo.attributes.position;
+  const nor = geo.attributes.normal;
+  const uv = geo.attributes.uv;
+  const hw = w / 2, hh = h / 2, hd = d / 2;
+
+  const mapAxis = (t, half) => {
+    const a = Math.abs(t);
+    const sg = t < 0 ? -1 : 1;
+    if (a <= 0.2501) return { base: (t / 0.25) * (half - r), off: 0 };
+    const frac = Math.min(1, (a - 0.25) / 0.75);
+    return { base: sg * (half - r), off: sg * Math.tan(frac * (Math.PI / 4)) };
+  };
+
+  for (let i = 0; i < pos.count; i++) {
+    const tx = pos.getX(i), ty = pos.getY(i), tz = pos.getZ(i);
+    // Identifica a qual face original do BoxGeometry o vértice pertence
+    const onx = nor.getX(i), ony = nor.getY(i), onz = nor.getZ(i);
+    const mx = mapAxis(tx, hw), my = mapAxis(ty, hh), mz = mapAxis(tz, hd);
+    const len = Math.hypot(mx.off, my.off, mz.off) || 1;
+    const nx = mx.off / len, ny = my.off / len, nz = mz.off / len;
+    const px = mx.base + nx * r;
+    const py = my.base + ny * r;
+    const pz = mz.base + nz * r;
+
+    pos.setXYZ(i, px, py, pz);
+    nor.setXYZ(i, nx, ny, nz);
+
+    // UVs planares exatos por grupo de face (alinha perfeitamente topo + koguchi + kiomote)
+    if (ony > 0.5) {
+      uv.setXY(i, (px + hw) / w, 1 - (pz + hd) / d);
+    } else if (ony < -0.5) {
+      uv.setXY(i, (px + hw) / w, (pz + hd) / d);
+    } else if (onz > 0.5 || onz < -0.5) {
+      uv.setXY(i, (px + hw) / w, (py + hh) / h);
+    } else if (onx > 0.5) {
+      uv.setXY(i, (pz + hd) / d, (py + hh) / h);
+    } else {
+      uv.setXY(i, 1 - (pz + hd) / d, (py + hh) / h);
+    }
+  }
+  return geo;
+}
+
+// Montagem do Goban 3D chanfrado com pés tradicionais Kuchinashi (8 facetas)
 const gobanGroup = new THREE.Group();
 scene.add(gobanGroup);
 
-const sideMat = new THREE.MeshPhysicalMaterial({
-  map: kayaSideTex, bumpMap: kayaBumpTex, bumpScale: 0.002,
-  roughness: 0.42, metalness: 0.02, clearcoat: 0.22, clearcoatRoughness: 0.35
-});
 const topMat = new THREE.MeshPhysicalMaterial({
   map: createBoardTopTexture(9, cfg.coords),
-  bumpMap: kayaBumpTex, bumpScale: 0.0014,
-  roughness: 0.36, metalness: 0.02, clearcoat: 0.28, clearcoatRoughness: 0.32
+  normalMap: kayaTopBase.normalTex,
+  normalScale: new THREE.Vector2(0.16, 0.16),
+  roughness: 0.34,
+  metalness: 0.01,
+  clearcoat: 0.22,
+  clearcoatRoughness: 0.36
 });
-const underMat = new THREE.MeshStandardMaterial({ color: '#7a4d22', roughness: 0.7 });
+const sideLongMat = new THREE.MeshPhysicalMaterial({
+  map: kayaLongAssets.colorTex,
+  normalMap: kayaLongAssets.normalTex,
+  normalScale: new THREE.Vector2(0.32, 0.32),
+  roughness: 0.36,
+  metalness: 0.01,
+  clearcoat: 0.22,
+  clearcoatRoughness: 0.38
+});
+const sideEndMat = new THREE.MeshPhysicalMaterial({
+  map: kayaEndAssets.colorTex,
+  normalMap: kayaEndAssets.normalTex,
+  normalScale: new THREE.Vector2(0.38, 0.38),
+  roughness: 0.42,
+  metalness: 0.01,
+  clearcoat: 0.16,
+  clearcoatRoughness: 0.44
+});
+const underMat = new THREE.MeshStandardMaterial({
+  map: kayaUnderTex,
+  roughness: 0.68,
+  metalness: 0.01
+});
 
-const slabGeo = new THREE.BoxGeometry(BOARD_W, BOARD_H, BOARD_D);
-const slabMesh = new THREE.Mesh(slabGeo, [sideMat, sideMat, topMat, underMat, sideMat, sideMat]);
+const slabGeo = createBeveledGobanGeo(BOARD_W, BOARD_H, BOARD_D, 0.0085);
+const slabMesh = new THREE.Mesh(slabGeo, [
+  sideLongMat, sideLongMat, // +X, -X (kiomote: veios horizontais)
+  topMat,                   // +Y (ten: superfície de jogo masame)
+  underMat,                 // -Y (base com heso)
+  sideEndMat, sideEndMat    // +Z, -Z (koguchi: topo de fibra com anéis contínuos)
+]);
 slabMesh.position.y = BOARD_TOP_Y - BOARD_H / 2;
 slabMesh.castShadow = true;
 slabMesh.receiveShadow = true;
 gobanGroup.add(slabMesh);
 
-// Pés tradicionais esculpidos (Kuchinashi)
+// Pés tradicionais esculpidos (Kuchinashi — 8 gomos/facetas de gardênia em madeira âmbar)
 {
-  const legPts = [
-    new THREE.Vector2(0.01, 0),
-    new THREE.Vector2(0.055, 0.015),
-    new THREE.Vector2(0.045, 0.055),
-    new THREE.Vector2(0.088, 0.13),
-    new THREE.Vector2(0.095, 0.21),
-    new THREE.Vector2(0.068, 0.27)
+  const legProfile = [
+    [0.001, 0.000],
+    [0.056, 0.000],
+    [0.060, 0.014],
+    [0.050, 0.042],
+    [0.072, 0.095],
+    [0.096, 0.148],
+    [0.092, 0.195],
+    [0.064, 0.236],
+    [0.072, 0.262],
+    [0.072, 0.275]
   ];
-  const legGeo = new THREE.LatheGeometry(legPts, 16);
-  const legMat = new THREE.MeshPhysicalMaterial({ color: '#7b491c', roughness: 0.48, clearcoat: 0.2 });
-  const legY = FLOOR_Y;
+  // Geometria de 16 segmentos radiais com 8 sulcos sutis (aspecto octogonal esculpido à mão)
+  const radSegs = 16;
+  const rows = legProfile.length;
+  const verts = [], uvs = [], indices = [];
+  for (let r = 0; r < rows; r++) {
+    const [rad, y] = legProfile[r];
+    const v = y / 0.275;
+    // O entalhe de 8 gomos é mais pronunciado no bojo central do pé
+    const fluteAmt = (y > 0.025 && y < 0.225) ? 0.065 : 0.015;
+    for (let s = 0; s <= radSegs; s++) {
+      const ang = (s / radSegs) * Math.PI * 2;
+      const flute = 1 - fluteAmt * (0.5 - 0.5 * Math.cos(ang * 8));
+      const rr = rad * flute;
+      verts.push(Math.cos(ang) * rr, y, Math.sin(ang) * rr);
+      uvs.push(s / radSegs, v);
+    }
+  }
+  for (let r = 0; r < rows - 1; r++) {
+    for (let s = 0; s < radSegs; s++) {
+      const a = r * (radSegs + 1) + s;
+      const b = a + 1;
+      const c = a + (radSegs + 1);
+      const d = c + 1;
+      // Winding anti-horário visto de fora (normais apontando para fora!)
+      indices.push(a, d, b, a, c, d);
+    }
+  }
+  const legGeo = new THREE.BufferGeometry();
+  legGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  legGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  legGeo.setIndex(indices);
+  legGeo.computeVertexNormals();
+
+  const legMat = new THREE.MeshPhysicalMaterial({
+    color: '#b47d42',
+    map: kayaLongAssets.colorTex,
+    normalMap: kayaLongAssets.normalTex,
+    normalScale: new THREE.Vector2(0.26, 0.26),
+    roughness: 0.42,
+    metalness: 0.02,
+    clearcoat: 0.24,
+    clearcoatRoughness: 0.34
+  });
+  const collarMat = new THREE.MeshStandardMaterial({ color: '#5d3818', roughness: 0.6 });
+  const padMat = new THREE.MeshStandardMaterial({ color: '#241910', roughness: 0.92 });
+
   const lx = BOARD_W * 0.36, lz = BOARD_D * 0.36;
   for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
+    const legGrp = new THREE.Group();
     const leg = new THREE.Mesh(legGeo, legMat);
-    leg.position.set(sx * lx, legY, sz * lz);
     leg.castShadow = true;
     leg.receiveShadow = true;
-    gobanGroup.add(leg);
+    legGrp.add(leg);
+
+    // Colarinho de encaixe na base do goban
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.076, 0.018, 8), collarMat);
+    collar.position.y = 0.264;
+    collar.rotation.y = Math.PI / 8;
+    legGrp.add(collar);
+
+    // Pequena sapata/feltro protetor rente sob o pé
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.054, 0.004, 16), padMat);
+    pad.position.y = 0.002;
+    legGrp.add(pad);
+
+    legGrp.position.set(sx * lx, FLOOR_Y, sz * lz);
+    legGrp.rotation.y = Math.PI / 8;
+    gobanGroup.add(legGrp);
   }
 }
-
-// Tigelas tradicionais (Goke) e tampas ao lado do Goban
-const bowlGroup = new THREE.Group();
-scene.add(bowlGroup);
-
-const bowlWoodMat = new THREE.MeshPhysicalMaterial({
-  color: '#4e2712', roughness: 0.32, metalness: 0.04, clearcoat: 0.55, clearcoatRoughness: 0.22
-});
-const bowlInsideMat = new THREE.MeshStandardMaterial({ color: '#2b1308', roughness: 0.65 });
-
-function buildBowl(x, z, stoneColor) {
-  const g = new THREE.Group();
-  g.position.set(x, FLOOR_Y, z);
-  const pts = [
-    new THREE.Vector2(0.001, 0),
-    new THREE.Vector2(0.11, 0),
-    new THREE.Vector2(0.17, 0.05),
-    new THREE.Vector2(0.20, 0.12),
-    new THREE.Vector2(0.19, 0.19),
-    new THREE.Vector2(0.155, 0.23),
-    new THREE.Vector2(0.145, 0.23),
-    new THREE.Vector2(0.14, 0.16),
-    new THREE.Vector2(0.001, 0.15)
-  ];
-  const mesh = new THREE.Mesh(new THREE.LatheGeometry(pts, 28), bowlWoodMat);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  g.add(mesh);
-
-  // Monte de pedras dentro da tigela
-  const fillMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.135, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.52),
-    stoneColor === BLACK
-      ? new THREE.MeshStandardMaterial({ color: '#17181c', roughness: 0.45 })
-      : new THREE.MeshStandardMaterial({ color: '#efe9db', roughness: 0.25 })
-  );
-  fillMesh.scale.set(1, 0.42, 1);
-  fillMesh.position.y = 0.165;
-  g.add(fillMesh);
-
-  // Tampa virada para cima (recebe os prisioneiros!)
-  const lidPts = [
-    new THREE.Vector2(0.001, 0),
-    new THREE.Vector2(0.14, 0.004),
-    new THREE.Vector2(0.162, 0.022),
-    new THREE.Vector2(0.155, 0.032),
-    new THREE.Vector2(0.13, 0.016),
-    new THREE.Vector2(0.001, 0.012)
-  ];
-  const lid = new THREE.Mesh(new THREE.LatheGeometry(lidPts, 28), bowlWoodMat);
-  const lidZ = z > 0 ? -0.36 : 0.36;
-  lid.position.set(0.04 * Math.sign(x), 0, lidZ);
-  lid.castShadow = true;
-  lid.receiveShadow = true;
-  g.add(lid);
-
-  bowlGroup.add(g);
-  return {
-    group: g,
-    lidWorld: new THREE.Vector3(x + 0.04 * Math.sign(x), FLOOR_Y + 0.024, z + lidZ)
-  };
-}
-
-const blackBowl = buildBowl(BOARD_W * 0.5 + 0.34, 0.38, BLACK);
-const whiteBowl = buildBowl(-(BOARD_W * 0.5 + 0.34), -0.38, WHITE);
 
 // Geometria biconvexa autêntica (Goishi) de raio unitário (escalada conforme N)
 function createStoneGeometry() {
@@ -2578,6 +3293,124 @@ const whiteStoneMat = new THREE.MeshPhysicalMaterial({
   roughness: 0.20, metalness: 0.02,
   clearcoat: 0.52, clearcoatRoughness: 0.16
 });
+
+// Tigelas tradicionais (Goke) em madeira Keyaki torneada, com monte real de pedras dentro e AO no chão
+const bowlGroup = new THREE.Group();
+scene.add(bowlGroup);
+
+const keyakiBowlTex = makeCanvasTex(512, 256, (g, w, h) => {
+  const n = makeNoise2(163);
+  const img = g.createImageData(w, h);
+  const d = img.data;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const warp = fbm2(n, x / 90, y / 34, 3) * 14;
+      const ring = Math.sin((y * 0.32 + warp) * 0.9) * 0.5 + 0.5;
+      const fine = (n(x * 0.18, y * 0.55) - 0.5) * 0.14;
+      const k = 0.72 + ring * 0.26 + fine;
+      const o = (y * w + x) * 4;
+      d[o]     = Math.max(14, Math.min(255, 108 * k));
+      d[o + 1] = Math.max(8,  Math.min(255, 56 * k));
+      d[o + 2] = Math.max(5,  Math.min(255, 28 * k));
+      d[o + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+}, true);
+keyakiBowlTex.wrapS = keyakiBowlTex.wrapT = THREE.RepeatWrapping;
+
+const bowlWoodMat = new THREE.MeshPhysicalMaterial({
+  map: keyakiBowlTex,
+  roughness: 0.30,
+  metalness: 0.03,
+  clearcoat: 0.58,
+  clearcoatRoughness: 0.20
+});
+const bowlInsideMat = new THREE.MeshStandardMaterial({ color: '#241006', roughness: 0.72 });
+
+function buildBowl(x, z, stoneColor) {
+  const g = new THREE.Group();
+  g.position.set(x, FLOOR_Y, z);
+  const pts = [
+    new THREE.Vector2(0.001, 0),
+    new THREE.Vector2(0.11, 0),
+    new THREE.Vector2(0.17, 0.05),
+    new THREE.Vector2(0.20, 0.12),
+    new THREE.Vector2(0.19, 0.19),
+    new THREE.Vector2(0.155, 0.23),
+    new THREE.Vector2(0.142, 0.23),
+    new THREE.Vector2(0.136, 0.155),
+    new THREE.Vector2(0.001, 0.145)
+  ];
+  const mesh = new THREE.Mesh(new THREE.LatheGeometry(pts, 32), bowlWoodMat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  g.add(mesh);
+
+  // Base interna escura para não deixar frestas sob as pedras da tigela
+  const innerDisc = new THREE.Mesh(new THREE.CircleGeometry(0.138, 24), bowlInsideMat);
+  innerDisc.rotation.x = -Math.PI / 2;
+  innerDisc.position.y = 0.152;
+  g.add(innerDisc);
+
+  // Monte orgânico de pedras reais instanciadas dentro da boca da tigela
+  const pileCount = 26;
+  const pileInst = new THREE.InstancedMesh(
+    stoneGeo,
+    stoneColor === BLACK ? blackStoneMat : whiteStoneMat,
+    pileCount
+  );
+  pileInst.castShadow = true;
+  pileInst.receiveShadow = true;
+  const dm = new THREE.Object3D();
+  const pr = 0.041;
+  for (let i = 0; i < pileCount; i++) {
+    const layer = i < 12 ? 0 : (i < 21 ? 1 : 2);
+    const k = layer === 0 ? i : (layer === 1 ? i - 12 : i - 21);
+    const ringR = layer === 0 ? (k === 0 ? 0.01 : 0.048 + (k % 2) * 0.038)
+                : layer === 1 ? (k === 0 ? 0.008 : 0.036 + (k % 2) * 0.032)
+                : (k === 0 ? 0.0 : 0.032);
+    const ang = i * 2.39996 + (stoneColor === BLACK ? 0.4 : 1.7);
+    const py = 0.152 + layer * 0.023 + Math.sin(i * 3.1) * 0.004;
+    dm.position.set(Math.cos(ang) * ringR, py, Math.sin(ang) * ringR);
+    dm.rotation.set(Math.sin(i * 2.7) * 0.24, ang, Math.cos(i * 1.9) * 0.24);
+    dm.scale.setScalar(pr);
+    dm.updateMatrix();
+    pileInst.setMatrixAt(i, dm.matrix);
+  }
+  pileInst.instanceMatrix.needsUpdate = true;
+  g.add(pileInst);
+
+  // Tampa virada para cima (recebe os prisioneiros!)
+  const lidPts = [
+    new THREE.Vector2(0.001, 0),
+    new THREE.Vector2(0.14, 0.004),
+    new THREE.Vector2(0.162, 0.022),
+    new THREE.Vector2(0.155, 0.032),
+    new THREE.Vector2(0.13, 0.016),
+    new THREE.Vector2(0.001, 0.012)
+  ];
+  const lid = new THREE.Mesh(new THREE.LatheGeometry(lidPts, 32), bowlWoodMat);
+  const lidZ = z > 0 ? -0.36 : 0.36;
+  const lidX = 0.04 * Math.sign(x);
+  lid.position.set(lidX, 0, lidZ);
+  lid.castShadow = true;
+  lid.receiveShadow = true;
+  g.add(lid);
+
+  // Sombras de contato AO sob a tigela e a tampa no piso
+  addFloorAo(floorAoRoundTex, x, z, 0.46, 0.46, 0.72, 0.003);
+  addFloorAo(floorAoRoundTex, x + lidX, z + lidZ, 0.38, 0.38, 0.62, 0.003);
+
+  bowlGroup.add(g);
+  return {
+    group: g,
+    lidWorld: new THREE.Vector3(x + lidX, FLOOR_Y + 0.024, z + lidZ)
+  };
+}
+
+const blackBowl = buildBowl(BOARD_W * 0.5 + 0.34, 0.38, BLACK);
+const whiteBowl = buildBowl(-(BOARD_W * 0.5 + 0.34), -0.38, WHITE);
 
 // Sombra de contato radial suave sob cada pedra
 const aoTex = makeCanvasTex(128, 128, (g, w, h) => {
@@ -3780,6 +4613,8 @@ function openMenu(tab = null) {
 }
 
 function syncCfgButtons() {
+  const floorNames = { tatami: 'Tatame', wood: 'Madeira', slate: 'Ardósia' };
+  $('cfg-floor').textContent = floorNames[cfg.floorStyle] || 'Tatame';
   $('cfg-coords').textContent = cfg.coords ? 'Ligado' : 'Desligado';
   $('cfg-confirm').textContent = cfg.confirmMode === 'auto' ? 'Automático' : (cfg.confirmMode === 'on' ? 'Sempre' : 'Desligado');
   $('cfg-atari').textContent = cfg.atari ? 'Ligado' : 'Desligado';
@@ -3788,6 +4623,11 @@ function syncCfgButtons() {
 }
 syncCfgButtons();
 
+$('cfg-floor').addEventListener('click', () => {
+  cfg.floorStyle = cfg.floorStyle === 'tatami' ? 'wood' : (cfg.floorStyle === 'wood' ? 'slate' : 'tatami');
+  saveCfg(); syncCfgButtons();
+  applyFloorStyle(cfg.floorStyle);
+});
 $('cfg-coords').addEventListener('click', () => {
   cfg.coords = !cfg.coords; saveCfg(); syncCfgButtons();
   rebuildBoardVisual(currentBoardN);
