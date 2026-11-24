@@ -2235,7 +2235,7 @@ try {
 let renderer;
 try {
   setLoad(0.5, 'Iluminando o salão tradicional...');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW_END, powerPreference: 'high-performance' });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW_END, powerPreference: 'high-performance', precision: 'highp' });
 } catch {
   $('loading').hidden = true;
   $('nogl').hidden = false;
@@ -2244,7 +2244,7 @@ try {
 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, LOW_END ? 1.75 : 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
@@ -2361,10 +2361,11 @@ const keyLight = new THREE.DirectionalLight('#fff4e2', 1.52);
 keyLight.position.set(1.35, 3.7, 1.55);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(LOW_END ? 1024 : 2048, LOW_END ? 1024 : 2048);
-keyLight.shadow.bias = -0.00025;
-keyLight.shadow.normalBias = 0.003;
-keyLight.shadow.radius = 2.8;
-Object.assign(keyLight.shadow.camera, { left: -2.8, right: 2.8, top: 2.8, bottom: -2.8, near: 0.5, far: 9 });
+keyLight.shadow.bias = -0.0004;
+keyLight.shadow.normalBias = 0.008;
+keyLight.shadow.radius = 2.6;
+Object.assign(keyLight.shadow.camera, { left: -2.4, right: 2.4, top: 2.4, bottom: -2.4, near: 1.0, far: 8.5 });
+keyLight.shadow.camera.updateProjectionMatrix();
 scene.add(keyLight);
 
 // Luz de rebote suave do lado oposto (revela veios da lateral sombreada e facetas dos pés)
@@ -3038,85 +3039,96 @@ const kayaUnderTex = makeCanvasTex(512, 512, (g, w, h) => {
   }
 }, true);
 
-function createBoardTopTexture(N, showCoords) {
-  return makeCanvasTex(2048, 2048, (g, w, h) => {
-    // Base madeira Hon-Kaya orgânica cacheada
-    g.drawImage(kayaTopBase.canvas, 0, 0, w, h);
+const boardTopCanvas = document.createElement('canvas');
+boardTopCanvas.width = 2048;
+boardTopCanvas.height = 2048;
+const boardTopCtx = boardTopCanvas.getContext('2d');
+const boardTopTex = new THREE.CanvasTexture(boardTopCanvas);
+boardTopTex.colorSpace = THREE.SRGBColorSpace;
+boardTopTex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
-    // Vinheta muito sutil nas bordas para dar volume ao bloco maciço
-    const vig = g.createRadialGradient(w / 2, h / 2, w * 0.35, w / 2, h / 2, w * 0.74);
-    vig.addColorStop(0, 'rgba(255, 246, 220, 0.04)');
-    vig.addColorStop(1, 'rgba(84, 46, 14, 0.11)');
-    g.fillStyle = vig;
-    g.fillRect(0, 0, w, h);
+function drawBoardTopTexture(N, showCoords) {
+  const g = boardTopCtx;
+  const w = boardTopCanvas.width, h = boardTopCanvas.height;
+  // Base madeira Hon-Kaya orgânica cacheada
+  g.drawImage(kayaTopBase.canvas, 0, 0, w, h);
 
-    // Grade em tinta preta (tachi-mori)
-    const mx = (MARGIN_X / BOARD_W) * w;
-    const mz = (MARGIN_Z / BOARD_D) * h;
-    const gx0 = mx, gx1 = w - mx;
-    const gz0 = mz, gz1 = h - mz;
-    const stepX = (gx1 - gx0) / (N - 1);
-    const stepZ = (gz1 - gz0) / (N - 1);
+  // Vinheta muito sutil nas bordas para dar volume ao bloco maciço
+  const vig = g.createRadialGradient(w / 2, h / 2, w * 0.35, w / 2, h / 2, w * 0.74);
+  vig.addColorStop(0, 'rgba(255, 246, 220, 0.04)');
+  vig.addColorStop(1, 'rgba(84, 46, 14, 0.11)');
+  g.fillStyle = vig;
+  g.fillRect(0, 0, w, h);
 
-    g.strokeStyle = '#1b140d';
-    g.lineCap = 'square';
-    const innerW = N === 19 ? 2.6 : (N === 13 ? 3.2 : 3.8);
-    const outerW = innerW * 1.45;
+  // Grade em tinta preta (tachi-mori)
+  const mx = (MARGIN_X / BOARD_W) * w;
+  const mz = (MARGIN_Z / BOARD_D) * h;
+  const gx0 = mx, gx1 = w - mx;
+  const gz0 = mz, gz1 = h - mz;
+  const stepX = (gx1 - gx0) / (N - 1);
+  const stepZ = (gz1 - gz0) / (N - 1);
 
+  g.strokeStyle = '#1b140d';
+  g.lineCap = 'square';
+  const innerW = N === 19 ? 2.6 : (N === 13 ? 3.2 : 3.8);
+  const outerW = innerW * 1.45;
+
+  for (let i = 0; i < N; i++) {
+    const x = gx0 + i * stepX;
+    g.lineWidth = (i === 0 || i === N - 1) ? outerW : innerW;
+    g.beginPath(); g.moveTo(x, gz0); g.lineTo(x, gz1); g.stroke();
+
+    const z = gz0 + i * stepZ;
+    g.lineWidth = (i === 0 || i === N - 1) ? outerW : innerW;
+    g.beginPath(); g.moveTo(gx0, z); g.lineTo(gx1, z); g.stroke();
+  }
+
+  // Pontos estrela (hoshi)
+  const starR = N === 19 ? 8.5 : (N === 13 ? 10 : 12);
+  g.fillStyle = '#18110b';
+  for (const [sx, sy] of getStarPoints(N)) {
+    g.beginPath();
+    g.arc(gx0 + sx * stepX, gz0 + sy * stepZ, starR, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // Coordenadas sutis gravadas na borda
+  if (showCoords) {
+    const fs = N === 19 ? 28 : (N === 13 ? 34 : 40);
+    g.font = `700 ${fs}px system-ui, sans-serif`;
+    g.fillStyle = 'rgba(52, 31, 12, 0.72)';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
     for (let i = 0; i < N; i++) {
       const x = gx0 + i * stepX;
-      g.lineWidth = (i === 0 || i === N - 1) ? outerW : innerW;
-      g.beginPath(); g.moveTo(x, gz0); g.lineTo(x, gz1); g.stroke();
-
       const z = gz0 + i * stepZ;
-      g.lineWidth = (i === 0 || i === N - 1) ? outerW : innerW;
-      g.beginPath(); g.moveTo(gx0, z); g.lineTo(gx1, z); g.stroke();
+      const colCh = COLS_STR[i];
+      const rowCh = String(N - i);
+      g.fillText(colCh, x, mz * 0.45);
+      g.fillText(colCh, x, h - mz * 0.45);
+      g.fillText(rowCh, mx * 0.45, z);
+      g.fillText(rowCh, w - mx * 0.45, z);
     }
-
-    // Pontos estrela (hoshi)
-    const starR = N === 19 ? 8.5 : (N === 13 ? 10 : 12);
-    g.fillStyle = '#18110b';
-    for (const [sx, sy] of getStarPoints(N)) {
-      g.beginPath();
-      g.arc(gx0 + sx * stepX, gz0 + sy * stepZ, starR, 0, Math.PI * 2);
-      g.fill();
-    }
-
-    // Coordenadas sutis gravadas na borda
-    if (showCoords) {
-      const fs = N === 19 ? 28 : (N === 13 ? 34 : 40);
-      g.font = `700 ${fs}px system-ui, sans-serif`;
-      g.fillStyle = 'rgba(52, 31, 12, 0.72)';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      for (let i = 0; i < N; i++) {
-        const x = gx0 + i * stepX;
-        const z = gz0 + i * stepZ;
-        const colCh = COLS_STR[i];
-        const rowCh = String(N - i);
-        g.fillText(colCh, x, mz * 0.45);
-        g.fillText(colCh, x, h - mz * 0.45);
-        g.fillText(rowCh, mx * 0.45, z);
-        g.fillText(rowCh, w - mx * 0.45, z);
-      }
-    }
-  });
+  }
+  boardTopTex.needsUpdate = true;
 }
+drawBoardTopTexture(9, cfg.coords);
 
 // Geometria de Goban maciço com chanfro contínuo (bevel) em todas as 12 arestas e 8 cantos,
-// preservando 6 grupos de material e UVs planares 100% exatos para a grade do topo!
+// preservando 6 grupos de material, UVs planares exatos e tangentes analíticas (evita dFdx/dFdy em GPUs móveis)
 function createBeveledGobanGeo(w, h, d, r = 0.0085) {
-  const geo = new THREE.BoxGeometry(2, 2, 2, 8, 8, 8);
+  const geo = new THREE.BoxGeometry(2, 2, 2, 12, 8, 12);
   const pos = geo.attributes.position;
   const nor = geo.attributes.normal;
   const uv = geo.attributes.uv;
+  const tangents = new Float32Array(pos.count * 4);
   const hw = w / 2, hh = h / 2, hd = d / 2;
 
-  const mapAxis = (t, half) => {
+  const mapAxis = (t, half, flatLim) => {
     const a = Math.abs(t);
     const sg = t < 0 ? -1 : 1;
-    if (a <= 0.2501) return { base: (t / 0.25) * (half - r), off: 0 };
-    const frac = Math.min(1, (a - 0.25) / 0.75);
+    if (a <= flatLim + 0.0001) return { base: (t / flatLim) * (half - r), off: 0 };
+    const frac = Math.min(1, (a - flatLim) / (1 - flatLim));
     return { base: sg * (half - r), off: sg * Math.tan(frac * (Math.PI / 4)) };
   };
 
@@ -3124,7 +3136,7 @@ function createBeveledGobanGeo(w, h, d, r = 0.0085) {
     const tx = pos.getX(i), ty = pos.getY(i), tz = pos.getZ(i);
     // Identifica a qual face original do BoxGeometry o vértice pertence
     const onx = nor.getX(i), ony = nor.getY(i), onz = nor.getZ(i);
-    const mx = mapAxis(tx, hw), my = mapAxis(ty, hh), mz = mapAxis(tz, hd);
+    const mx = mapAxis(tx, hw, 0.5), my = mapAxis(ty, hh, 0.25), mz = mapAxis(tz, hd, 0.5);
     const len = Math.hypot(mx.off, my.off, mz.off) || 1;
     const nx = mx.off / len, ny = my.off / len, nz = mz.off / len;
     const px = mx.base + nx * r;
@@ -3134,19 +3146,39 @@ function createBeveledGobanGeo(w, h, d, r = 0.0085) {
     pos.setXYZ(i, px, py, pz);
     nor.setXYZ(i, nx, ny, nz);
 
-    // UVs planares exatos por grupo de face (alinha perfeitamente topo + koguchi + kiomote)
+    // UVs planares exatos e vetor tangente analítico (+U, com sinal w para +V) por grupo de face
+    let trx = 1, try_ = 0, trz = 0, tw = 1;
     if (ony > 0.5) {
       uv.setXY(i, (px + hw) / w, 1 - (pz + hd) / d);
+      trx = 1; try_ = 0; trz = 0; tw = 1;
     } else if (ony < -0.5) {
       uv.setXY(i, (px + hw) / w, (pz + hd) / d);
-    } else if (onz > 0.5 || onz < -0.5) {
+      trx = 1; try_ = 0; trz = 0; tw = 1;
+    } else if (onz > 0.5) {
       uv.setXY(i, (px + hw) / w, (py + hh) / h);
+      trx = 1; try_ = 0; trz = 0; tw = 1;
+    } else if (onz < -0.5) {
+      uv.setXY(i, (px + hw) / w, (py + hh) / h);
+      trx = 1; try_ = 0; trz = 0; tw = -1;
     } else if (onx > 0.5) {
       uv.setXY(i, (pz + hd) / d, (py + hh) / h);
+      trx = 0; try_ = 0; trz = 1; tw = -1;
     } else {
       uv.setXY(i, 1 - (pz + hd) / d, (py + hh) / h);
+      trx = 0; try_ = 0; trz = -1; tw = -1;
     }
+    // Ortogonaliza T contra N (Gram-Schmidt) para tangente unitária mesmo nos chanfros
+    const dTN = trx * nx + try_ * ny + trz * nz;
+    let ox = trx - nx * dTN, oy = try_ - ny * dTN, oz = trz - nz * dTN;
+    const olen = Math.hypot(ox, oy, oz) || 1;
+    tangents[i * 4]     = ox / olen;
+    tangents[i * 4 + 1] = oy / olen;
+    tangents[i * 4 + 2] = oz / olen;
+    tangents[i * 4 + 3] = tw;
   }
+  geo.setAttribute('tangent', new THREE.Float32BufferAttribute(tangents, 4));
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
   return geo;
 }
 
@@ -3155,36 +3187,40 @@ const gobanGroup = new THREE.Group();
 scene.add(gobanGroup);
 
 const topMat = new THREE.MeshPhysicalMaterial({
-  map: createBoardTopTexture(9, cfg.coords),
+  map: boardTopTex,
   normalMap: kayaTopBase.normalTex,
   normalScale: new THREE.Vector2(0.16, 0.16),
-  roughness: 0.34,
+  roughness: LOW_END ? 0.32 : 0.34,
   metalness: 0.01,
-  clearcoat: 0.22,
-  clearcoatRoughness: 0.36
+  clearcoat: LOW_END ? 0 : 0.22,
+  clearcoatRoughness: 0.36,
+  shadowSide: THREE.BackSide
 });
 const sideLongMat = new THREE.MeshPhysicalMaterial({
   map: kayaLongAssets.colorTex,
   normalMap: kayaLongAssets.normalTex,
   normalScale: new THREE.Vector2(0.32, 0.32),
-  roughness: 0.36,
+  roughness: LOW_END ? 0.34 : 0.36,
   metalness: 0.01,
-  clearcoat: 0.22,
-  clearcoatRoughness: 0.38
+  clearcoat: LOW_END ? 0 : 0.22,
+  clearcoatRoughness: 0.38,
+  shadowSide: THREE.BackSide
 });
 const sideEndMat = new THREE.MeshPhysicalMaterial({
   map: kayaEndAssets.colorTex,
   normalMap: kayaEndAssets.normalTex,
   normalScale: new THREE.Vector2(0.38, 0.38),
-  roughness: 0.42,
+  roughness: LOW_END ? 0.40 : 0.42,
   metalness: 0.01,
-  clearcoat: 0.16,
-  clearcoatRoughness: 0.44
+  clearcoat: LOW_END ? 0 : 0.16,
+  clearcoatRoughness: 0.44,
+  shadowSide: THREE.BackSide
 });
 const underMat = new THREE.MeshStandardMaterial({
   map: kayaUnderTex,
   roughness: 0.68,
-  metalness: 0.01
+  metalness: 0.01,
+  shadowSide: THREE.BackSide
 });
 
 const slabGeo = createBeveledGobanGeo(BOARD_W, BOARD_H, BOARD_D, 0.0085);
@@ -3556,9 +3592,7 @@ function rebuildBoardVisual(N) {
     stoneJitter.push({ jx, jz, rot });
   }
 
-  if (topMat.map) topMat.map.dispose();
-  topMat.map = createBoardTopTexture(N, cfg.coords);
-  topMat.needsUpdate = true;
+  drawBoardTopTexture(N, cfg.coords);
 }
 
 function gridToWorld(N, idx) {
