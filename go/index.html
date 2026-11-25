@@ -2105,9 +2105,12 @@ const saveCfg = () => LS.set('cfg', cfg);
 const saveProg = () => LS.set('progresso', progress);
 
 // ========================================================================
-// ÁUDIO PROCEDURAL (Web Audio API — estalo "pachi!" na madeira Kaya)
+// ÁUDIO PROCEDURAL (Web Audio API — "pachi!" da pedra no goban de Kaya)
+// Síntese modal: transiente de contato + modos da pedra + modos do bloco
+// de madeira, numa sala de tatame com reverberação curta
 // ========================================================================
 let actx = null;
+let audioIn = null;
 function ensureAudio() {
   if (!cfg.sound) return null;
   if (!actx) {
@@ -2119,61 +2122,213 @@ function ensureAudio() {
   return actx;
 }
 
-function playStoneSound(distCenter = 0.5, captureCount = 0) {
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  const now = ctx.currentTime;
-
-  // 1. Estalo seco de pedra ardósia/concha (ruído filtrado ultracurto)
-  const bufLen = Math.floor(ctx.sampleRate * 0.035);
-  const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < bufLen; i++) {
-    const env = Math.exp(-i / (bufLen * 0.14));
-    data[i] = (Math.random() * 2 - 1) * env;
-  }
-  const noise = ctx.createBufferSource();
-  noise.buffer = buf;
-  const bp = ctx.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.setValueAtTime(1950 + (1 - distCenter) * 450 + Math.random() * 220, now);
-  bp.Q.setValueAtTime(2.6, now);
-  const ng = ctx.createGain();
-  ng.gain.setValueAtTime(0.52, now);
-  ng.gain.exponentialRampToValueAtTime(0.001, now + 0.032);
-  noise.connect(bp).connect(ng).connect(ctx.destination);
-  noise.start(now);
-
-  // 2. Ressonância oca da madeira Kaya (mais profunda perto do centro do goban)
-  const osc = ctx.createOscillator();
-  osc.type = 'triangle';
-  const baseF = 240 + distCenter * 95 + (Math.random() * 18 - 9);
-  osc.frequency.setValueAtTime(baseF * 1.45, now);
-  osc.frequency.exponentialRampToValueAtTime(baseF * 0.68, now + 0.065);
-  const og = ctx.createGain();
-  og.gain.setValueAtTime(0.28, now);
-  og.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
-  osc.connect(og).connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + 0.08);
-
-  // 3. Som suave das pedras capturadas caindo na tampa de madeira
-  if (captureCount > 0) {
-    const n = Math.min(4, captureCount);
-    for (let k = 0; k < n; k++) {
-      const t = now + 0.12 + k * 0.055;
-      const o2 = ctx.createOscillator();
-      o2.type = 'sine';
-      o2.frequency.setValueAtTime(780 + k * 140 + Math.random() * 60, t);
-      o2.frequency.exponentialRampToValueAtTime(420, t + 0.05);
-      const g2 = ctx.createGain();
-      g2.gain.setValueAtTime(0.09, t);
-      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.055);
-      o2.connect(g2).connect(ctx.destination);
-      o2.start(t);
-      o2.stop(t + 0.06);
+// Resposta ao impulso de um washitsu: paredes de papel e tatame absorvem muito,
+// então poucas reflexões iniciais e cauda curta (RT60 ≈ 0,35 s) que escurece
+function makeRoomIR(ctx) {
+  const sr = ctx.sampleRate;
+  const len = Math.floor(sr * 0.5);
+  const ir = ctx.createBuffer(2, len, sr);
+  const early = [[0.0071, 0.42, 0.30], [0.0113, 0.30, 0.38], [0.0167, 0.24, 0.18], [0.0229, 0.15, 0.21], [0.0313, 0.12, 0.09]];
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    for (const [t, gl, gr] of early) {
+      const i = Math.floor((t + ch * 0.0009) * sr);
+      if (i < len) d[i] += ch ? gr : gl;
+    }
+    let lp = 0;
+    for (let i = Math.floor(0.012 * sr); i < len; i++) {
+      const t = i / sr;
+      const a = Math.min(0.9, 0.25 + t * 2.6); // a cauda perde agudos com o tempo
+      lp += (1 - a) * ((Math.random() * 2 - 1) - lp);
+      d[i] += lp * 0.55 * Math.exp(-t / 0.05);
     }
   }
+  return ir;
+}
+
+function audioBus(ctx) {
+  if (audioIn) return audioIn;
+  audioIn = ctx.createGain();
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -8;
+  comp.knee.value = 8;
+  comp.ratio.value = 4;
+  comp.attack.value = 0.001;
+  comp.release.value = 0.09;
+  const conv = ctx.createConvolver();
+  conv.buffer = makeRoomIR(ctx);
+  const wet = ctx.createGain();
+  wet.gain.value = 0.2;
+  audioIn.connect(comp);
+  audioIn.connect(conv).connect(wet).connect(comp);
+  comp.connect(ctx.destination);
+  return audioIn;
+}
+
+// Soma de senoides amortecidas (cada modo: [freq Hz, amplitude, decaimento τ s]),
+// por rotação complexa para ficar barato até em celular
+function addModes(d, sr, start, modes) {
+  for (const [f, amp, tau] of modes) {
+    if (f >= sr * 0.45) continue;
+    const w = 2 * Math.PI * f / sr;
+    const c = Math.cos(w), s = Math.sin(w);
+    const k = Math.exp(-1 / (tau * sr));
+    let re = 1, im = 0, env = amp;
+    const end = Math.min(d.length, start + Math.ceil(tau * sr * 7));
+    for (let i = start; i < end; i++) {
+      d[i] += im * env;
+      const nr = re * c - im * s;
+      im = re * s + im * c;
+      re = nr;
+      env *= k;
+    }
+  }
+}
+
+// Ruído de contato: estalo de banda larga de 2 a 3 ms (diferenciado, para ficar seco)
+function addClick(d, sr, start, amp, tau) {
+  let prev = 0;
+  const end = Math.min(d.length, start + Math.ceil(tau * sr * 8));
+  for (let i = start; i < end; i++) {
+    const x = (Math.random() * 2 - 1) * Math.exp(-(i - start) / (tau * sr));
+    d[i] += (x - prev * 0.55) * amp;
+    prev = x;
+  }
+}
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+// Pedra caindo no goban. dist: 0 no centro, 1 na borda. Preta (ardósia) é mais
+// seca e grave; branca (concha) mais brilhante e com o toque um pouco mais longo
+function synthBoardHit(ctx, dist, color) {
+  const sr = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, Math.floor(sr * 0.3), sr);
+  const d = buf.getChannelData(0);
+  const shell = color === WHITE;
+  const center = 1 - dist;
+
+  addClick(d, sr, 0, 0.95, shell ? 0.00032 : 0.00042);
+
+  // Modos de placa livre da pedra biconvexa (razões inarmônicas de disco)
+  const f1 = (shell ? 3350 : 2950) * rnd(0.95, 1.05);
+  const damp = shell ? 1 : 0.78;
+  addModes(d, sr, 0, [
+    [f1,        0.30, 0.026 * damp],
+    [f1 * 1.73, 0.21, 0.019 * damp],
+    [f1 * 2.33, 0.15, 0.014 * damp],
+    [f1 * 3.02, 0.09, 0.010 * damp],
+    [f1 * 3.91, 0.06, 0.007 * damp]
+  ]);
+
+  // Bloco maciço de Kaya: graves soam mais no centro, agudos mais perto da borda
+  const lo = 0.5 + 0.65 * center;
+  const hi = 0.8 + 0.45 * dist;
+  const j = () => rnd(0.97, 1.03);
+  addModes(d, sr, 0, [
+    [188 * j(),  0.05 * lo, 0.060],
+    [312 * j(),  0.06 * lo, 0.050],
+    [545 * j(),  0.12 * lo, 0.040],
+    [826 * j(),  0.16,      0.030],
+    [1185 * j(), 0.21 * hi, 0.023],
+    [1660 * j(), 0.20 * hi, 0.017],
+    [2270 * j(), 0.16 * hi, 0.012],
+    [2980 * j(), 0.10 * hi, 0.009]
+  ]);
+  // Baque do corpo apoiado nos pés (só perceptível no centro)
+  addModes(d, sr, 0, [[rnd(100, 125), 0.035 * center, 0.03]]);
+
+  // A pedra biconvexa balança e assenta: um ou dois toques miúdos logo depois
+  let t = rnd(0.016, 0.026);
+  for (let n = 0, tot = Math.random() < 0.6 ? 2 : 1; n < tot; n++) {
+    const i = Math.floor(t * sr);
+    const a = rnd(0.07, 0.13) / (n + 1);
+    addClick(d, sr, i, a, 0.00025);
+    addModes(d, sr, i, [[f1 * rnd(1.0, 1.05), a * 0.8, 0.006], [826 * j(), a * 0.5, 0.012]]);
+    t += rnd(0.012, 0.022);
+  }
+  normalize(d, rnd(0.82, 0.95));
+  return buf;
+}
+
+// Pedra capturada caindo na tampa sobre outras pedras: "clac" de pedra com pedra
+// e o tampo fino de madeira, mais agudo e curto que o goban
+function synthLidHit(ctx, color) {
+  const sr = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, Math.floor(sr * 0.16), sr);
+  const d = buf.getChannelData(0);
+  const f1 = (color === WHITE ? 4300 : 3800) * rnd(0.93, 1.07);
+  addClick(d, sr, 0, 0.6, 0.0003);
+  addModes(d, sr, 0, [
+    [f1,        0.30, 0.014],
+    [f1 * 1.73, 0.18, 0.010],
+    [f1 * 2.33, 0.10, 0.007],
+    [rnd(640, 760),   0.16, 0.018],
+    [rnd(1150, 1350), 0.14, 0.013],
+    [rnd(1900, 2200), 0.09, 0.009]
+  ]);
+  if (Math.random() < 0.5) {
+    const i = Math.floor(rnd(0.018, 0.04) * sr);
+    addClick(d, sr, i, 0.18, 0.00025);
+    addModes(d, sr, i, [[f1 * rnd(0.98, 1.04), 0.1, 0.008]]);
+  }
+  normalize(d, rnd(0.5, 0.65));
+  return buf;
+}
+
+function normalize(d, peak) {
+  let m = 0;
+  for (let i = 0; i < d.length; i++) m = Math.max(m, Math.abs(d[i]));
+  if (m > 0) for (let i = 0; i < d.length; i++) d[i] *= peak / m;
+}
+
+function playBuffer(ctx, buf, when, pan, gain) {
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const g = ctx.createGain();
+  g.gain.value = gain;
+  let node = src.connect(g);
+  if (ctx.createStereoPanner) {
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    node = node.connect(p);
+  }
+  node.connect(audioBus(ctx));
+  src.start(when);
+}
+
+// Duração da descida da pedra até o goban (o estalo toca no contato)
+const DROP_DUR = 0.13;
+// Capturas: cada pedra sai em sequência e chega à tampa ao fim da animação
+const CAPTURE_STAGGER = 0.025, CAPTURE_DUR = 0.42;
+
+// opts: pan (-1 esquerda … 1 direita), color, lidPan (lado da tampa que recebe as capturas)
+function playStoneSound(distCenter = 0.5, captureCount = 0, opts = {}) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const now = ctx.currentTime + 0.005;
+  const color = opts.color || BLACK;
+  playBuffer(ctx, synthBoardHit(ctx, Math.min(1, distCenter), color), now + DROP_DUR, (opts.pan || 0) * 0.45, 1);
+
+  const capColor = color === BLACK ? WHITE : BLACK;
+  const n = Math.min(6, captureCount);
+  for (let k = 0; k < n; k++) {
+    const t = now + CAPTURE_DUR + k * CAPTURE_STAGGER + rnd(0, 0.012);
+    playBuffer(ctx, synthLidHit(ctx, capColor), t, (opts.lidPan || 0) * 0.6, 0.55 - k * 0.04);
+  }
+}
+
+// Atalho pela casa do tabuleiro: calcula distância ao centro e posição estéreo
+function stoneSoundAt(idx, captureCount, color) {
+  const N = game.N;
+  const x = idx % N, y = (idx / N) | 0;
+  const half = (N - 1) / 2;
+  const distC = Math.hypot(x - half, y - half) / ((N - 1) * 0.72);
+  const lid = color === BLACK ? blackBowl.lidWorld : whiteBowl.lidWorld;
+  playStoneSound(Math.min(1, distC), captureCount, {
+    color,
+    pan: (x - half) / half,
+    lidPan: lid ? lid.x / 1.2 : 0
+  });
 }
 
 function playUiTone(type) {
@@ -2182,6 +2337,7 @@ function playUiTone(type) {
   const now = ctx.currentTime;
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
+  const out = audioBus(ctx);
   if (type === 'ok') {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(523.25, now);
@@ -2189,7 +2345,7 @@ function playUiTone(type) {
     osc.frequency.setValueAtTime(783.99, now + 0.16);
     g.gain.setValueAtTime(0.11, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
-    osc.connect(g).connect(ctx.destination);
+    osc.connect(g).connect(out);
     osc.start(now); osc.stop(now + 0.37);
   } else if (type === 'err') {
     osc.type = 'triangle';
@@ -2197,7 +2353,7 @@ function playUiTone(type) {
     osc.frequency.exponentialRampToValueAtTime(155, now + 0.14);
     g.gain.setValueAtTime(0.12, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-    osc.connect(g).connect(ctx.destination);
+    osc.connect(g).connect(out);
     osc.start(now); osc.stop(now + 0.17);
   } else if (type === 'pass') {
     osc.type = 'sine';
@@ -2205,7 +2361,7 @@ function playUiTone(type) {
     osc.frequency.exponentialRampToValueAtTime(330, now + 0.12);
     g.gain.setValueAtTime(0.08, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-    osc.connect(g).connect(ctx.destination);
+    osc.connect(g).connect(out);
     osc.start(now); osc.stop(now + 0.15);
   }
 }
@@ -3799,7 +3955,7 @@ function spawnDropAnim(idx, color) {
   m.position.set(x + jit.jx, BOARD_TOP_Y + 0.16, z + jit.jz);
   scene.add(m);
   animStones.push({
-    mesh: m, type: 'drop', idx, t: 0, dur: 0.13,
+    mesh: m, type: 'drop', idx, t: 0, dur: DROP_DUR,
     from: new THREE.Vector3(x + jit.jx, BOARD_TOP_Y + 0.15, z + jit.jz),
     to: new THREE.Vector3(x + jit.jx, BOARD_TOP_Y + 0.0005, z + jit.jz)
   });
@@ -3816,7 +3972,7 @@ function spawnCaptureAnims(capturedList, capturedColor) {
     m.position.set(x, BOARD_TOP_Y + 0.005, z);
     scene.add(m);
     animStones.push({
-      mesh: m, type: 'capture', t: -i * 0.025, dur: 0.42,
+      mesh: m, type: 'capture', t: -i * CAPTURE_STAGGER, dur: CAPTURE_DUR,
       from: new THREE.Vector3(x, BOARD_TOP_Y + 0.005, z),
       to: targetLid.clone().add(new THREE.Vector3((Math.random()-0.5)*0.08, 0.04, (Math.random()-0.5)*0.08))
     });
@@ -4202,12 +4358,9 @@ function executeMove(idx, isAi = false) {
   setHintMarker(-1);
 
   if (idx >= 0) {
-    const N = game.N;
-    const x = idx % N, y = (idx / N) | 0;
-    const distC = Math.hypot(x - (N - 1) / 2, y - (N - 1) / 2) / ((N - 1) * 0.72);
     spawnDropAnim(idx, movingColor);
     if (res.captured.length) spawnCaptureAnims(res.captured, opp(movingColor));
-    playStoneSound(Math.min(1, distC), res.captured.length);
+    stoneSoundAt(idx, res.captured.length, movingColor);
   } else {
     playUiTone('pass');
     showToast(`${movingColor === BLACK ? 'Pretas' : 'Brancas'} passaram a vez.`);
@@ -4331,8 +4484,8 @@ function handleDidacticMove(idx) {
     if (!res.ok) { showToast(res.reason); return; }
     spawnDropAnim(idx, BLACK);
     if (res.captured.length) spawnCaptureAnims(res.captured, WHITE);
-    playStoneSound(0.4, res.captured.length);
-    setTimeout(() => playUiTone('ok'), 160);
+    stoneSoundAt(idx, res.captured.length, BLACK);
+    setTimeout(() => playUiTone('ok'), 300);
     lessonSolved = true;
     setHintMarker(-1);
     progress.lessons[L.id] = true;
@@ -4363,14 +4516,14 @@ function handleDidacticMove(idx) {
     const res = game.play(idx);
     spawnDropAnim(idx, BLACK);
     if (res.captured.length) spawnCaptureAnims(res.captured, WHITE);
-    playStoneSound(0.45, res.captured.length);
+    stoneSoundAt(idx, res.captured.length, BLACK);
     setHintMarker(-1);
     syncBoardMeshes();
     updateHud();
 
     if (branch.win) {
       lessonSolved = true;
-      setTimeout(() => playUiTone('ok'), 160);
+      setTimeout(() => playUiTone('ok'), 300);
       progress.tsumego[TSUMEGO[activeTsumegoIdx].id] = true;
       saveProg();
       const btns = [];
@@ -4389,7 +4542,7 @@ function handleDidacticMove(idx) {
         const rRes = game.play(rIdx);
         spawnDropAnim(rIdx, WHITE);
         if (rRes.captured && rRes.captured.length) spawnCaptureAnims(rRes.captured, BLACK);
-        playStoneSound(0.45, rRes.captured ? rRes.captured.length : 0);
+        stoneSoundAt(rIdx, rRes.captured ? rRes.captured.length : 0, WHITE);
         tsumegoNode = branch.next;
         aiThinking = false;
         syncBoardMeshes();
@@ -4866,7 +5019,8 @@ function animate(now) {
     if (a.t < 0) continue;
     const u = Math.min(1, a.t / a.dur);
     if (a.type === 'drop') {
-      const ease = 1 - Math.pow(1 - u, 3);
+      // A mão desce a pedra acelerando até o estalo no goban (o som toca no contato)
+      const ease = u * u;
       a.mesh.position.lerpVectors(a.from, a.to, ease);
     } else {
       const ease = u * u * (3 - 2 * u);
