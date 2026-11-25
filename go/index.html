@@ -2255,45 +2255,22 @@ scene.fog = new THREE.Fog('#17110c', 6.8, 17.5);
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 36);
 
-// Mipmaps feitos na CPU, reduzindo o próprio canvas pela metade a cada nível, em vez de
-// gl.generateMipmap. No celular (Firefox Android) o generateMipmap de textura vinda de canvas
-// às vezes sai com níveis pretos ou com lixo: a metade distante do goban escurecia, a face
-// frontal ficava preta e o piso mudava de cor, enquanto o nível 0 (perto da câmera) saía certo.
-function buildCanvasMips(tex) {
-  const base = tex.image;
-  const mips = tex.mipmaps && tex.mipmaps[0] === base ? tex.mipmaps : [base];
-  let prev = base, w = base.width, h = base.height, i = 1;
-  while (w > 1 || h > 1) {
-    w = Math.max(1, w >> 1);
-    h = Math.max(1, h >> 1);
-    let c = mips[i];
-    if (!c || c.width !== w || c.height !== h) {
-      c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      mips[i] = c;
-    }
-    const g = c.getContext('2d');
-    g.imageSmoothingEnabled = true;
-    g.imageSmoothingQuality = 'high';
-    g.clearRect(0, 0, w, h);
-    g.drawImage(prev, 0, 0, w, h);
-    prev = c;
-    i++;
-  }
-  mips.length = i;
-  tex.mipmaps = mips;
-  tex.generateMipmaps = false;
-  tex.needsUpdate = true;
+// Canvas 2D sem aceleração por GPU. No Firefox Android o canvas 2D acelerado às vezes perde
+// ou troca o conteúdo entre canvases (vários saíam vazios ou com o desenho de outro): o normal
+// map do topo ficava pela metade, escurecendo a metade distante do goban, e os das laterais
+// vinham zerados, deixando a face frontal preta. willReadFrequently mantém o canvas na memória
+// comum, onde o conteúdo não se perde.
+function ctx2d(c) {
+  return c.getContext('2d', { willReadFrequently: true });
 }
 
 function makeCanvasTex(w, h, draw, srgb = true) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
-  draw(c.getContext('2d'), w, h);
+  draw(ctx2d(c), w, h);
   const t = new THREE.CanvasTexture(c);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  buildCanvasMips(t);
   return t;
 }
 
@@ -2936,7 +2913,7 @@ const kayaTopBase = (() => {
   const w = 512, h = 512;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
-  const g = c.getContext('2d');
+  const g = ctx2d(c);
   const img = g.createImageData(w, h);
   const d = img.data;
   const heights = new Float32Array(w * h);
@@ -3081,7 +3058,7 @@ const kayaUnderTex = makeCanvasTex(512, 512, (g, w, h) => {
 const boardTopCanvas = document.createElement('canvas');
 boardTopCanvas.width = 2048;
 boardTopCanvas.height = 2048;
-const boardTopCtx = boardTopCanvas.getContext('2d');
+const boardTopCtx = ctx2d(boardTopCanvas);
 const boardTopTex = new THREE.CanvasTexture(boardTopCanvas);
 boardTopTex.colorSpace = THREE.SRGBColorSpace;
 boardTopTex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -3149,7 +3126,7 @@ function drawBoardTopTexture(N, showCoords) {
       g.fillText(rowCh, w - mx * 0.45, z);
     }
   }
-  buildCanvasMips(boardTopTex);
+  boardTopTex.needsUpdate = true;
 }
 drawBoardTopTexture(9, cfg.coords);
 
@@ -4925,6 +4902,7 @@ function animate(now) {
 // ========================================================================
 if (new URLSearchParams(location.search).has('diag')) {
   const gl = renderer.getContext();
+  window.__diag = { THREE, renderer, scene, topMat, sideLongMat, sideEndMat, keyLight };
   const allMats = () => {
     const set = new Set();
     scene.traverse((o) => {
@@ -4973,7 +4951,7 @@ if (new URLSearchParams(location.search).has('diag')) {
     try { depthBits = gl.getParameter(gl.DEPTH_BITS); } catch {}
     const ext = (n) => (gl.getExtension(n) ? 's' : 'n');
     return [
-      'versão: mipmaps-cpu + diag 2026-11-25',
+      'versão: canvas sem GPU + diag 2026-11-25',
       'GPU: ' + gpu,
       navigator.userAgent,
       `depth ${depthBits} bits · msaa ${attrs.antialias ? gl.getParameter(gl.SAMPLES) : 0} · highp frag ${hp ? hp.precision : '?'}`,
