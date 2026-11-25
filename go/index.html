@@ -2122,26 +2122,31 @@ function ensureAudio() {
   return actx;
 }
 
-// Resposta ao impulso de um washitsu: paredes de papel e tatame absorvem muito,
-// então poucas reflexões iniciais e cauda curta (RT60 ≈ 0,35 s) que escurece
+// Resposta ao impulso de um washitsu: tatame e papel absorvem muito, então a cauda
+// é curta (RT60 ≈ 0,3 s) e escurece. Só ruído difuso: reflexões discretas fortes
+// fazem filtro em pente, que soa metálico
 function makeRoomIR(ctx) {
   const sr = ctx.sampleRate;
-  const len = Math.floor(sr * 0.5);
+  const len = Math.floor(sr * 0.4);
   const ir = ctx.createBuffer(2, len, sr);
-  const early = [[0.0071, 0.42, 0.30], [0.0113, 0.30, 0.38], [0.0167, 0.24, 0.18], [0.0229, 0.15, 0.21], [0.0313, 0.12, 0.09]];
   for (let ch = 0; ch < 2; ch++) {
     const d = ir.getChannelData(ch);
-    for (const [t, gl, gr] of early) {
-      const i = Math.floor((t + ch * 0.0009) * sr);
-      if (i < len) d[i] += ch ? gr : gl;
-    }
     let lp = 0;
-    for (let i = Math.floor(0.012 * sr); i < len; i++) {
+    for (let i = Math.floor(0.004 * sr); i < len; i++) {
       const t = i / sr;
-      const a = Math.min(0.9, 0.25 + t * 2.6); // a cauda perde agudos com o tempo
+      const a = Math.min(0.92, 0.35 + t * 3); // a cauda perde agudos com o tempo
       lp += (1 - a) * ((Math.random() * 2 - 1) - lp);
-      d[i] += lp * 0.55 * Math.exp(-t / 0.05);
+      const early = 1 + 1.5 * Math.exp(-((t - 0.012) ** 2) / 0.00003); // leve massa de reflexões iniciais
+      d[i] = lp * 0.5 * early * Math.exp(-t / 0.045);
     }
+  }
+  // Energia unitária por canal: o nível da reverberação fica só no ganho "wet"
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    let e = 0;
+    for (let i = 0; i < len; i++) e += d[i] * d[i];
+    const g = 1 / Math.sqrt(e || 1);
+    for (let i = 0; i < len; i++) d[i] *= g;
   }
   return ir;
 }
@@ -2158,7 +2163,7 @@ function audioBus(ctx) {
   const conv = ctx.createConvolver();
   conv.buffer = makeRoomIR(ctx);
   const wet = ctx.createGain();
-  wet.gain.value = 0.2;
+  wet.gain.value = 0.14;
   audioIn.connect(comp);
   audioIn.connect(conv).connect(wet).connect(comp);
   comp.connect(ctx.destination);
@@ -2198,78 +2203,95 @@ function addClick(d, sr, start, amp, tau) {
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 
-// Pedra caindo no goban. dist: 0 no centro, 1 na borda. Preta (ardósia) é mais
-// seca e grave; branca (concha) mais brilhante e com o toque um pouco mais longo
+// Madeira não "canta" em notas: um bloco maciço tem modos tão densos que soa como
+// ruído colorido, e cada faixa some depressa. Em cada banda a energia cai com
+// τ = 1/(π·f·η), onde η é o fator de perda (madeira ≈ 0,01–0,03; vidro e metal
+// ficam perto de 0,001 e por isso tocam como sino). bands: [freq central, amplitude]
+function addWoodBands(d, sr, start, bands, eta, q, maxTau) {
+  for (const [fc, amp] of bands) {
+    if (fc >= sr * 0.45 || amp <= 0) continue;
+    const w0 = 2 * Math.PI * fc / sr;
+    const al = Math.sin(w0) / (2 * q), cw = Math.cos(w0), a0 = 1 + al;
+    const b0 = al / a0, b2 = -al / a0, a1 = -2 * cw / a0, a2 = (1 - al) / a0;
+    const tau = Math.min(maxTau, 1 / (Math.PI * fc * eta));
+    const k = Math.exp(-1 / (tau * sr));
+    const end = Math.min(d.length, start + Math.ceil(tau * sr * 8));
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0, env = amp;
+    for (let i = start; i < end; i++) {
+      const x = (Math.random() * 2 - 1) * env;
+      const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+      x2 = x1; x1 = x; y2 = y1; y1 = y;
+      d[i] += y;
+      env *= k;
+    }
+  }
+}
+
+// Pedra assentando no goban. dist: 0 no centro, 1 na borda. O "clac" é o contato
+// curtíssimo de duas superfícies duras somado à resposta do bloco de Kaya; o "toc"
+// grave vem do corpo e do rebaixo (heso) embaixo, mais forte no centro
 function synthBoardHit(ctx, dist, color) {
   const sr = ctx.sampleRate;
-  const buf = ctx.createBuffer(1, Math.floor(sr * 0.3), sr);
+  const buf = ctx.createBuffer(1, Math.floor(sr * 0.2), sr);
   const d = buf.getChannelData(0);
-  const shell = color === WHITE;
   const center = 1 - dist;
+  const bright = color === WHITE ? 1.12 : 1; // concha um pouco mais viva que ardósia
+  const lo = 0.55 + 0.6 * center;
+  const hi = (0.85 + 0.35 * dist) * bright;
 
-  addClick(d, sr, 0, 0.95, shell ? 0.00032 : 0.00042);
-
-  // Modos de placa livre da pedra biconvexa (razões inarmônicas de disco)
-  const f1 = (shell ? 3350 : 2950) * rnd(0.95, 1.05);
-  const damp = shell ? 1 : 0.78;
+  addClick(d, sr, 0, 1.2, 0.00016);
+  addWoodBands(d, sr, 0, [
+    [170, 0.0],
+    [240, 0.08 * lo],
+    [330, 0.10 * lo],
+    [450, 0.18 * lo],
+    [610, 0.24],
+    [820, 0.32],
+    [1100, 1.00 * hi],
+    [1480, 1.25 * hi],
+    [2000, 1.35 * hi],
+    [2700, 1.80 * hi],
+    [3600, 1.40 * hi],
+    [4800, 0.90 * hi],
+    [6400, 0.50 * hi]
+  ].map(([f, a]) => [f * rnd(0.96, 1.04), a * rnd(0.85, 1.15)]), 0.024, 2.4, 0.045);
+  // "Toc" do corpo: poucos modos graves, curtos (η ≈ 0,05)
   addModes(d, sr, 0, [
-    [f1,        0.30, 0.026 * damp],
-    [f1 * 1.73, 0.21, 0.019 * damp],
-    [f1 * 2.33, 0.15, 0.014 * damp],
-    [f1 * 3.02, 0.09, 0.010 * damp],
-    [f1 * 3.91, 0.06, 0.007 * damp]
+    [rnd(195, 235), 0.025 * lo, 0.028],
+    [rnd(420, 480), 0.03 * lo, 0.016]
   ]);
 
-  // Bloco maciço de Kaya: graves soam mais no centro, agudos mais perto da borda
-  const lo = 0.5 + 0.65 * center;
-  const hi = 0.8 + 0.45 * dist;
-  const j = () => rnd(0.97, 1.03);
-  addModes(d, sr, 0, [
-    [188 * j(),  0.05 * lo, 0.060],
-    [312 * j(),  0.06 * lo, 0.050],
-    [545 * j(),  0.12 * lo, 0.040],
-    [826 * j(),  0.16,      0.030],
-    [1185 * j(), 0.21 * hi, 0.023],
-    [1660 * j(), 0.20 * hi, 0.017],
-    [2270 * j(), 0.16 * hi, 0.012],
-    [2980 * j(), 0.10 * hi, 0.009]
-  ]);
-  // Baque do corpo apoiado nos pés (só perceptível no centro)
-  addModes(d, sr, 0, [[rnd(100, 125), 0.035 * center, 0.03]]);
-
-  // A pedra biconvexa balança e assenta: um ou dois toques miúdos logo depois
-  let t = rnd(0.016, 0.026);
-  for (let n = 0, tot = Math.random() < 0.6 ? 2 : 1; n < tot; n++) {
-    const i = Math.floor(t * sr);
-    const a = rnd(0.07, 0.13) / (n + 1);
-    addClick(d, sr, i, a, 0.00025);
-    addModes(d, sr, i, [[f1 * rnd(1.0, 1.05), a * 0.8, 0.006], [826 * j(), a * 0.5, 0.012]]);
-    t += rnd(0.012, 0.022);
+  // Às vezes a pedra biconvexa balança e dá um toque miúdo ao assentar
+  if (Math.random() < 0.35) {
+    const i = Math.floor(rnd(0.022, 0.034) * sr);
+    addClick(d, sr, i, 0.06, 0.00014);
+    addWoodBands(d, sr, i, [[1500, 0.06], [2600, 0.05]], 0.03, 2.4, 0.01);
   }
   normalize(d, rnd(0.82, 0.95));
   return buf;
 }
 
-// Pedra capturada caindo na tampa sobre outras pedras: "clac" de pedra com pedra
-// e o tampo fino de madeira, mais agudo e curto que o goban
+// Pedra capturada caindo na tampa, sobre outras pedras: "clic" seco de pedra com
+// pedra e o tampo fino de madeira, mais agudo e mais curto que no goban
 function synthLidHit(ctx, color) {
   const sr = ctx.sampleRate;
-  const buf = ctx.createBuffer(1, Math.floor(sr * 0.16), sr);
+  const buf = ctx.createBuffer(1, Math.floor(sr * 0.1), sr);
   const d = buf.getChannelData(0);
-  const f1 = (color === WHITE ? 4300 : 3800) * rnd(0.93, 1.07);
-  addClick(d, sr, 0, 0.6, 0.0003);
-  addModes(d, sr, 0, [
-    [f1,        0.30, 0.014],
-    [f1 * 1.73, 0.18, 0.010],
-    [f1 * 2.33, 0.10, 0.007],
-    [rnd(640, 760),   0.16, 0.018],
-    [rnd(1150, 1350), 0.14, 0.013],
-    [rnd(1900, 2200), 0.09, 0.009]
-  ]);
+  addClick(d, sr, 0, 0.5, 0.00013);
+  addWoodBands(d, sr, 0, [
+    [700, 0.25],
+    [1000, 0.32],
+    [1450, 0.38],
+    [2100, 0.40],
+    [3000, 0.36],
+    [4200, 0.25],
+    [5800, 0.14]
+  ].map(([f, a]) => [f * rnd(0.94, 1.06), a * rnd(0.8, 1.2)]), 0.04, 2.2, 0.02);
+  addModes(d, sr, 0, [[rnd(650, 780), 0.05, 0.010]]);
   if (Math.random() < 0.5) {
-    const i = Math.floor(rnd(0.018, 0.04) * sr);
-    addClick(d, sr, i, 0.18, 0.00025);
-    addModes(d, sr, i, [[f1 * rnd(0.98, 1.04), 0.1, 0.008]]);
+    const i = Math.floor(rnd(0.015, 0.035) * sr);
+    addClick(d, sr, i, 0.15, 0.00012);
+    addWoodBands(d, sr, i, [[2200, 0.12], [3400, 0.1]], 0.05, 2.2, 0.006);
   }
   normalize(d, rnd(0.5, 0.65));
   return buf;
