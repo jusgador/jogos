@@ -2255,6 +2255,37 @@ scene.fog = new THREE.Fog('#17110c', 6.8, 17.5);
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 36);
 
+// Mipmaps feitos na CPU, reduzindo o próprio canvas pela metade a cada nível, em vez de
+// gl.generateMipmap. No celular (Firefox Android) o generateMipmap de textura vinda de canvas
+// às vezes sai com níveis pretos ou com lixo: a metade distante do goban escurecia, a face
+// frontal ficava preta e o piso mudava de cor, enquanto o nível 0 (perto da câmera) saía certo.
+function buildCanvasMips(tex) {
+  const base = tex.image;
+  const mips = tex.mipmaps && tex.mipmaps[0] === base ? tex.mipmaps : [base];
+  let prev = base, w = base.width, h = base.height, i = 1;
+  while (w > 1 || h > 1) {
+    w = Math.max(1, w >> 1);
+    h = Math.max(1, h >> 1);
+    let c = mips[i];
+    if (!c || c.width !== w || c.height !== h) {
+      c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      mips[i] = c;
+    }
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.clearRect(0, 0, w, h);
+    g.drawImage(prev, 0, 0, w, h);
+    prev = c;
+    i++;
+  }
+  mips.length = i;
+  tex.mipmaps = mips;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+}
+
 function makeCanvasTex(w, h, draw, srgb = true) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -2262,6 +2293,7 @@ function makeCanvasTex(w, h, draw, srgb = true) {
   const t = new THREE.CanvasTexture(c);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  buildCanvasMips(t);
   return t;
 }
 
@@ -3110,7 +3142,7 @@ function drawBoardTopTexture(N, showCoords) {
       g.fillText(rowCh, w - mx * 0.45, z);
     }
   }
-  boardTopTex.needsUpdate = true;
+  buildCanvasMips(boardTopTex);
 }
 drawBoardTopTexture(9, cfg.coords);
 
