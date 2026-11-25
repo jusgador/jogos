@@ -2353,7 +2353,8 @@ function heightToNormalTex(heights, w, h, strength = 2.0, wrap = true) {
 }
 
 // Ambiente PMREM procedural (salão japonês com shoji quente e luminária)
-{
+let envTex = null, envRT = null;
+function buildEnvironment() {
   const es = new THREE.Scene();
   es.background = new THREE.Color('#1c140e');
   const room = new THREE.Mesh(
@@ -2382,10 +2383,16 @@ function heightToNormalTex(heights, w, h, strength = 2.0, wrap = true) {
   es.add(lamp);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(es, 0.025).texture;
-  scene.environmentIntensity = 0.92;
+  const rt = pmrem.fromScene(es, 0.025);
   pmrem.dispose();
+  es.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+  if (envRT) envRT.dispose();
+  envRT = rt;
+  envTex = rt.texture;
+  scene.environment = envTex;
+  scene.environmentIntensity = 0.92;
 }
+buildEnvironment();
 
 // Iluminação quente e equilibrada do salão (principal + rebote lateral + contra-luz)
 scene.add(new THREE.HemisphereLight('#fff2dc', '#3a2819', 0.56));
@@ -4910,6 +4917,143 @@ function animate(now) {
 
   updateCamera(dt);
   renderer.render(scene, camera);
+}
+
+// ========================================================================
+// DIAGNÓSTICO GRÁFICO (só com ?diag na URL): informações da GPU e chaves
+// para isolar defeitos de renderização direto no celular
+// ========================================================================
+if (new URLSearchParams(location.search).has('diag')) {
+  const gl = renderer.getContext();
+  const allMats = () => {
+    const set = new Set();
+    scene.traverse((o) => {
+      if (!o.material) return;
+      for (const m of [].concat(o.material)) set.add(m);
+    });
+    return [...set];
+  };
+  const TEX_KEYS = ['map', 'normalMap', 'roughnessMap', 'aoMap', 'bumpMap', 'alphaMap', 'emissiveMap'];
+  const allTex = () => {
+    const set = new Set();
+    for (const m of allMats()) for (const k of TEX_KEYS) if (m[k]) set.add(m[k]);
+    return [...set];
+  };
+  const refreshMats = () => { for (const m of allMats()) m.needsUpdate = true; };
+
+  function envStats() {
+    try {
+      const w = envRT.width, h = envRT.height;
+      const buf = new Uint16Array(w * h * 4);
+      renderer.readRenderTargetPixels(envRT, 0, 0, w, h, buf);
+      let nan = 0, inf = 0, neg = 0, n = 0;
+      const sum = [0, 0, 0];
+      for (let i = 0; i < buf.length; i += 4) {
+        for (let c = 0; c < 3; c++) {
+          const v = THREE.DataUtils.fromHalfFloat(buf[i + c]);
+          if (Number.isNaN(v)) nan++;
+          else if (!Number.isFinite(v)) inf++;
+          else { if (v < 0) neg++; sum[c] += v; }
+        }
+        n++;
+      }
+      const f = (v) => (v / n).toFixed(3);
+      return `amb ${w}x${h} média rgb ${f(sum[0])} ${f(sum[1])} ${f(sum[2])} | NaN ${nan} Inf ${inf} neg ${neg}`;
+    } catch (e) {
+      return 'amb: leitura falhou (' + e.message + ')';
+    }
+  }
+
+  function info() {
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const gpu = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    const attrs = gl.getContextAttributes() || {};
+    const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+    let depthBits = '?';
+    try { depthBits = gl.getParameter(gl.DEPTH_BITS); } catch {}
+    const ext = (n) => (gl.getExtension(n) ? 's' : 'n');
+    return [
+      'versão: mipmaps-cpu + diag 2026-11-25',
+      'GPU: ' + gpu,
+      navigator.userAgent,
+      `depth ${depthBits} bits · msaa ${attrs.antialias ? gl.getParameter(gl.SAMPLES) : 0} · highp frag ${hp ? hp.precision : '?'}`,
+      `aniso máx ${renderer.capabilities.getMaxAnisotropy()} · tex máx ${gl.getParameter(gl.MAX_TEXTURE_SIZE)}`,
+      `float rt ${ext('EXT_color_buffer_float')} · half rt ${ext('EXT_color_buffer_half_float')} · float linear ${ext('OES_texture_float_linear')}`,
+      `dpr ${window.devicePixelRatio} · pixelRatio ${renderer.getPixelRatio().toFixed(2)} · buffer ${gl.drawingBufferWidth}x${gl.drawingBufferHeight} · LOW_END ${LOW_END}`,
+      envStats()
+    ].join('\n');
+  }
+
+  const panel = document.createElement('div');
+  panel.style.cssText = 'position:fixed;left:6px;right:6px;bottom:64px;z-index:9999;background:rgba(0,0,0,.82);color:#f5e7c8;' +
+    'font:11px/1.35 monospace;padding:8px;border-radius:8px;max-height:46vh;overflow:auto;';
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'margin:0 0 6px;white-space:pre-wrap;word-break:break-all;';
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;';
+  panel.append(pre, row);
+  document.body.append(panel);
+
+  const state = { sombras: true, ambiente: true, luz: true, mipmaps: true, normais: true, aniso: true };
+  const savedNormals = new Map();
+  const savedAniso = new Map();
+  const actions = {
+    sombras(on) { renderer.shadowMap.enabled = on; refreshMats(); },
+    ambiente(on) { scene.environment = on ? envTex : null; refreshMats(); },
+    luz(on) { keyLight.visible = on; },
+    mipmaps(on) {
+      for (const t of allTex()) {
+        t.minFilter = on ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
+        t.needsUpdate = true;
+      }
+    },
+    normais(on) {
+      for (const m of allMats()) {
+        if (on) { if (savedNormals.has(m)) m.normalMap = savedNormals.get(m); }
+        else if (m.normalMap) { savedNormals.set(m, m.normalMap); m.normalMap = null; }
+      }
+      refreshMats();
+    },
+    aniso(on) {
+      for (const t of allTex()) {
+        if (!on) { savedAniso.set(t, t.anisotropy); t.anisotropy = 1; }
+        else if (savedAniso.has(t)) t.anisotropy = savedAniso.get(t);
+        t.needsUpdate = true;
+      }
+    }
+  };
+  const mkBtn = (label, fn) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.style.cssText = 'font:12px system-ui;padding:6px 8px;border-radius:6px;border:1px solid #a88a55;background:#2a2018;color:#f5e7c8;';
+    b.addEventListener('click', (e) => { e.stopPropagation(); fn(b); });
+    row.append(b);
+    return b;
+  };
+  for (const key of Object.keys(state)) {
+    const lbl = () => `${key}: ${state[key] ? 'lig' : 'desl'}`;
+    mkBtn(lbl(), (b) => { state[key] = !state[key]; actions[key](state[key]); b.textContent = lbl(); });
+  }
+  mkBtn('refazer ambiente', () => { buildEnvironment(); if (!state.ambiente) scene.environment = null; pre.textContent = info(); });
+  mkBtn('atualizar', () => { pre.textContent = info(); });
+  mkBtn('copiar', () => {
+    const txt = info() + '\nchaves: ' + JSON.stringify(state);
+    navigator.clipboard?.writeText(txt).catch(() => {});
+    pre.textContent = txt;
+  });
+  mkBtn('ocultar', () => { panel.hidden = true; toggle.hidden = false; });
+  const toggle = document.createElement('button');
+  toggle.textContent = 'diag';
+  toggle.hidden = true;
+  toggle.style.cssText = 'position:fixed;left:6px;bottom:64px;z-index:9999;font:12px system-ui;padding:6px 10px;border-radius:6px;' +
+    'border:1px solid #a88a55;background:rgba(0,0,0,.8);color:#f5e7c8;';
+  toggle.addEventListener('click', (e) => { e.stopPropagation(); panel.hidden = false; toggle.hidden = true; pre.textContent = info(); });
+  document.body.append(toggle);
+  for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'wheel']) {
+    panel.addEventListener(ev, (e) => e.stopPropagation());
+    toggle.addEventListener(ev, (e) => e.stopPropagation());
+  }
+  setTimeout(() => { pre.textContent = info(); }, 400);
 }
 
 // Finaliza carregamento e exibe o menu com o goban 3D girando ao fundo
